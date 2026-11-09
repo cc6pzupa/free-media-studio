@@ -15,11 +15,11 @@ _registry_lock = threading.Lock()
 class KaggleEasyImage:
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required':{'prompt':('STRING',{'multiline':True,'default':''}),'seed':('INT',{'default':42,'min':0,'max':2147483647}),'steps':('INT',{'default':20,'min':1,'max':50})}}
+        return {'required':{'prompt':('STRING',{'multiline':True,'default':''}),'seed':('INT',{'default':42,'min':0,'max':2147483647}),'steps':('INT',{'default':20,'min':1,'max':50})},'optional':{'model_id':(['qwen-image-2.1','z-image-turbo','sdxl-lightning'],),'use_model_defaults':('BOOLEAN',{'default':True})}}
     RETURN_TYPES=('IMAGE',)
     FUNCTION='generate'
     CATEGORY='Kaggle'
-    def generate(self,prompt,seed,steps):
+    def generate(self,prompt,seed,steps,model_id="qwen-image-2.1",use_model_defaults=True):
         path=Path(os.environ.get('EASY_CONFIG_PATH',str(Path.home()/'.kaggle-qwen-client/settings.json')))
         if path.is_file():
             config=json.loads(path.read_text(encoding='utf-8'))
@@ -43,6 +43,8 @@ class KaggleEasyImage:
                 from .studio_client import SharedBackend
                 backend=SharedBackend(config)
                 _backends[key]=backend
-        raw,stats=backend.generate(prompt,seed,steps)
+        if model_id=="sdxl-lightning":steps=4
+        elif model_id=="z-image-turbo" and use_model_defaults:steps=9
+        raw,stats=backend.generate(prompt,seed,steps,model_id=model_id)
         image=np.asarray(Image.open(io.BytesIO(raw)).convert('RGB'),dtype=np.float32)/255
         return (torch.from_numpy(image).unsqueeze(0),)

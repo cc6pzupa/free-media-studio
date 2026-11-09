@@ -58,6 +58,22 @@ python desktop.py
 | macOS | `bash start_mac.command` |
 | Linux | `bash start_linux.sh` |
 
+## 模型选择与性能对比
+
+创作区新增模型选择：
+
+| 模型 | 推荐步数 | 用途 |
+| --- | --- | --- |
+| Qwen-Image 2.1 | 20，可调 | 保留现有画质基线 |
+| Z-Image Turbo | 9，可调 | 效率优先 |
+| SDXL-Lightning | 固定 4 | 快速预览，推荐英文提示词 |
+
+选择模型会自动带出推荐步数。切换时释放旧模型，模型文件与私有缓存按模型分别保存。同一个活跃模型继续复用。新增模型使用自动账号连接；当前统一输出单张 512×512 PNG。
+
+GUI、ComfyUI、Kaggle 独立 Notebook 与 MCP 均已接入模型选择。本机 API 可传 `model_id`，省略 `steps` 时使用模型默认值；SDXL-Lightning 必须是 4 步。MCP 的 `generate_image` 同样接受 `model_id`。
+
+完成状态新增编码、采样和解码耗时。运行 `python benchmark.py` 查看测试计划；`python benchmark.py --run` 执行固定提示词的模型与步数对比，预热和连续生成分开统计。`python benchmark.py --gpu-probe` 检查已连接会话的双卡拓扑与并行能力。详见 **[模型与性能研究](docs/performance.md)**。新增模型与双卡加速尚未完成真实 T4 验收。
+
 ## 语言、保活与用量
 
 右上角可切换 **简体中文 / English**，浏览器记住选择，首次跟随浏览器语言。GUI 主界面显示 Kaggle API 返回的 GPU 已用、预留、总额度、重置时间，并计算可用额度（总额度减已用及预留）；接口未返回的字段显示不可用。自动每分钟刷新，可手动刷新；所有客户端共用 60 秒缓存。
@@ -157,7 +173,7 @@ python -m unittest discover -s tests -v
 node --test tests/test_ui.cjs
 ```
 
-Linux 安装 MCP 依赖后的完整检查通过 **56 项 Python 测试、6 项页面逻辑测试**。MCP 协议测试使用真实 SDK 客户端和模拟 GPU 后端，不消耗 Kaggle 额度；真实 GPU 后端的既有验证记录仍保留。已验证本地 Git clone 后的手动启动和自动环境启动。
+Linux 安装 MCP 依赖后的完整检查通过 **65 项 Python 测试、7 项页面逻辑测试**。MCP 协议测试使用真实 SDK 客户端和模拟 GPU 后端，不消耗 Kaggle 额度；真实 GPU 后端的既有验证记录仍保留。已验证本地 Git clone 后的手动启动和自动环境启动。
 
 [verification.json](verification.json) 保留 Kaggle 验证结论摘要（已移除私有资源标识），[examples](examples) 包含结果图。已验证 HF 首次下载、私有缓存加载、跨客户端恢复会话，以及同一模型实例的连续请求。Windows/macOS 原生窗口与完整 ComfyUI 画布尚未实机验收；仓库包含三系统自动测试配置，上传后由 GitHub Actions 执行。
 

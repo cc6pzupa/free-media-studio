@@ -132,3 +132,14 @@ python studio_worker.py --stop
 ## 验证范围
 
 自动测试使用真实 MCP SDK 客户端，覆盖 stdio 工具发现、提交、去重、进度、图片内容、断开重连、旧协议协商、后台独立存活、GUI/共享后端共用队列，以及 SQLite 恢复。协议测试使用确定性的模拟 Kaggle 后端，不消耗 GPU 额度。真实 Kaggle 推理沿用此前已经验证的会话后端；此次是否重跑 GPU 见 `verification.json`。
+
+
+## Model selection / 模型选择
+
+`generate_image` accepts `model_id`: `qwen-image-2.1`, `z-image-turbo`, or `sdxl-lightning`. Omit `steps` to use 20, 9, or 4 respectively. SDXL-Lightning requires exactly 4 steps.
+
+```text
+generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-001", model_id="z-image-turbo")
+```
+
+模型切换时释放旧模型；同一模型继续复用。新增模型使用 GUI 保存的自动账号配置。返回的 usage 包含 model_id、编码、采样及解码耗时。

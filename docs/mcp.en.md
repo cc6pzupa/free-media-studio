@@ -39,3 +39,14 @@ The local worker survives GUI closure and MCP disconnection. Completed images pe
 Default idle retention is 15 minutes after the queue finishes. Change it in the GUI or saved configuration; 0 disables automatic release. Only automatic account mode releases its exact Kaggle session, and the local worker must remain running and online. Quota is cached for 60 seconds and querying status never allocates a GPU or extends idle retention. Last model usage is historical and does not guarantee a currently live GPU.
 
 Before upgrading, finish tasks and run `python studio_worker.py --stop`. This stops the local worker only; explicitly stop unused remote sessions on Kaggle. An interrupted running job is never replayed automatically on recovery, while completed images remain available and unstarted queued jobs can resume with the same account configuration.
+
+
+## Model selection / 模型选择
+
+`generate_image` accepts `model_id`: `qwen-image-2.1`, `z-image-turbo`, or `sdxl-lightning`. Omit `steps` to use 20, 9, or 4 respectively. SDXL-Lightning requires exactly 4 steps.
+
+```text
+generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-001", model_id="z-image-turbo")
+```
+
+模型切换时释放旧模型；同一模型继续复用。新增模型使用 GUI 保存的自动账号配置。返回的 usage 包含 model_id、编码、采样及解码耗时。

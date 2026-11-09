@@ -17,7 +17,7 @@ def png():
 class FakeBackend:
     def __init__(self,config):
         self.config=config;self.count=0
-    def generate_with_progress(self,prompt,seed=42,steps=20,progress=None):
+    def generate_with_progress(self,prompt,seed=42,steps=20,progress=None,model_id="qwen-image-2.1"):
         self.count+=1
         if progress:progress({'phase':'download','message':'should not leak '+self.config['token'],
             'downloaded_bytes':1024,'total_bytes':4096,'percent':25,'token':self.config['token']})
@@ -25,7 +25,7 @@ class FakeBackend:
         time.sleep(.6)
         if progress:progress({'phase':'generating'})
         time.sleep(.3)
-        return png(),{'runtime_id':'fixture-runtime','model_load_count':1,'model_reused':self.count>1,
+        return png(),{'model_id':model_id,'runtime_id':'fixture-runtime','model_load_count':1,'model_reused':self.count>1,
             'generation_number':self.count,'request_seconds':.9,'seed':seed,'steps':steps,'width':512,'height':512,
             'token':self.config['token']}
     def close(self):pass

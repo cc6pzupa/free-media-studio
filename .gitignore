@@ -1,5 +1,7 @@
 # Local environments and Python caches
 .venv/
+.test-venv/
+.benchmarks/
 .easy-venv/
 venv/
 __pycache__/

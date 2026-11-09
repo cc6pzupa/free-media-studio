@@ -49,6 +49,14 @@ Alternatively, run `python launch.py`, or use `start_windows.bat`, `bash start_m
 
 No Jupyter URL or existing dataset is required in automatic mode. Closing the notebook editor or GUI does not immediately stop the Kaggle session. A new client can recover a live session from the private notebook's operation record.
 
+## Model selection and profiling
+
+Choose Qwen-Image 2.1 (20-step quality baseline), Z-Image Turbo (9-step efficient option), or SDXL-Lightning (fixed 4-step preview). Selecting a model applies its recommended steps. Switching releases the previous model and uses a separate private cache; repeated requests reuse the current live instance. New models use automatic account mode. All currently return one 512×512 PNG.
+
+GUI, ComfyUI, the standalone Kaggle notebook, and MCP support selection. The API and MCP `generate_image` accept `model_id`; omitted `steps` uses the model default. SDXL-Lightning requires exactly 4 steps.
+
+The GUI and usage metadata separate encoding, denoising, and decode time. `python benchmark.py` prints a plan without GPU tasks; add `--run` for fixed-prompt comparisons with separate warm-up and steady-state measurements. `--gpu-probe` inspects an existing session. See [performance research](docs/performance.md). The new models and single-image dual-GPU acceleration have not been validated on live T4s.
+
 ## Idle retention and GPU usage
 
 The default idle retention is **15 minutes**, measured after the final local task finishes. Downloads, model loading, generation, and queued tasks are excluded from idle time. Status and quota checks do not reset the timer.

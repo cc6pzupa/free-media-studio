@@ -82,18 +82,31 @@ def generate_image(prompt, seed=42, width=512, height=512, steps=35):
     positive = tuple(t.to('cuda:0') if t is not None else None for t in positive)
     negative = tuple(t.to('cuda:0') if t is not None else None for t in negative)
     pipe.register_modules(text_encoder=None)
+    _step_events=[]
+    def _record_step(pipeline,index,timestep,callback_kwargs):
+        event=torch.cuda.Event(enable_timing=True);event.record(torch.cuda.current_stream(0));_step_events.append(event)
+        return callback_kwargs
+    _before=torch.cuda.Event(enable_timing=True);_before.record(torch.cuda.current_stream(0))
     try:
         result = pipe(
             prompt_embeds=positive[0], prompt_embeds_mask=positive[1],
             negative_prompt_embeds=negative[0], negative_prompt_embeds_mask=negative[1],
             width=width, height=height, num_inference_steps=steps,
             sigmas=torch.linspace(1, 0, steps+1)[:-1].tolist(),
-            true_cfg_scale=5.0, use_kv_cache=True,
+            true_cfg_scale=5.0, use_kv_cache=True,callback_on_step_end=_record_step,
             generator=torch.Generator(device='cuda:0').manual_seed(seed)).images[0]
     finally:
         pipe.register_modules(text_encoder=encoder)
+    _after=torch.cuda.Event(enable_timing=True);_after.record(torch.cuda.current_stream(0))
     torch.cuda.synchronize(0)
-    stats = {'encoding_seconds': round(encoded-started, 2),
+    _denoise=_before.elapsed_time(_step_events[-1])/1000 if _step_events else None
+    _decode=_step_events[-1].elapsed_time(_after)/1000 if _step_events else None
+    stats = {'model_id':'qwen-image-2.1','denoising_seconds':round(_denoise,3) if _denoise is not None else None,
+             'decode_seconds':round(_decode,3) if _decode is not None else None,
+             'denoising_steps':len(_step_events),
+             'milliseconds_per_step':round(_denoise*1000/len(_step_events),2) if _step_events else None,
+             'attention_backend':'sdpa','parallel_strategy':'encoder_split',
+             'encoding_seconds': round(encoded-started, 2),
              'generation_seconds': round(time.perf_counter()-encoded, 2),
              'width': width, 'height': height, 'steps': steps, 'seed': seed,
              'peak_gpu_gib': [round(torch.cuda.max_memory_allocated(i)/2**30, 2) for i in range(2)]}

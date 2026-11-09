@@ -65,12 +65,17 @@ def cache_metadata(handle, token):
 
 
 def validate_cache_manifest(manifest):
-    if (manifest.get('studio_cache_version') != CACHE_VERSION
+    generic=manifest.get('studio_model_id') is not None
+    if generic:
+        if (manifest.get('studio_cache_version')!=2 or manifest['studio_model_id']!=globals().get('_CC_MODEL_ID')
+            or manifest.get('model_sources')!=globals().get('_CC_MODEL_SOURCES')):
+            raise RuntimeError('所选模型缓存版本不兼容。')
+    elif (manifest.get('studio_cache_version') != CACHE_VERSION
         or manifest.get('base_revision') != BASE_REVISION
         or manifest.get('gguf_revision') != GGUF_REVISION):
         raise RuntimeError('同名 Dataset 不是兼容的本程序缓存，没有覆盖它。')
     files = manifest.get('cache_files', {})
-    if not files or 'transformer-q4.gguf' not in files:
+    if not files or (not generic and 'transformer-q4.gguf' not in files) or (generic and not any(name.endswith('.safetensors') for name in files)):
         raise RuntimeError('模型缓存文件清单不完整。')
     for name, size in files.items():
         safe_relative(name)
@@ -176,13 +181,20 @@ def save_private_cache(folder, encoder):
         emit_progress('cache-prepare', '正在保存 INT8 编码器和 Q4 权重，首次需要额外等待。')
         with tempfile.TemporaryDirectory(prefix='qwen-private-cache-', dir='/kaggle/temp') as temporary:
             bundle = Path(temporary)
-            for name in ('processor','scheduler','vae','transformer'):
+            generic=globals().get('_CC_MODEL_ID','qwen-image-2.1')!='qwen-image-2.1'
+            if generic:
+                def link_or_copy(src,dst):
+                    try:os.link(src,dst)
+                    except OSError:shutil.copy2(src,dst)
+                shutil.copytree(folder,bundle,dirs_exist_ok=True,copy_function=link_or_copy,
+                    ignore=shutil.ignore_patterns('*.partial','*.verified.json','asset-sources.json'))
+            for name in (() if generic else ('processor','scheduler','vae','transformer')):
                 shutil.copytree(folder/name, bundle/name, ignore=shutil.ignore_patterns('*.partial','*.verified.json'))
-            for name in ('transformer-q4.gguf','model_index.json','LICENSE'):
+            for name in (() if generic else ('transformer-q4.gguf','model_index.json','LICENSE')):
                 if (folder/name).exists(): shutil.copy2(folder/name, bundle/name)
-            encoder.save_pretrained(bundle/'text_encoder', safe_serialization=True, max_shard_size='4GB')
+            if not generic:encoder.save_pretrained(bundle/'text_encoder', safe_serialization=True, max_shard_size='4GB')
             manifest = json.loads((folder/'asset-sources.json').read_text())
-            manifest.update(studio_cache_version=CACHE_VERSION,
+            manifest.update(studio_cache_version=2 if generic else CACHE_VERSION,
                 cache_files={p.relative_to(bundle).as_posix():p.stat().st_size for p in bundle.rglob('*') if p.is_file()},
                 cache_sha256=cache_file_hashes(bundle))
             (bundle/'asset-sources.json').write_text(json.dumps(manifest, indent=2))

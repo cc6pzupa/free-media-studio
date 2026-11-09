@@ -1,8 +1,8 @@
 {
   "project": "CC Media Studio",
   "verification_summary": {
-    "python_tests_passed": 56,
-    "ui_logic_tests_passed": 6,
+    "python_tests_passed": 65,
+    "ui_logic_tests_passed": 7,
     "mcp_protocol": "Real SDK with simulated GPU backend",
     "previous_gpu_checks": [
       "First download from public Hugging Face",
@@ -16,7 +16,17 @@
       "MCP protocol checks do not constitute a new live GPU test"
     ],
     "ui_dom_checks": "Chinese/English persistence and switching, prompt preservation, dynamic status translation, quota and idle countdown, no generation submission",
-    "quota_and_retention": "Mocked official API responses; no live Kaggle quota or cancellation check in this update"
+    "quota_and_retention": "Mocked official API responses; no live Kaggle quota or cancellation check in this update",
+    "models": {
+      "implemented": [
+        "qwen-image-2.1",
+        "z-image-turbo",
+        "sdxl-lightning"
+      ],
+      "new_model_live_gpu_verified": false,
+      "local_validation": "Model routing, defaults, isolated caches, managed model switching, MCP roundtrip and compiled standalone notebook"
+    },
+    "performance": "CUDA phase timing, fixed-input warm benchmark and existing-kernel dual-GPU diagnostics; no measured dual-GPU speedup"
   },
   "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."
 }

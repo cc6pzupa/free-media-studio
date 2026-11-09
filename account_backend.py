@@ -171,17 +171,24 @@ class AccountBackend:
             time.sleep(10)
         raise TimeoutError('Kaggle 启动等待超时。再次请求会继续检查同一个启动任务，不会重复申请。')
 
-    def generate(self,prompt,seed=42,steps=20):
-        return self.generate_with_progress(prompt,seed,steps)
+    def generate(self,prompt,seed=42,steps=None,model_id=None):
+        return self.generate_with_progress(prompt,seed,steps,model_id=model_id)
 
-    def generate_with_progress(self,prompt,seed=42,steps=20,progress=None):
+    def generate_with_progress(self,prompt,seed=42,steps=None,progress=None,model_id=None):
+        if __package__:
+            from .model_registry import model_profile,model_steps
+        else:
+            from model_registry import model_profile,model_steps
+        profile=model_profile(model_id);steps=model_steps(profile["id"],steps)
         notify=progress or (lambda update:None)
         with self.lock:
             started=time.monotonic()
+            if self.backend is not None and getattr(self.backend,"model_id","qwen-image-2.1")!=profile["id"]:
+                self.backend.close();self.backend=None
             if self.backend is None or self.backend.session.transport is None:
                 url=self._ensure_session(notify)
                 self.backend=SessionBackend(self.user,self.dataset,url,asset_mode='auto',
-                    cache_handle=self.user+'/qwen-image-studio-assets',api_token=self.token)
+                    cache_handle=self.user+'/'+profile['cache_slug'],api_token=self.token,model_id=profile['id'])
             image,stats=self.backend.generate_with_progress(prompt,seed,steps,notify)
             stats.update(backend='account',request_seconds=round(time.monotonic()-started,2))
             return image,stats

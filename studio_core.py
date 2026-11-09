@@ -98,21 +98,29 @@ def make_backend(config):
     return BatchBackend(config['user'], config['dataset'], config['token'])
 
 
-def validate_generation(prompt, seed, steps):
+def validate_generation(prompt, seed, steps, model_id=None):
+    if __package__:
+        from .model_registry import model_profile,model_steps,DEFAULT_MODEL
+    else:
+        from model_registry import model_profile,model_steps,DEFAULT_MODEL
+    model_id=model_profile(model_id)["id"];steps=model_steps(model_id,steps)
     if not isinstance(prompt,str) or not prompt.strip() or not 1 <= len(prompt) <= 4000:
         raise ValueError('提示词需要 1–4000 个字符。')
     if type(seed) is not int or not 0 <= seed <= 2147483647:
         raise ValueError('seed 需要为 0–2147483647 的整数。')
     if type(steps) is not int or not 1 <= steps <= 50:
         raise ValueError('steps 需要为 1–50 的整数。')
-    return {'prompt':prompt,'seed':seed,'steps':steps}
+    result={'prompt':prompt,'seed':seed,'steps':steps}
+    if model_id!=DEFAULT_MODEL:result['model_id']=model_id
+    return result
 
 
 # Explicit allow-lists keep transport addresses, credentials and exception text
 # out of durable jobs and MCP tool results.
 STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width','height',
     'steps','seed','peak_gpu_gib','runtime_id','model_load_count','model_reused',
-    'generation_number','asset_source','cache_status','backend'}
+    'generation_number','asset_source','cache_status','backend','model_id','denoising_seconds','decode_seconds',
+    'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy'}
 PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
@@ -283,11 +291,15 @@ class StudioCore:
     def status(self):
         with self.lock:
             config=self.config or {}
+            if __package__:
+                from .model_registry import model_catalog
+            else:
+                from model_registry import model_catalog
             last_usage=self.store.last_usage(self.fingerprint)
             return {'configured':self.backend is not None,'mode':config.get('mode','account'),
                 'user':config.get('user',''),'dataset':config.get('dataset',''),
                 'pending_jobs':self.store.pending(),'active_job_id':self.store.active_id(),
-                'last_usage':last_usage,
+                'last_usage':last_usage,'models':model_catalog(),
                 'keep_alive_minutes':config.get('keep_alive_minutes',15),
                 'idle_remaining_seconds':self.idle_remaining(),
                 'session_state':self.session_state,
@@ -295,9 +307,10 @@ class StudioCore:
                 'model_state':'released' if self.session_state=='released' else ('last_request_ready' if last_usage else 'not_checked'),
                 'message':'模型状态以最近一次生图为准；查询状态不会申请 GPU。'}
 
-    def submit(self,prompt,seed=42,steps=20,request_id=None):
-        params=validate_generation(prompt,seed,steps)
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
+        params=validate_generation(prompt,seed,steps,model_id)
         with self.lock:
+            if model_id not in (None,'qwen-image-2.1') and (self.config or {}).get('mode')!='account':raise ValueError('新增模型请使用自动账号模式。')
             if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
             if not self.backend:raise ValueError('先在 GUI 保存账号配置，或设置 KAGGLE_USERNAME 与 KAGGLE_API_TOKEN。')
             job,reused=self.store.submit(params,self.fingerprint,request_id or secrets.token_hex(16))

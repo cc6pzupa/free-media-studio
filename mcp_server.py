@@ -16,7 +16,7 @@ from studio_client import StudioClient
 
 def build_server(client=None):
     service=client or StudioClient()
-    server=MCPServer('CC Media Studio',version='0.5.0',log_level='WARNING',instructions=(
+    server=MCPServer('CC Media Studio',version='0.6.0',log_level='WARNING',instructions=(
         'Generate images on the user\'s Kaggle GPU. Credentials are configured locally; never ask for a key in tool arguments. '
         'Call studio_status, then generate_image once with a unique request_id. Poll get_job with at least two seconds '
         'between calls. When complete, call get_image to display the PNG. Reuse the same request_id only for transport retries. '
@@ -33,12 +33,13 @@ def build_server(client=None):
         return dict(call(service.status),quota=call(service.quota))
 
     @server.tool(structured_output=True)
-    def generate_image(prompt:str,request_id:str,seed:int=42,steps:int=20) -> dict[str,Any]:
-        """Queue one 512x512 PNG and return its job_id immediately. Use a unique request_id per intended image;
+    def generate_image(prompt:str,request_id:str,seed:int=42,steps:int|None=None,model_id:str="qwen-image-2.1") -> dict[str,Any]:
+        """Queue one 512x512 PNG and return its job_id immediately. Models: qwen-image-2.1 (20 steps default),
+        z-image-turbo (9 steps default), sdxl-lightning (exactly 4 steps). Omit steps for the model default. Use a unique request_id per intended image;
         reuse it when retrying the same submission. First-time preparation may take many minutes.
         Retrieve progress with get_job and the final image with get_image. No credentials are accepted here.
         """
-        return call(service.submit,prompt,seed,steps,request_id)
+        return call(service.submit,prompt,seed,steps,request_id,model_id)
 
     @server.tool(structured_output=True)
     def get_job(job_id:str) -> dict[str,Any]:

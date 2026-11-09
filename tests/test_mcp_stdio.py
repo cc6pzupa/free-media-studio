@@ -125,6 +125,20 @@ class MCPStdioTest(unittest.TestCase):
                 backend=SharedBackend({'mode':'account','user':'owner','token':'KGAT_fixture_secret'},client=service)
                 raw,usage=backend.generate('third',42,20)
                 self.assertEqual(usage['generation_number'],3);self.assertTrue(usage['model_reused'])
+                async def model_choice():
+                    async with Client(self.parameters(config_path)) as client:
+                        submitted=await client.call_tool('generate_image',{'prompt':'catgirl','request_id':'mcp-lightning','model_id':'sdxl-lightning'})
+                        self.assertFalse(submitted.is_error)
+                        selected=submitted.structured_content['job_id']
+                        for _ in range(60):
+                            result=await client.call_tool('get_job',{'job_id':selected})
+                            if result.structured_content['state']=='complete':break
+                            await asyncio.sleep(.1)
+                        self.assertEqual(result.structured_content['usage']['model_id'],'sdxl-lightning')
+                        self.assertEqual(result.structured_content['usage']['steps'],4)
+                        invalid=await client.call_tool('generate_image',{'prompt':'catgirl','request_id':'bad-model','model_id':'unknown'})
+                        self.assertTrue(invalid.is_error)
+                asyncio.run(model_choice())
             finally:
                 if thread.is_alive():gui.shutdown();thread.join();gui.server_close()
                 stop_worker(service,process)

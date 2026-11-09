@@ -14,7 +14,9 @@ from batch_backend import BatchBackend
 
 def validate(data):
     if not isinstance(data,dict):raise ValueError('请求必须是 JSON 对象')
-    prompt=data.get('prompt','');seed=data.get('seed',42);steps=data.get('steps',20)
+    from model_registry import model_profile,model_steps
+    profile=model_profile(data.get('model_id'))
+    prompt=data.get('prompt','');seed=data.get('seed',42);steps=model_steps(profile['id'],data.get('steps'))
     if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=4000:raise ValueError('请输入 1–4000 字的提示词')
     if type(seed) is not int or not 0<=seed<=2147483647:raise ValueError('seed 应为 0–2147483647 的整数')
     if type(steps) is not int or not 1<=steps<=50:raise ValueError('steps 应为 1–50 的整数')
@@ -82,7 +84,10 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         def api_auth(self):return hmac.compare_digest(self.headers.get('Authorization',''),'Bearer '+api_key)
         def do_GET(self):
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
-            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.5.0'})
+            if self.path=='/models':
+                from model_registry import model_catalog
+                return self.send(200,{'models':model_catalog()})
+            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.6.0'})
             if self.path in ('/usage','/v1/studio/usage'):
                 if not (self.ui_auth() if self.path=='/usage' else self.api_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
                 sync_shared_backend()
@@ -163,7 +168,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if backend is None:return self.send(409,{'error':{'message':'请先完成页面上方的首次配置'}})
             if is_job and isinstance(backend,SharedBackend):
                 try:
-                    job=backend.submit(prompt,seed,steps,data.get('request_id'))
+                    job=backend.submit(prompt,seed,steps,data.get('request_id'),data.get('model_id'))
                     return self.send(202,{'job_id':job['job_id']})
                 except (RuntimeError,ValueError) as error:return self.send(409,{'error':{'message':str(error)}})
             # Only accept a second task after the first finishes. No silent resubmission.
@@ -172,10 +177,12 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             def generate(progress=None):
                 try:
                     generate_with_progress=getattr(current,'generate_with_progress',None)
+                    extra={'model_id':data['model_id']} if isinstance(current,SharedBackend) and data.get('model_id') else {}
+                    if data.get('model_id') not in (None,'qwen-image-2.1') and not isinstance(current,SharedBackend):raise ValueError('新增模型请使用自动账号模式。')
                     if progress is not None and callable(generate_with_progress):
-                        image,stats=generate_with_progress(prompt,seed,steps,progress=progress)
+                        image,stats=generate_with_progress(prompt,seed,steps,progress=progress,**extra)
                     else:
-                        image,stats=current.generate(prompt,seed,steps)
+                        image,stats=current.generate(prompt,seed,steps,**extra)
                     return {'created':int(time.time()),'data':[{'b64_json':base64.b64encode(image).decode()}],'usage':stats}
                 finally:generation_lock.release()
             if is_api:

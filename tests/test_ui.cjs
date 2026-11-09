@@ -67,3 +67,27 @@ test('download progress reports actual bytes and percentage',async()=>{
     assert.equal(p.elements.get('progressBar').style.width,'25%');
     assert.match(p.elements.get('progressCaption').textContent,/1.00 \/ 4.00 GB/);
 });
+
+test('model selection uses trained defaults and includes the selected model in submission',async()=>{
+    const calls=[];
+    const p=page(async(url,options)=>{
+        calls.push([url,options]);
+        if(url==='/configuration')return config(null);
+        if(url==='/jobs')return response({job_id:'model-job'});
+        return complete();
+    });
+    for(let i=0;i<5;i++)await tick();
+    const choice=p.elements.get('modelChoice');
+    choice.value='sdxl-lightning';choice.onchange();
+    assert.equal(p.elements.get('steps').value,4);
+    assert.equal(p.elements.get('steps').disabled,true);
+    p.elements.set('prompt',{value:'adult catgirl',style:{}});
+    p.elements.set('seed',{value:'42',style:{}});
+    await p.elements.get('generate').onclick();
+    const payload=JSON.parse(calls.find(([url])=>url==='/jobs')[1].body);
+    assert.equal(payload.model_id,'sdxl-lightning');assert.equal(payload.steps,4);
+    choice.value='z-image-turbo';choice.onchange();
+    assert.equal(p.elements.get('steps').value,9);assert.equal(p.elements.get('steps').disabled,false);
+    choice.value='qwen-image-2.1';choice.onchange();
+    assert.equal(p.elements.get('steps').value,20);
+});

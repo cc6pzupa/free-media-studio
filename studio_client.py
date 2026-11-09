@@ -24,7 +24,7 @@ class StudioClient:
         self.autostart=autostart
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None
+        self.url=None;self.token=None;self.model_selection_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -43,7 +43,9 @@ class StudioClient:
             response=self.http.get(data['url']+'/health',headers={'Authorization':'Bearer '+data['token']},timeout=1)
             result=response.json()
             if response.ok and result.get('app')=='qwen-studio-worker' and result.get('protocol')==1:
-                self.url,self.token=data['url'],data['token'];return True
+                self.url,self.token=data['url'],data['token']
+                self.model_selection_supported=result.get('model_selection') is True
+                return True
         except (requests.RequestException,ValueError):pass
         return False
 
@@ -98,11 +100,13 @@ class StudioClient:
 
     def quota(self):return self._request('GET','/quota')
 
-    def submit(self,prompt,seed=42,steps=20,request_id=None):
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
         self.status()
+        if model_id not in (None,'qwen-image-2.1') and not self.model_selection_supported:
+            raise RuntimeError('请先停止旧后台并重启客户端，再使用新增模型。 / Restart the old worker to select new models.')
         # A retried POST in _request uses this exact same ID and payload.
         return self._request('POST','/jobs',{'prompt':prompt,'seed':seed,'steps':steps,
-            'request_id':request_id or secrets.token_hex(16)})
+            'request_id':request_id or secrets.token_hex(16),'model_id':model_id})
 
     def get_job(self,job_id):
         # Validate before assembling a URL; never accept traversal/query fragments.
@@ -155,12 +159,12 @@ class SharedBackend:
         result.client.autostart=True
         return result
 
-    def submit(self,prompt,seed=42,steps=20,request_id=None):
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
         if self.config:
             config={k:v for k,v in self.config.items() if k!='keep_alive_minutes'}
             self.client._request('POST','/configure',config)
-        return self.client.submit(prompt,seed,steps,request_id)
-    def generate(self,prompt,seed=42,steps=20):return self.generate_with_progress(prompt,seed,steps)
-    def generate_with_progress(self,prompt,seed=42,steps=20,progress=None):
-        return self.client.wait(self.submit(prompt,seed,steps)['job_id'],progress)
+        return self.client.submit(prompt,seed,steps,request_id,model_id)
+    def generate(self,prompt,seed=42,steps=None,model_id=None):return self.generate_with_progress(prompt,seed,steps,model_id=model_id)
+    def generate_with_progress(self,prompt,seed=42,steps=None,progress=None,model_id=None):
+        return self.client.wait(self.submit(prompt,seed,steps,model_id=model_id)['job_id'],progress)
     def close(self):self.client.close()

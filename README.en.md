@@ -4,7 +4,7 @@
 
 ![CC Media Studio English interface](docs/gui-en.jpg)
 
-The preview uses a previously verified generated image. No live account quota is connected in this screenshot.
+The interface preview uses an illustrative catgirl image, not a verified Kaggle output. No live account quota is connected in this screenshot.
 
 A personal media studio powered by your own Kaggle GPU. Image generation is available now; the CC Media Studio name leaves room for future video features. Model downloads, loading, and inference run on Kaggle. Your computer does not need a GPU, CUDA, PyTorch, or model weights.
 

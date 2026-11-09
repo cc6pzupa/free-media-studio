@@ -4,7 +4,7 @@
 
 ![CC Media Studio 中文界面](docs/gui.jpg)
 
-界面预览使用此前已验证的生图结果；截图未连接真实额度。
+界面使用猫娘示例图预览（非 Kaggle 实测输出）；截图未连接真实额度。
 
 在 Windows、Linux、macOS 上使用自己的 Kaggle GPU 生图。客户端只负责界面、请求和图片显示，模型下载、加载、推理都在 Kaggle 完成；本机无需显卡、CUDA、PyTorch 或模型权重。
 

@@ -22,7 +22,7 @@ def validate(data):
     return prompt,seed,steps
 
 
-def create_server(port=8787, backend_factory=BatchBackend):
+def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=None):
     from studio_client import SharedBackend, StudioClient
     shared_mode=backend_factory is BatchBackend
     nonce=secrets.token_urlsafe(32); api_key=secrets.token_urlsafe(32)
@@ -30,6 +30,7 @@ def create_server(port=8787, backend_factory=BatchBackend):
     config_path=Path(os.environ.get('EASY_CONFIG_PATH',str(Path.home()/'.kaggle-qwen-client/settings.json')))
     saved_user=saved_dataset=''
     def make_backend(data):
+        if keep_alive_minutes is not None:data=dict(data,keep_alive_minutes=keep_alive_minutes)
         if shared_mode:
             return SharedBackend(dict(data,mode=data.get('mode','batch')),activate=False)
         user=data.get('user','').strip()
@@ -82,6 +83,15 @@ def create_server(port=8787, backend_factory=BatchBackend):
         def do_GET(self):
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
             if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.5.0'})
+            if self.path in ('/usage','/v1/studio/usage'):
+                if not (self.ui_auth() if self.path=='/usage' else self.api_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
+                sync_shared_backend()
+                if isinstance(backend,SharedBackend):
+                    try:
+                        quota=backend.client.quota();status=backend.client.status()
+                        return self.send(200,{'quota':quota,**{k:status.get(k) for k in ('keep_alive_minutes','idle_remaining_seconds','session_state')}})
+                    except RuntimeError:return self.send(200,{'quota':{'available':False,'reason':'worker_unavailable'}})
+                return self.send(200,{'quota':{'available':False,'reason':'not_configured'}})
             if self.path=='/configuration' and self.ui_auth():
                 sync_shared_backend()
                 with state_lock:
@@ -89,7 +99,7 @@ def create_server(port=8787, backend_factory=BatchBackend):
                 if isinstance(backend,SharedBackend):
                     try:active_job_id=backend.client.status()['active_job_id']
                     except RuntimeError:pass
-                return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
+                return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'keep_alive_minutes':getattr(backend,'keep_alive_minutes',keep_alive_minutes if keep_alive_minutes is not None else 15),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
             if self.path=='/':return self.send(200,page.encode(),'text/html; charset=utf-8')
             if self.path=='/kaggle_standalone.ipynb':
                 notebook=Path(__file__).with_name('kaggle_standalone.ipynb')
@@ -119,7 +129,8 @@ def create_server(port=8787, backend_factory=BatchBackend):
                 data=json.loads(self.rfile.read(length))
                 if is_config:
                     if not isinstance(data,dict):raise ValueError('配置格式有误')
-                    candidate=make_backend(data)
+                    if keep_alive_minutes is not None and 'keep_alive_minutes' not in data:data['keep_alive_minutes']=keep_alive_minutes
+                    candidate=SharedBackend(dict(data,mode=data.get('mode','batch')),activate=False) if shared_mode else make_backend(data)
                     if not generation_lock.acquire(blocking=False):return self.send(409,{'error':{'message':'正在生成，请结束后再修改配置'}})
                     try:
                         if isinstance(candidate,SharedBackend):

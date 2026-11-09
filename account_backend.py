@@ -37,9 +37,9 @@ class AccountBackend:
         self.cache_file=directory/(user+'-'+notebook_slug+'.json')
         self.backend=None;self.lock=threading.Lock()
 
-    def _call(self,service,method,body):
+    def _call(self,service,method,body,timeout=(20,90)):
         try:
-            response=self.http.post('https://api.kaggle.com/v1/'+service+'/'+method,json=body,timeout=(20,90))
+            response=self.http.post('https://api.kaggle.com/v1/'+service+'/'+method,json=body,timeout=timeout)
         except requests.RequestException:
             raise RuntimeError('无法连接 Kaggle，请检查网络；没有自动重复提交。') from None
         if not response.ok:raise KaggleApiError(response.status_code)
@@ -160,7 +160,7 @@ class AccountBackend:
                 # tokenizedJupyterUrl is a frontend handoff URL, not an API base.
                 url=payload.get('jupyterUrl') or ''
                 if not self._valid_connection(url):raise RuntimeError('Kaggle 未返回有效的会话连接。')
-                self._save({'jupyter_url':url,'operation':operation})
+                self._save({'jupyter_url':url,'operation':operation,**({'kernel_session_id':payload['kernelSessionId']} if isinstance(payload.get('kernelSessionId'),int) else {})})
                 if recorded_operation!=operation:
                     try:self._remember_operation(operation)
                     except Exception:
@@ -185,6 +185,27 @@ class AccountBackend:
             image,stats=self.backend.generate_with_progress(prompt,seed,steps,notify)
             stats.update(backend='account',request_seconds=round(time.monotonic()-started,2))
             return image,stats
+
+    def quota(self):
+        from usage_stats import normalize_quota
+        return normalize_quota(self._call('kernels.KernelsApiService','GetAcceleratorQuotaStatistics',{},timeout=(3,8)))
+
+    def release_session(self):
+        # Cancel only the exact interactive session this client connected to.
+        with self.lock:
+            cached=self._read();url=cached.get('jupyter_url','')
+            if not url:return
+            if not self._valid_connection(url):raise RuntimeError('Invalid cached session')
+            match=re.fullmatch(r'/k/([0-9]+)/[^/]+/proxy/?',urlsplit(url).path)
+            session_id=cached.get('kernel_session_id') or (int(match.group(1)) if match else None)
+            if not isinstance(session_id,int) or session_id<=0:raise RuntimeError('Session ID unavailable')
+            try:
+                result=self._call('kernels.KernelsApiService','CancelKernelSession',{'kernelSessionId':session_id})
+                if result.get('errorMessage') or result.get('error'):raise RuntimeError('Session cancellation failed')
+            except KaggleApiError as error:
+                if error.status not in (404,410):raise
+            if self.backend:self.backend.close();self.backend=None
+            self._save({})
 
     def close(self):
         with self.lock:

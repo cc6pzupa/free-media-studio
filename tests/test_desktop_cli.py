@@ -21,7 +21,7 @@ class DesktopCLITest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             environment = dict(os.environ, EASY_CONFIG_PATH=str(Path(temporary)/'settings.json'),
                                PYTHONUTF8='1', PYTHONUNBUFFERED='1')
-            process = subprocess.Popen([sys.executable, 'desktop.py', '--no-open', '--port', '0'],
+            process = subprocess.Popen([sys.executable, 'desktop.py', '--no-open', '--port', '0', '--keep-alive-minutes', '22'],
                 cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding='utf-8')
             lines = queue.Queue()
@@ -54,6 +54,12 @@ class DesktopCLITest(unittest.TestCase):
                 configuration = requests.get(address+'/configuration',
                     headers={'X-Local-Session':nonce},timeout=5).json()
                 self.assertFalse(configuration['configured'])
+                self.assertEqual(configuration['keep_alive_minutes'],22)
+                self.assertEqual(requests.get(address+'/usage',timeout=5).status_code,401)
+                usage=requests.get(address+'/usage',headers={'X-Local-Session':nonce},timeout=5)
+                self.assertEqual(usage.status_code,200)
+                self.assertFalse(usage.json()['quota']['available'])
+                self.assertEqual(requests.get(address+'/v1/studio/usage',timeout=5).status_code,401)
                 notebook = requests.get(address+'/kaggle_standalone.ipynb',timeout=5)
                 self.assertEqual(notebook.status_code,200)
                 self.assertEqual(json.loads(notebook.content)['nbformat'],4)

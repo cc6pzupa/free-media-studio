@@ -1,5 +1,11 @@
 # CC Media Studio · Kaggle
 
+**简体中文** | [English](README.en.md)
+
+![CC Media Studio 中文界面](docs/gui.jpg)
+
+界面预览使用此前已验证的生图结果；截图未连接真实额度。
+
 在 Windows、Linux、macOS 上使用自己的 Kaggle GPU 生图。客户端只负责界面、请求和图片显示，模型下载、加载、推理都在 Kaggle 完成；本机无需显卡、CUDA、PyTorch 或模型权重。
 
 ## 快速开始：clone → 安装依赖 → 运行
@@ -52,6 +58,21 @@ python desktop.py
 | macOS | `bash start_mac.command` |
 | Linux | `bash start_linux.sh` |
 
+## 语言、保活与用量
+
+右上角可切换 **简体中文 / English**，浏览器记住选择，首次跟随浏览器语言。GUI 主界面显示 Kaggle API 返回的 GPU 已用、预留、总额度、重置时间，并计算可用额度（总额度减已用及预留）；接口未返回的字段显示不可用。自动每分钟刷新，可手动刷新；所有客户端共用 60 秒缓存。
+
+默认**空闲保活 15 分钟**，从最后一个任务结束后计时，生成、下载或排队时不触发释放，查询状态与用量不重置计时。GUI“账号与连接”可设置 0–1440 分钟；0 为关闭自动释放。启动参数示例：
+
+```bash
+python desktop.py --keep-alive-minutes 15
+python launch.py --keep-alive-minutes 30
+```
+
+`CC_MEDIA_KEEP_ALIVE_MINUTES` 设置无已保存配置时的默认值。自动账号模式空闲超时后，后台只取消当前连接的 Kaggle 会话，下次生成重新准备模型；手动 Jupyter 和 Kaggle 独立 Notebook 由用户管理。自动释放要求本机后台运行且能联网；关闭 GUI 后后台继续运行，关机或停止后台后无法代为释放。释放失败会显示提示，至少 60 秒后重试。Kaggle 自身的会话限制仍适用。
+
+外部程序可使用本机 API Key 请求 `GET /v1/studio/usage`，返回额度、保活配置、剩余空闲秒数及会话状态；MCP 的 `studio_status` 也返回这些信息。新额度读取和自动取消已使用模拟 API 响应测试，此次未用真实 Kaggle 账号验证。
+
 ## 使用流程
 
 1. 在 GUI 填 Kaggle 用户名和 API Key，按需勾选“记住配置”。账号需已完成 Kaggle 验证并有可用 GPU 额度。
@@ -60,7 +81,7 @@ python desktop.py
 4. 完全首次使用时，从公开 Hugging Face 下载约 **23.51 GB** 权重，显示真实进度；准备 INT8 编码器和 Q4 主模型，自动保存约 **16 GB** 私有 Dataset 缓存。
 5. 接收一张 **512×512 PNG**，可在 GUI 保存。后续请求继续复用已加载的模型。
 
-同一个 Kaggle 内核存活时模型只加载一次。关闭 Notebook 编辑器网页、退出或重启客户端，不会主动停止 GPU 会话；新装客户端也能通过专用私有 Notebook 的启动任务编号恢复连接。Kaggle 会话结束后需要加载一次，已有私有缓存时无需重新从 HF 下载、量化。
+保活期内同一个 Kaggle 内核存活时模型只加载一次。关闭 Notebook 编辑器网页、退出或重启 GUI 不会立即停止 GPU 会话；本机后台会按保活设置释放空闲会话；新装客户端也能通过专用私有 Notebook 的启动任务编号恢复连接。Kaggle 会话结束后需要加载一次，已有私有缓存时无需重新从 HF 下载、量化。
 
 缓存下载支持 **4 路并行、断点续传、真实字节进度**；上传和模型加载显示实际阶段。首次保存私有缓存需要额外等待。程序不会覆盖同名的不兼容 Dataset。
 
@@ -136,7 +157,7 @@ python -m unittest discover -s tests -v
 node --test tests/test_ui.cjs
 ```
 
-Linux 安装 MCP 依赖后的完整检查通过 **49 项 Python 测试、6 项页面逻辑测试**。MCP 协议测试使用真实 SDK 客户端和模拟 GPU 后端，不消耗 Kaggle 额度；真实 GPU 后端的既有验证记录仍保留。已验证本地 Git clone 后的手动启动和自动环境启动。
+Linux 安装 MCP 依赖后的完整检查通过 **56 项 Python 测试、6 项页面逻辑测试**。MCP 协议测试使用真实 SDK 客户端和模拟 GPU 后端，不消耗 Kaggle 额度；真实 GPU 后端的既有验证记录仍保留。已验证本地 Git clone 后的手动启动和自动环境启动。
 
 [verification.json](verification.json) 保留 Kaggle 验证结论摘要（已移除私有资源标识），[examples](examples) 包含结果图。已验证 HF 首次下载、私有缓存加载、跨客户端恢复会话，以及同一模型实例的连续请求。Windows/macOS 原生窗口与完整 ComfyUI 画布尚未实机验收；仓库包含三系统自动测试配置，上传后由 GitHub Actions 执行。
 

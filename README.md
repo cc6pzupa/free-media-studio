@@ -1,189 +1,160 @@
-# CC Media Studio · Kaggle
+# CC Media Studio
 
 **简体中文** | [English](README.en.md)
 
-![CC Media Studio 中文界面](docs/gui.jpg)
+使用自己的 Kaggle GPU 额度生成图片。双击启动器，填写 Kaggle 用户名和 API Key，即可在本机界面创作；模型下载、加载和推理都在云端完成。
 
-界面使用猫娘示例图预览（非 Kaggle 实测输出）；截图未连接真实额度。
+![CC Media Studio 界面](docs/gui.jpg)
 
-在 Windows、Linux、macOS 上使用自己的 Kaggle GPU 生图。客户端只负责界面、请求和图片显示，模型下载、加载、推理都在 Kaggle 完成；本机无需显卡、CUDA、PyTorch 或模型权重。
+- 支持 Windows、macOS、Linux，首次启动自动安装依赖。
+- 三种模型可选，自动准备权重、保存私有缓存，并复用活跃会话中的模型。
+- 中文 / English 界面，显示下载进度、GPU 用量和空闲倒计时。
+- 支持 GUI、ComfyUI、Kaggle Notebook、本地 MCP 和 HTTP API。
 
-## 快速开始：clone → 安装依赖 → 运行
+## 下载与启动
 
-准备 **Git、Python 3.11+** 和可联网的电脑。推荐 Python 3.11 或 3.12。私有仓库需要先用有访问权限的 GitHub 账号完成 Git 认证；Kaggle Key 不用于 GitHub 认证。
+安装 **Python 3.11 或 3.12**，然后[下载 ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) 并解压。当前仓库为私有，下载需使用有访问权限的 GitHub 账号。
 
-使用有访问权限的 GitHub 账号克隆本私有仓库：
-
-```bash
-git clone https://github.com/cc6pzupa/free-media-studio.git qwen-image-studio
-cd qwen-image-studio
-```
-
-### Windows（PowerShell 或命令提示符）
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe desktop.py
-```
-
-### Linux / macOS
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python desktop.py
-```
-
-程序会打开 GUI。未安装原生窗口组件时，在系统浏览器打开同样的界面：**http://127.0.0.1:8787**。保持启动进程运行，按 `Ctrl+C` 可退出 GUI 服务。已启动的独立后台会继续处理任务；停止后台请在队列结束后运行 `python studio_worker.py --stop`。
-
-第一次使用只填写 **Kaggle 用户名 + API Key / API Token**，然后输入提示词、点击生成。无需自己填写 Jupyter 地址，也无需先准备 Dataset。
-
-### 可选：独立窗口或自动安装
-
-默认依赖已足够运行浏览器 GUI。Windows/macOS 如需独立窗口，在同一个虚拟环境内额外安装：
-
-```bash
-python -m pip install -r requirements-desktop.txt
-python desktop.py
-```
-
-上面的 `python` 指已激活虚拟环境的 Python；未激活时，使用前文对应的 `.venv` Python 完整路径。原生窗口不可用时会退回系统浏览器。也可以用 `python desktop.py --browser` 固定使用浏览器界面。
-
-不想手动创建环境，可直接运行 `python launch.py`。它创建独立的 `.easy-venv`，安装依赖，并在依赖清单变化后自动更新；Windows/macOS 会尝试安装原生窗口组件。
-
-| 系统 | 自动启动入口 |
+| 系统 | 启动方式 |
 | --- | --- |
 | Windows | 双击 `start_windows.bat` |
-| macOS | `bash start_mac.command` |
-| Linux | `bash start_linux.sh` |
+| macOS | 在项目目录运行 `bash start_mac.command` |
+| Linux | 在项目目录运行 `bash start_linux.sh` |
 
-## 模型选择与性能对比
+启动器会创建 `.easy-venv` 并安装依赖。保持启动窗口运行，GUI 默认地址为 **http://127.0.0.1:8787**。
 
-创作区新增模型选择：
-
-| 模型 | 推荐步数 | 用途 |
-| --- | --- | --- |
-| Qwen-Image 2.1 | 20，可调 | 保留现有画质基线 |
-| Z-Image Turbo | 9，可调 | 效率优先 |
-| SDXL-Lightning | 固定 4 | 快速预览，推荐英文提示词 |
-
-选择模型会自动带出推荐步数。切换时释放旧模型，模型文件与私有缓存按模型分别保存。同一个活跃模型继续复用。新增模型使用自动账号连接；当前统一输出单张 512×512 PNG。
-
-GUI、ComfyUI、Kaggle 独立 Notebook 与 MCP 均已接入模型选择。本机 API 可传 `model_id`，省略 `steps` 时使用模型默认值；SDXL-Lightning 必须是 4 步。MCP 的 `generate_image` 同样接受 `model_id`。
-
-完成状态新增编码、采样和解码耗时。运行 `python benchmark.py` 查看测试计划；`python benchmark.py --run` 执行固定提示词的模型与步数对比，预热和连续生成分开统计。`python benchmark.py --gpu-probe` 检查已连接会话的双卡拓扑与并行能力。详见 **[模型与性能研究](docs/performance.md)**。新增模型与双卡加速尚未完成真实 T4 验收。
-
-## 语言、保活与用量
-
-右上角可切换 **简体中文 / English**，浏览器记住选择，首次跟随浏览器语言。GUI 主界面显示 Kaggle API 返回的 GPU 已用、预留、总额度、重置时间，并计算可用额度（总额度减已用及预留）；接口未返回的字段显示不可用。自动每分钟刷新，可手动刷新；所有客户端共用 60 秒缓存。
-
-默认**空闲保活 15 分钟**，从最后一个任务结束后计时，生成、下载或排队时不触发释放，查询状态与用量不重置计时。GUI“账号与连接”可设置 0–1440 分钟；0 为关闭自动释放。启动参数示例：
+也可以使用 Git：
 
 ```bash
-python desktop.py --keep-alive-minutes 15
+git clone https://github.com/cc6pzupa/free-media-studio.git
+cd free-media-studio
+python launch.py
+```
+
+macOS / Linux 使用 `python3 launch.py`。Windows 安装 Python 时勾选 **Add python.exe to PATH**。
+
+## 第一次生图
+
+1. 打开左侧 **账号与连接**。
+2. 填写 Kaggle 个人主页中的**用户名**，以及自己的 **API Key / API Token**。
+3. 勾选 **记住账号配置**，点击 **保存连接**。
+4. 回到创作工作台，选择模型，输入画面描述，点击 **生成图片**。
+5. 图片生成后，点击 **保存图片** 下载 PNG。
+
+API Token 可在 [Kaggle API 设置](https://www.kaggle.com/settings/api) 中创建。账号需已完成 GPU 使用所需的验证，并有可用额度。自动连接模式无需填写 Dataset 或 Jupyter 地址。
+
+首次生成会自动准备 Kaggle 双 T4 会话、下载权重并保存私有缓存；进度卡片显示下载字节和当前阶段。后续请求复用已加载的模型，新会话优先读取缓存。切换模型会释放旧模型，保留已下载文件。
+
+## 选择模型
+
+| 模型 | 默认步数 | 适用场景 |
+| --- | --- | --- |
+| Qwen-Image 2.1 | 20，可调整 | 通用文生图 |
+| Z-Image Turbo | 9，可调整 | 效率优先 |
+| SDXL-Lightning | 固定 4 | 快速预览，推荐英文提示词 |
+
+选择模型后自动应用推荐步数。当前输出为单张 **512×512 PNG**，随机种子默认为 **42**。完成状态显示编码、采样和解码耗时。
+
+每个模型使用独立私有缓存。Qwen 首次原始权重下载约 23.51 GB，准备后的 INT8 / Q4 缓存约 16 GB；其他模型的实际下载量以进度显示为准。
+
+## GPU 用量与保活
+
+主界面显示 GPU 已用、预留、可用、总额度及重置时间，每分钟刷新，也可手动刷新。
+
+默认**空闲保活 15 分钟**，从最后一个任务结束后计时。下载、加载、生图和排队时不触发空闲释放；查询状态和用量不延长计时。
+
+在 **账号与连接** 中可设为 **0–1440 分钟**，`0` 表示关闭自动释放。也可通过启动参数设置：
+
+```bash
 python launch.py --keep-alive-minutes 30
 ```
 
-`CC_MEDIA_KEEP_ALIVE_MINUTES` 设置无已保存配置时的默认值。自动账号模式空闲超时后，后台只取消当前连接的 Kaggle 会话，下次生成重新准备模型；手动 Jupyter 和 Kaggle 独立 Notebook 由用户管理。自动释放要求本机后台运行且能联网；关闭 GUI 后后台继续运行，关机或停止后台后无法代为释放。释放失败会显示提示，至少 60 秒后重试。Kaggle 自身的会话限制仍适用。
+关闭 GUI 后，本地后台继续处理任务和管理空闲会话。自动释放需要电脑保持联网、后台保持运行；手动 Jupyter 模式和直接运行的 Kaggle Notebook 由用户管理。
 
-外部程序可使用本机 API Key 请求 `GET /v1/studio/usage`，返回额度、保活配置、剩余空闲秒数及会话状态；MCP 的 `studio_status` 也返回这些信息。新额度读取和自动取消已使用模拟 API 响应测试，此次未用真实 Kaggle 账号验证。
+## ComfyUI
 
-## 使用流程
-
-1. 在 GUI 填 Kaggle 用户名和 API Key，按需勾选“记住配置”。账号需已完成 Kaggle 验证并有可用 GPU 额度。
-2. 输入提示词，点击生成。程序自动创建或找回私有专用 Notebook，并申请双 T4 会话。
-3. 模型已在当前内核中时直接生成。新内核优先读取自己的私有 `用户名/qwen-image-studio-assets`。
-4. 完全首次使用时，从公开 Hugging Face 下载约 **23.51 GB** 权重，显示真实进度；准备 INT8 编码器和 Q4 主模型，自动保存约 **16 GB** 私有 Dataset 缓存。
-5. 接收一张 **512×512 PNG**，可在 GUI 保存。后续请求继续复用已加载的模型。
-
-保活期内同一个 Kaggle 内核存活时模型只加载一次。关闭 Notebook 编辑器网页、退出或重启 GUI 不会立即停止 GPU 会话；本机后台会按保活设置释放空闲会话；新装客户端也能通过专用私有 Notebook 的启动任务编号恢复连接。Kaggle 会话结束后需要加载一次，已有私有缓存时无需重新从 HF 下载、量化。
-
-缓存下载支持 **4 路并行、断点续传、真实字节进度**；上传和模型加载显示实际阶段。首次保存私有缓存需要额外等待。程序不会覆盖同名的不兼容 Dataset。
-
-## ComfyUI：独立运行，无需保持 GUI 打开
-
-在 `ComfyUI/custom_nodes` 中 clone 本仓库，然后用 **ComfyUI 所用的 Python** 安装依赖并重启 ComfyUI：
+在 ComfyUI 的上级目录执行：
 
 ```bash
-git clone https://github.com/cc6pzupa/free-media-studio.git ComfyUI/custom_nodes/qwen-image-studio
-<ComfyUI的Python> -m pip install -r ComfyUI/custom_nodes/qwen-image-studio/requirements.txt
+git clone https://github.com/cc6pzupa/free-media-studio.git ComfyUI/custom_nodes/cc-media-studio
+<ComfyUI的Python> -m pip install -r ComfyUI/custom_nodes/cc-media-studio/requirements.txt
 ```
 
-以上路径以 ComfyUI 的上级目录为基准；已经进入 `ComfyUI/custom_nodes` 时，直接 clone 到 `qwen-image-studio` 即可。
+重启 ComfyUI，添加 **CC Media Image**，将 `IMAGE` 输出连接到 **Save Image** 的 `images`。
 
-先在 GUI 保存一次账号配置，或在启动 ComfyUI 前设置 `KAGGLE_USERNAME`、`KAGGLE_API_TOKEN`（旧 Key 可用 `KAGGLE_KEY`）。添加 **CC Media Image**，将 `IMAGE` 接到 **Save Image** 的 `images`。节点通过独立后台连接 Kaggle，不经过 GUI 的 HTTP 服务，凭据不写入工作流。本机 Torch、NumPy、Pillow 由 ComfyUI 环境提供。
+先在同一系统用户下通过 GUI 保存一次账号配置。节点可独立运行，GUI 无需保持打开。选择 `model_id`；启用 `use_model_defaults` 时，Z-Image 使用 9 步，SDXL-Lightning 使用 4 步。
 
-## Kaggle：直接运行 Notebook
+## Kaggle Notebook
 
-上传或导入 [`kaggle_standalone.ipynb`](kaggle_standalone.ipynb)，选择 **GPU T4 ×2**、开启 Internet，运行所有单元格，然后在 Notebook 的界面中输入提示词并生成。
+把 [`kaggle_standalone.ipynb`](kaggle_standalone.ipynb) 导入 Kaggle，选择 **GPU T4 ×2**、开启 **Internet**，运行全部单元格。在 Notebook 界面选择模型并输入提示词。
 
-Notebook 已嵌入必要运行代码，无需本机客户端或已有 Dataset。不填额外凭据也可从 HF 下载后生图；如需自动保存和读取跨会话私有缓存，展开可选设置，填写自己的 Kaggle 用户名和 API Key。Key 使用后会清空输入框；不要保存带凭据的 Notebook 输出。
+如需跨会话私有缓存，展开缓存设置填写自己的 Kaggle 用户名和 Key。只在当前会话生图时可留空。
 
-## 本地 MCP：第四个入口
+## 本地 MCP
 
-安装 `requirements-mcp.txt`，在 AI 客户端注册 `mcp_server.py`，即可通过对话调用生图。提供 `studio_status`、`generate_image`、`get_job`、`get_image` 四个工具，支持异步队列、真实进度、PNG 返回、请求去重和任务恢复。
+用项目环境中的 Python 安装：
 
-GUI、ComfyUI 和 MCP 共用独立后台；关掉 GUI 后 MCP 仍可运行。账号配置复用本机保存内容，Key 不进入工具参数。
+```powershell
+# Windows
+.\.easy-venv\Scripts\python.exe -m pip install -r requirements-mcp.txt
+```
 
-完整安装步骤、Windows/macOS/Linux 配置示例和恢复说明见 **[本地 MCP 使用指南](docs/mcp.md)**。
+```bash
+# macOS / Linux
+.easy-venv/bin/python -m pip install -r requirements-mcp.txt
+```
 
-## 本机 API 与启动参数
+在支持本地 stdio MCP 的 AI 客户端中注册 `mcp_server.py`。账号读取 GUI 已保存的配置。
 
-GUI 运行时提供：
+| 工具 | 用途 |
+| --- | --- |
+| `studio_status` | 查看模型列表、账号配置、队列和 GPU 用量 |
+| `generate_image` | 提交生图并返回任务编号 |
+| `get_job` | 查询生成进度 |
+| `get_image` | 取得完成后的 PNG |
 
-```text
+完整的三系统配置和调用步骤见 **[MCP 使用指南](docs/mcp.md)**。
+
+## HTTP API
+
+GUI 启动后，在高级设置中查看本机 API Key。
+
+```http
 POST http://127.0.0.1:8787/v1/images/generations
-Authorization: Bearer <GUI高级设置中显示的本机API密钥>
+Authorization: Bearer <本机 API Key>
+Content-Type: application/json
+
+{"prompt":"An adult catgirl by a sunny window, anime illustration","model_id":"z-image-turbo","seed":42}
 ```
 
-```json
-{"prompt":"An orange fox beside a teacup, natural photography","size":"512x512","steps":20,"seed":42}
+响应中的 `data[0].b64_json` 为 PNG；`usage` 包含模型、步数、耗时、缓存状态和复用信息。省略 `steps` 时使用所选模型默认值。
+
+```http
+GET http://127.0.0.1:8787/v1/studio/usage
+Authorization: Bearer <本机 API Key>
 ```
 
-返回 `data[0].b64_json` 为 PNG；`usage` 包含耗时、`runtime_id`、`model_load_count`、`model_reused`、`generation_number`、`asset_source`、`cache_status`。这个本机 API 密钥与 Kaggle Key 不同。示例：[test_api_example.py](test_api_example.py)。
+## 更新
+
+等当前队列完成，关闭 GUI / MCP 客户端，再停止本地后台：
+
+```powershell
+# Windows
+.\.easy-venv\Scripts\python.exe studio_worker.py --stop
+```
 
 ```bash
-python desktop.py --browser
-python desktop.py --port 8788
-python desktop.py --no-open --port 8787
+# macOS / Linux
+.easy-venv/bin/python studio_worker.py --stop
 ```
 
-`--no-open` 仅启动本机服务，不打开窗口，适合无桌面环境和启动检查；服务始终只监听本机地址。`--port 0` 可供测试自动选择空闲端口。通过 `launch.py` 启动时也可传递这些参数。
+执行 `git pull` 后重新运行启动器。MCP 使用者同时更新 `requirements-mcp.txt` 中的依赖。
 
-## 更新与测试
+## 常见问题
 
-先等队列完成，停止本机后台并关闭 GUI / MCP 客户端，再在仓库目录执行：
-
-```bash
-python studio_worker.py --stop
-git pull
-python -m pip install -r requirements.txt
-python desktop.py
-```
-
-这里的 `python` 同样指本项目虚拟环境中的 Python。自动启动器会在下次启动时检查依赖清单是否变化。
-
-MCP 使用者更新后还需执行 `python -m pip install -r requirements-mcp.txt`。
-
-开发检查（Node.js 只用于页面测试，普通使用无需安装；这些测试不需要真实 Kaggle Key，也不会申请 GPU）：
-
-```bash
-python -m unittest discover -s tests -v
-node --test tests/test_ui.cjs
-```
-
-Linux 安装 MCP 依赖后的完整检查通过 **65 项 Python 测试、7 项页面逻辑测试**。MCP 协议测试使用真实 SDK 客户端和模拟 GPU 后端，不消耗 Kaggle 额度；真实 GPU 后端的既有验证记录仍保留。已验证本地 Git clone 后的手动启动和自动环境启动。
-
-[verification.json](verification.json) 保留 Kaggle 验证结论摘要（已移除私有资源标识），[examples](examples) 包含结果图。已验证 HF 首次下载、私有缓存加载、跨客户端恢复会话，以及同一模型实例的连续请求。Windows/macOS 原生窗口与完整 ComfyUI 画布尚未实机验收；仓库包含三系统自动测试配置，上传后由 GitHub Actions 执行。
-
-## 配置与常见问题
-
-- **本机没有显卡可以吗？** 可以。模型与推理在 Kaggle，客户端不安装 GPU 依赖。
-- **Linux 创建虚拟环境失败？** 某些发行版需先安装对应 Python 的 `venv` 组件，然后重试。
-- **浏览器没有自动打开？** 手动访问启动日志中的本机地址；也可加 `--browser`。
-- **端口被占用？** 使用 `--port 8788`，不会把请求交给不属于本程序的已有服务。
-- **关闭 GUI 就停止计费/额度消耗吗？** 不会自动停止 Kaggle GPU，会话用完请在 Kaggle 主动停止。
-- **Key 保存在哪里？** 本机用户目录 `.kaggle-qwen-client/settings.json`，连接记录在同目录 `sessions/`；POSIX 系统使用私有文件权限，Windows 使用用户目录的系统访问控制。不要上传或分享这些文件。
-
-仓库的 `.gitignore` 已排除本机配置、会话凭据、虚拟环境和下载权重；仓库不包含真实 Key。权重来源、固定版本、旧版手动连接和批处理说明见 [运行细节](docs/runtime-details.md)。
+- **浏览器没有自动打开？** 手动打开 `http://127.0.0.1:8787`，或使用 `python launch.py --browser`。
+- **端口被占用？** 使用 `python launch.py --port 8788`。
+- **第一次生成较久？** 进度包含会话排队、下载、准备、缓存和加载；后续优先复用。
+- **提示重启旧后台？** 按更新步骤停止后台，再重新启动客户端。
+- **配置保存在哪里？** 当前用户目录的 `.kaggle-qwen-client/settings.json`；任务和图片在同目录的 `studio/`。
+- **如何结束 GPU 会话？** 等待空闲自动释放，或在 Kaggle 会话管理中停止。停止本地后台只影响本机服务。

@@ -1,126 +1,160 @@
-# CC Media Studio · Kaggle
+# CC Media Studio
 
 [简体中文](README.md) | **English**
 
-![CC Media Studio English interface](docs/gui-en.jpg)
+Generate images with your own Kaggle GPU quota. Start the launcher, enter your Kaggle username and API key, and create in a lightweight local interface. Model downloads, loading, and inference run in the cloud.
 
-The interface preview uses an illustrative catgirl image, not a verified Kaggle output. No live account quota is connected in this screenshot.
+![CC Media Studio interface](docs/gui-en.jpg)
 
-A personal media studio powered by your own Kaggle GPU. Image generation is available now; the CC Media Studio name leaves room for future video features. Model downloads, loading, and inference run on Kaggle. Your computer does not need a GPU, CUDA, PyTorch, or model weights.
+- Windows, macOS, and Linux launchers with automatic dependency installation.
+- Three models, automatic downloads, private caches, and live model reuse.
+- Chinese / English interface with download progress, GPU usage, and idle countdown.
+- GUI, ComfyUI, standalone Kaggle notebook, local MCP, and HTTP API.
 
-## Clone, install, run
+## Download and launch
 
-Install Git and Python 3.11+ (3.11 or 3.12 recommended). Authenticate Git with a GitHub account that can access this private repository.
+Install **Python 3.11 or 3.12**, then [download the ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) and extract it. This is a private repository; sign in with an authorized GitHub account to download.
 
-```bash
-git clone https://github.com/cc6pzupa/free-media-studio.git qwen-image-studio
-cd qwen-image-studio
-```
+| System | Launch |
+| --- | --- |
+| Windows | Double-click `start_windows.bat` |
+| macOS | Run `bash start_mac.command` in the project folder |
+| Linux | Run `bash start_linux.sh` in the project folder |
 
-Windows:
+The launcher creates `.easy-venv` and installs dependencies. Keep its window running. The GUI opens at **http://127.0.0.1:8787**.
 
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe desktop.py
-```
-
-Linux / macOS:
+Or use Git:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python desktop.py
+git clone https://github.com/cc6pzupa/free-media-studio.git
+cd free-media-studio
+python launch.py
 ```
 
-The GUI opens in your browser at `http://127.0.0.1:8787`. Select **English** or **简体中文** in the top bar; the browser remembers your choice. The initial language follows your browser preference. Enter your Kaggle username and API key/token, then write a prompt and generate.
+Use `python3 launch.py` on macOS/Linux. On Windows, select **Add python.exe to PATH** when installing Python.
 
-For an optional native window on Windows/macOS, install `requirements-desktop.txt` in the same environment. If a native window is unavailable, the app falls back to the browser. Use `--browser` to always use the browser or `--no-open` to serve without opening a window.
+## Generate your first image
 
-Alternatively, run `python launch.py`, or use `start_windows.bat`, `bash start_mac.command`, or `bash start_linux.sh`. The launcher creates `.easy-venv`, installs dependencies, and updates them when the dependency manifest changes.
+1. Open **Account & connection**.
+2. Enter your Kaggle profile **username** and **API key / API token**.
+3. Select **Remember configuration** and **Save connection**.
+4. Select a model, write a prompt, and click **Generate image**.
+5. Select **Save image** to download the PNG.
 
-## First use and model reuse
+Create tokens in [Kaggle API settings](https://www.kaggle.com/settings/api). Your account needs the verification required for GPU use and available quota. Automatic mode does not need a dataset or Jupyter URL.
 
-1. Use a verified Kaggle account with available GPU quota.
-2. The client creates or recovers its private notebook and requests a dual T4 session.
-3. A loaded model in a live kernel is reused. A new kernel first looks for your private model cache.
-4. On a completely new account, public Hugging Face weights download automatically (about 23.51 GB), with actual byte progress and resumable downloads. INT8/Q4 preparation then saves an approximately 16 GB private dataset cache.
-5. Images are single 512×512 PNG files. Later requests reuse the same loaded model while its session remains alive.
+First use prepares a dual T4 session, downloads weights, and saves a private cache. The progress card shows actual bytes and stages. Later requests reuse the loaded model; new sessions first check the cache. Switching models releases the previous model and retains downloaded files.
 
-No Jupyter URL or existing dataset is required in automatic mode. Closing the notebook editor or GUI does not immediately stop the Kaggle session. A new client can recover a live session from the private notebook's operation record.
+## Choose a model
 
-## Model selection and profiling
+| Model | Default steps | Use |
+| --- | --- | --- |
+| Qwen-Image 2.1 | 20, adjustable | General image generation |
+| Z-Image Turbo | 9, adjustable | Efficiency |
+| SDXL-Lightning | Fixed at 4 | Quick previews; English prompts recommended |
 
-Choose Qwen-Image 2.1 (20-step quality baseline), Z-Image Turbo (9-step efficient option), or SDXL-Lightning (fixed 4-step preview). Selecting a model applies its recommended steps. Switching releases the previous model and uses a separate private cache; repeated requests reuse the current live instance. New models use automatic account mode. All currently return one 512×512 PNG.
+Selecting a model applies its recommended steps. Output is one **512×512 PNG**, with seed **42** by default. Completion status shows encoding, denoising, and decode time.
 
-GUI, ComfyUI, the standalone Kaggle notebook, and MCP support selection. The API and MCP `generate_image` accept `model_id`; omitted `steps` uses the model default. SDXL-Lightning requires exactly 4 steps.
+Each model has a separate private cache. Qwen's initial raw download is approximately 23.51 GB, with a prepared INT8/Q4 cache of about 16 GB. Other models show their actual download size in the progress card.
 
-The GUI and usage metadata separate encoding, denoising, and decode time. `python benchmark.py` prints a plan without GPU tasks; add `--run` for fixed-prompt comparisons with separate warm-up and steady-state measurements. `--gpu-probe` inspects an existing session. See [performance research](docs/performance.md). The new models and single-image dual-GPU acceleration have not been validated on live T4s.
+## GPU usage and idle retention
 
-## Idle retention and GPU usage
+The GUI shows used, reserved, available, and total GPU quota plus reset time. It refreshes every minute and supports manual refresh.
 
-The default idle retention is **15 minutes**, measured after the final local task finishes. Downloads, model loading, generation, and queued tasks are excluded from idle time. Status and quota checks do not reset the timer.
+Default idle retention is **15 minutes** after the final task finishes. Queued tasks, downloads, loading, and generation prevent idle release. Status and quota checks do not extend the timer.
 
-Set **Idle retention (minutes)** in the GUI, or pass a startup option:
+Set **0–1440 minutes** in Account & connection; `0` disables automatic release. Or pass a startup option:
 
 ```bash
-python desktop.py --keep-alive-minutes 15
 python launch.py --keep-alive-minutes 30
 ```
 
-The range is 0–1440 minutes; **0 disables automatic release**. `CC_MEDIA_KEEP_ALIVE_MINUTES` sets the default when no saved setting exists. The GUI can override it. In automatic account mode, the local worker calls Kaggle's cancellation API for the exact connected session when idle time expires; the next generation starts or reconnects and reloads as needed. Manual Jupyter sessions and direct Kaggle notebooks remain externally managed.
+Closing the GUI leaves the local worker running. Automatic release needs the computer online and the worker running. Manual Jupyter sessions and direct Kaggle notebooks are managed by the user.
 
-The local worker must remain running and online for automatic release. Closing the GUI alone keeps it running; stopping the worker or powering off the computer prevents its cleanup call. If release fails, the GUI reports it and the worker retries after at least 60 seconds. Kaggle's own platform limits still apply.
+## ComfyUI
 
-The main GUI shows GPU used, reserved, available, total, quota reset time, and the idle countdown. Quota is fetched from Kaggle's official `GetAcceleratorQuotaStatistics` API and cached for 60 seconds across clients. Available quota is derived as `max(0, total − used − reserved)` and is not a billing estimate. Missing fields remain unavailable; no assumed weekly allowance is displayed. Usage checks never allocate a GPU.
+From ComfyUI's parent directory:
 
-## Four entry points
+```bash
+git clone https://github.com/cc6pzupa/free-media-studio.git ComfyUI/custom_nodes/cc-media-studio
+<ComfyUI-Python> -m pip install -r ComfyUI/custom_nodes/cc-media-studio/requirements.txt
+```
 
-- **GUI:** `python desktop.py`.
-- **ComfyUI:** clone into `ComfyUI/custom_nodes/qwen-image-studio`, install `requirements.txt` with ComfyUI's Python, restart, and add **CC Media Image** → **Save Image**. Save account configuration once in the GUI or use `KAGGLE_USERNAME` and `KAGGLE_API_TOKEN` (`KAGGLE_KEY` for older keys). The GUI does not need to stay open. ComfyUI supplies its own Torch, NumPy, and Pillow.
-- **Kaggle notebook:** import `kaggle_standalone.ipynb`, enable Internet and dual T4 GPUs, and run all cells. No local installation is needed. Optional credentials enable cross-session private caching and are cleared from the input after use. Do not save notebook outputs containing credentials.
-- **Local MCP:** install `requirements-mcp.txt`, then register `mcp_server.py` as a local stdio server. See [MCP setup](docs/mcp.en.md). GUI, ComfyUI, and MCP share one durable local queue, backend, and image store.
+Restart ComfyUI, add **CC Media Image**, and connect `IMAGE` to **Save Image** → `images`.
 
-## Local API
+Save account configuration once in the GUI under the same system user. The GUI can then be closed. Select `model_id`; with `use_model_defaults` enabled, Z-Image uses 9 steps and SDXL-Lightning uses 4.
 
-```text
+## Kaggle notebook
+
+Import [`kaggle_standalone.ipynb`](kaggle_standalone.ipynb), select **GPU T4 ×2**, enable **Internet**, and run all cells. Select a model and enter a prompt in the notebook interface.
+
+Optional cache settings accept your Kaggle username and key for cross-session private caching. Leave them empty for generation within the current session.
+
+## Local MCP
+
+Install with the project environment:
+
+```powershell
+# Windows
+.\.easy-venv\Scripts\python.exe -m pip install -r requirements-mcp.txt
+```
+
+```bash
+# macOS / Linux
+.easy-venv/bin/python -m pip install -r requirements-mcp.txt
+```
+
+Register `mcp_server.py` in an AI client supporting local stdio MCP. It uses credentials saved in the GUI.
+
+| Tool | Purpose |
+| --- | --- |
+| `studio_status` | Models, configuration, queue, GPU usage |
+| `generate_image` | Submit generation and return a job ID |
+| `get_job` | Read progress |
+| `get_image` | Retrieve the completed PNG |
+
+See the [MCP setup guide](docs/mcp.en.md) for platform configurations and examples.
+
+## HTTP API
+
+Start the GUI and find the local API key in advanced settings.
+
+```http
 POST http://127.0.0.1:8787/v1/images/generations
-Authorization: Bearer <local API key shown in advanced settings>
+Authorization: Bearer <local API key>
+Content-Type: application/json
+
+{"prompt":"An adult catgirl by a sunny window, anime illustration","model_id":"z-image-turbo","seed":42}
 ```
 
-```json
-{"prompt":"An orange fox beside a teacup, natural photography","size":"512x512","steps":20,"seed":42}
-```
+`data[0].b64_json` contains the PNG. `usage` includes model, steps, timings, cache status, and reuse. Omitted `steps` uses the model default.
 
-The result contains `data[0].b64_json` and usage statistics, including generation time, model reuse, load count, and cache status. This local API key differs from your Kaggle key.
-
-```text
+```http
 GET http://127.0.0.1:8787/v1/studio/usage
 Authorization: Bearer <local API key>
 ```
 
-Returns `quota`, `keep_alive_minutes`, `idle_remaining_seconds`, and `session_state`. MCP's `studio_status` exposes the same quota and retention information.
+## Update
 
-## Updating and stopping
+Finish queued work, close GUI/MCP clients, and stop the local worker:
 
-Finish queued tasks before updating. Stop the local worker, pull changes, install dependencies, then restart GUI/MCP clients:
-
-```bash
-python studio_worker.py --stop
-git pull
-python -m pip install -r requirements.txt
-python desktop.py
+```powershell
+# Windows
+.\.easy-venv\Scripts\python.exe studio_worker.py --stop
 ```
 
-MCP users also install `requirements-mcp.txt`. These commands use the project's virtual-environment Python. Stopping the local worker does not stop a remote Kaggle session; explicitly stop unused sessions on Kaggle if needed.
-
-Account settings live under `~/.kaggle-qwen-client/`; existing paths and internal identifiers remain compatible with earlier releases. The repository excludes credentials, connection records, local databases, outputs, virtual environments, and weights. Never share local connection or settings files.
-
-## Validation
-
 ```bash
-python -m unittest discover -s tests -v
-node --test tests/test_ui.cjs
+# macOS / Linux
+.easy-venv/bin/python studio_worker.py --stop
 ```
 
-MCP tests use the real SDK with a simulated GPU backend. Prior real-GPU checks covered first-time Hugging Face downloads, private cache reloads, session recovery, and repeated generation with model reuse. New quota and idle-release behavior is tested with mocked API responses; it has not been validated against a live Kaggle account in this update. Windows/macOS native windows and a full ComfyUI canvas have not been tested on physical hosts.
+Run `git pull`, then restart the launcher. MCP users also update dependencies from `requirements-mcp.txt`.
+
+## Common questions
+
+- **Browser did not open?** Visit `http://127.0.0.1:8787` or use `python launch.py --browser`.
+- **Port in use?** Use `python launch.py --port 8788`.
+- **First generation takes longer?** Progress includes queuing, downloads, preparation, caching, and loading. Later requests prioritize reuse.
+- **Asked to restart an old worker?** Follow the update steps and relaunch.
+- **Where is configuration?** `~/.kaggle-qwen-client/settings.json`; jobs and images are under `studio/` in the same directory.
+- **How do I end the GPU session?** Wait for automatic idle release or stop it in Kaggle's session manager. Stopping the local worker affects the local service only.

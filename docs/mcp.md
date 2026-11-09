@@ -1,5 +1,7 @@
 # 本地 MCP：第四个入口
 
+**简体中文** | [English](mcp.en.md)
+
 让支持本地 stdio MCP 的 AI 客户端调用 Kaggle 生图。GUI、ComfyUI 节点和 MCP 现在都连接同一个独立后台，后台拥有唯一任务队列、Kaggle 连接与图片记录；Kaggle 独立 Notebook 继续复用同一套云端运行时代码。
 
 本机不需要显卡、CUDA、Torch。MCP 依赖独立安装，不会增加普通 GUI 使用者的安装要求。
@@ -73,6 +75,8 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 自动启动器使用 `.easy-venv`；如果选择该环境，请先用它的 Python 安装 `requirements-mcp.txt`，再把上述 `.venv` 路径替换为 `.easy-venv`。
 
 不要在终端手动运行 MCP 之后等待网页打开。MCP 由 AI 客户端启动，通过标准输入输出通信；它本身不打开窗口，也不是 GUI 的 HTTP 地址。
+
+默认空闲保活 15 分钟，可在 GUI 修改；`studio_status` 同时返回 GPU 额度、保活配置及倒计时。查询额度不启动 GPU，也不重置保活计时。自动释放需要本机后台在线，只作用于自动账号模式的当前会话。
 
 ## 四个工具
 

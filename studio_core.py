@@ -1,6 +1,7 @@
 """Durable, single-consumer job queue shared by all local entry points."""
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -33,12 +34,19 @@ def private_write(path, data):
         temporary.unlink(missing_ok=True)
 
 
+def keep_alive_value(value):
+    if isinstance(value,bool) or str(value).strip() not in {str(n) for n in range(1441)}:
+        raise ValueError('保活时间需要为 0–1440 分钟的整数。')
+    return int(value)
+
+
 def normalize_config(config):
     mode = config.get('mode', 'account')
     user = config.get('user', '').strip()
     if not re.fullmatch(r'[A-Za-z0-9_-]+', user):
         raise ValueError('请配置 Kaggle 用户名。')
-    result = {'mode':mode, 'user':user, 'dataset':config.get('dataset', '').strip()}
+    result = {'mode':mode, 'user':user, 'dataset':config.get('dataset', '').strip(),
+              'keep_alive_minutes':keep_alive_value(config.get('keep_alive_minutes',os.environ.get('CC_MEDIA_KEEP_ALIVE_MINUTES','15')))}
     if mode == 'session':
         result.update(jupyter_url=config.get('jupyter_url', '').strip(), kernel_id=config.get('kernel_id') or None)
         if __package__:
@@ -76,7 +84,7 @@ def load_config():
 
 
 def configuration_fingerprint(config):
-    return hashlib.sha256(json.dumps(config, sort_keys=True).encode('utf-8')).hexdigest()
+    return hashlib.sha256(json.dumps({k:v for k,v in config.items() if k!='keep_alive_minutes'}, sort_keys=True).encode('utf-8')).hexdigest()
 
 
 def make_backend(config):
@@ -230,6 +238,9 @@ class StudioCore:
         self.config=None;self.backend=None;self.fingerprint=None
         self.wake=threading.Event();self.stopping=threading.Event()
         self.worker=None
+        self.idle_since=None;self.session_state='not_started';self.releasing=False;self.release_retry_at=0
+        self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=0
+        self.quota_lock=threading.Lock()
         initial=load_config()
         if initial:self.configure(initial)
 
@@ -237,7 +248,9 @@ class StudioCore:
         normalized=normalize_config(config)
         fingerprint=configuration_fingerprint(normalized)
         with self.lock:
+            if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
             changed=fingerprint!=self.fingerprint
+            if not changed and 'keep_alive_minutes' not in config:normalized['keep_alive_minutes']=self.config['keep_alive_minutes']
             if changed and self.backend is not None and self.store.pending():raise ValueError('队列尚有任务，请完成后再切换账号或连接配置。')
             candidate=self.factory(normalized) if changed else self.backend
             try:
@@ -251,9 +264,13 @@ class StudioCore:
                     try:candidate.close()
                     except Exception:pass
                 raise
-            if not changed:return
+            if not changed:
+                self.config=normalized
+                return
             previous=self.backend
             self.backend=candidate;self.config=normalized;self.fingerprint=fingerprint
+            self.idle_since=None;self.session_state='not_started'
+            self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=0
             if previous:
                 try:previous.close()
                 except Exception:pass
@@ -271,16 +288,59 @@ class StudioCore:
                 'user':config.get('user',''),'dataset':config.get('dataset',''),
                 'pending_jobs':self.store.pending(),'active_job_id':self.store.active_id(),
                 'last_usage':last_usage,
-                'model_state':'last_request_ready' if last_usage else 'not_checked',
+                'keep_alive_minutes':config.get('keep_alive_minutes',15),
+                'idle_remaining_seconds':self.idle_remaining(),
+                'session_state':self.session_state,
+                'quota':dict(self.quota_cache),
+                'model_state':'released' if self.session_state=='released' else ('last_request_ready' if last_usage else 'not_checked'),
                 'message':'模型状态以最近一次生图为准；查询状态不会申请 GPU。'}
 
     def submit(self,prompt,seed=42,steps=20,request_id=None):
         params=validate_generation(prompt,seed,steps)
         with self.lock:
+            if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
             if not self.backend:raise ValueError('先在 GUI 保存账号配置，或设置 KAGGLE_USERNAME 与 KAGGLE_API_TOKEN。')
             job,reused=self.store.submit(params,self.fingerprint,request_id or secrets.token_hex(16))
         self.wake.set()
         return dict(job,deduplicated=reused)
+
+    def idle_remaining(self):
+        minutes=(self.config or {}).get('keep_alive_minutes',15)
+        if not minutes or self.idle_since is None or self.store.pending() or self.session_state not in ('active','release_failed'):
+            return None
+        return max(0,math.ceil(minutes*60-(time.monotonic()-self.idle_since)))
+
+    def expire_idle(self):
+        with self.lock:
+            remaining=self.idle_remaining()
+            if remaining is None or remaining>0 or self.releasing or time.monotonic()<self.release_retry_at:return
+            backend=self.backend
+            release=getattr(backend,'release_session',None)
+            if not callable(release):
+                self.session_state='externally_managed';return
+            self.releasing=True;self.session_state='releasing'
+        try:
+            release()
+            with self.lock:self.session_state='released';self.idle_since=None
+        except Exception:
+            with self.lock:
+                self.session_state='release_failed';self.release_retry_at=time.monotonic()+60
+        finally:
+            with self.lock:self.releasing=False
+
+    def quota(self):
+        # This read never provisions a session and is rate-limited across all clients.
+        with self.quota_lock:
+            with self.lock:
+                backend=self.backend;fingerprint=self.fingerprint
+                if time.monotonic()-self.quota_checked_at<60:return dict(self.quota_cache)
+            getter=getattr(backend,'quota',None)
+            try:result=getter() if callable(getter) else {'available':False,'reason':'unsupported_mode'}
+            except Exception:result={'available':False,'reason':'api_unavailable'}
+            with self.lock:
+                if fingerprint!=self.fingerprint:return {'available':False,'reason':'configuration_changed'}
+                self.quota_cache=dict(result,checked_at=time.time());self.quota_checked_at=time.monotonic()
+                return dict(self.quota_cache)
 
     def _progress(self, job_id, event):
         phase=event.get('phase')
@@ -305,6 +365,7 @@ class StudioCore:
                     row=self.store.claim()
                 backend=self.backend
             if row is None:
+                self.expire_idle()
                 self.wake.wait(.5);self.wake.clear();continue
             job_id=row['id']
             if row['config_hash']!=self.fingerprint:
@@ -323,6 +384,10 @@ class StudioCore:
                 self.store.update(job_id,state='complete',progress={'phase':'complete','message':'图片已生成并保存。'},stats=clean_stats)
             except Exception:
                 self.store.update(job_id,state='error',progress={'phase':'error','message':'生成失败；该任务没有自动重发。请检查配置、网络或 Kaggle 会话后再决定是否提交新任务。'})
+
+            finally:
+                with self.lock:
+                    self.idle_since=time.monotonic();self.session_state='active';self.release_retry_at=0
 
     def close(self):
         self.stopping.set();self.wake.set()

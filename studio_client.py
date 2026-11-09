@@ -96,6 +96,8 @@ class StudioClient:
             if config:result=self.configure(config)
         return result
 
+    def quota(self):return self._request('GET','/quota')
+
     def submit(self,prompt,seed=42,steps=20,request_id=None):
         self.status()
         # A retried POST in _request uses this exact same ID and payload.
@@ -138,6 +140,7 @@ class SharedBackend:
         self.mode=normalized['mode'];self.user=normalized['user'];self.dataset=normalized['dataset']
         self.token=normalized.get('token','');self.jupyter_url=normalized.get('jupyter_url','')
         self.kernel_id=normalized.get('kernel_id')
+        self.keep_alive_minutes=normalized['keep_alive_minutes']
         if activate:self.activate()
 
     def activate(self,remember=None,api_key=None):
@@ -148,11 +151,14 @@ class SharedBackend:
         result=cls.__new__(cls)
         result.client=client;result.mode=status['mode'];result.user=status['user'];result.dataset=status['dataset']
         result.token='';result.jupyter_url='';result.kernel_id=None;result.config=None
+        result.keep_alive_minutes=status.get('keep_alive_minutes',15)
         result.client.autostart=True
         return result
 
     def submit(self,prompt,seed=42,steps=20,request_id=None):
-        if self.config:self.activate()
+        if self.config:
+            config={k:v for k,v in self.config.items() if k!='keep_alive_minutes'}
+            self.client._request('POST','/configure',config)
         return self.client.submit(prompt,seed,steps,request_id)
     def generate(self,prompt,seed=42,steps=20):return self.generate_with_progress(prompt,seed,steps)
     def generate_with_progress(self,prompt,seed=42,steps=20,progress=None):

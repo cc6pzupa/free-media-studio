@@ -65,6 +65,7 @@ def create_worker_server(core, token, port=0):
             if not self.authorized():return
             try:
                 if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1})
+                if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if self.path.startswith('/jobs/'):
                     pieces=self.path.split('/')
@@ -105,7 +106,7 @@ def create_worker_server(core, token, port=0):
     return ThreadingHTTPServer(('127.0.0.1',port),Handler)
 
 
-def serve(directory=None,backend_factory=None):
+def serve(directory=None,backend_factory=None,keep_alive_minutes=None):
     directory=Path(directory or state_directory())
     lock=ProcessLock(directory/'worker.lock')
     if not lock.acquire():return
@@ -113,6 +114,8 @@ def serve(directory=None,backend_factory=None):
     token=secrets.token_urlsafe(32)
     try:
         core=StudioCore(directory,**({'backend_factory':backend_factory} if backend_factory else {}))
+        if keep_alive_minutes is not None and core.config:
+            core.configure(dict(core.config,keep_alive_minutes=keep_alive_minutes))
         server=create_worker_server(core,token)
         private_write(info_path,json.dumps({'url':f'http://127.0.0.1:{server.server_port}',
             'token':token,'pid':os.getpid(),'protocol':1}).encode('utf-8'))
@@ -131,13 +134,18 @@ def serve(directory=None,backend_factory=None):
 def main():
     parser=argparse.ArgumentParser(description='CC Media Studio shared local worker')
     parser.add_argument('--state-dir',type=Path)
+    parser.add_argument('--keep-alive-minutes',type=int,help='Idle retention in minutes (default: 15; 0 disables auto-release)')
     parser.add_argument('--stop',action='store_true',help='Stop the local worker after all jobs finish; does not stop Kaggle')
     args=parser.parse_args()
+    if args.keep_alive_minutes is not None:
+        from studio_core import keep_alive_value
+        try:os.environ['CC_MEDIA_KEEP_ALIVE_MINUTES']=str(keep_alive_value(args.keep_alive_minutes))
+        except ValueError as error:parser.error(str(error))
     if args.stop:
         from studio_client import StudioClient
         client=StudioClient(args.state_dir,autostart=False)
         print(json.dumps(client.shutdown(),ensure_ascii=False))
-    else:serve(args.state_dir)
+    else:serve(args.state_dir,keep_alive_minutes=args.keep_alive_minutes)
 
 
 if __name__=='__main__':main()

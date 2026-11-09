@@ -1,7 +1,7 @@
 {
   "project": "CC Media Studio",
   "verification_summary": {
-    "python_tests_passed": 49,
+    "python_tests_passed": 56,
     "ui_logic_tests_passed": 6,
     "mcp_protocol": "Real SDK with simulated GPU backend",
     "previous_gpu_checks": [
@@ -14,7 +14,9 @@
       "Windows/macOS native windows not tested on real devices",
       "Full ComfyUI canvas not tested on real host",
       "MCP protocol checks do not constitute a new live GPU test"
-    ]
+    ],
+    "ui_dom_checks": "Chinese/English persistence and switching, prompt preservation, dynamic status translation, quota and idle countdown, no generation submission",
+    "quota_and_retention": "Mocked official API responses; no live Kaggle quota or cancellation check in this update"
   },
   "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."
 }

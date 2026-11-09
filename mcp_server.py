@@ -30,7 +30,7 @@ def build_server(client=None):
     @server.tool(structured_output=True)
     def studio_status() -> dict[str,Any]:
         """Check local configuration, queued jobs and last model usage. Does not allocate a GPU."""
-        return call(service.status)
+        return dict(call(service.status),quota=call(service.quota))
 
     @server.tool(structured_output=True)
     def generate_image(prompt:str,request_id:str,seed:int=42,steps:int=20) -> dict[str,Any]:

@@ -1,7 +1,7 @@
 from .node import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .easy_node import KaggleEasyImage
 NODE_CLASS_MAPPINGS['KaggleEasyImage'] = KaggleEasyImage
-NODE_DISPLAY_NAME_MAPPINGS['KaggleEasyImage'] = 'Kaggle Easy Image'
+NODE_DISPLAY_NAME_MAPPINGS['KaggleEasyImage'] = 'CC Media Image'
 try:
     from .session_node import KaggleQwenSession
 except ImportError:

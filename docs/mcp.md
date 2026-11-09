@@ -49,7 +49,7 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 ```json
 {
   "mcpServers": {
-    "qwen-studio": {
+    "cc-media-studio": {
       "command": "C:/absolute/path/qwen-image-studio/.venv/Scripts/python.exe",
       "args": ["C:/absolute/path/qwen-image-studio/mcp_server.py"]
     }
@@ -62,7 +62,7 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 ```json
 {
   "mcpServers": {
-    "qwen-studio": {
+    "cc-media-studio": {
       "command": "/absolute/path/qwen-image-studio/.venv/bin/python",
       "args": ["/absolute/path/qwen-image-studio/mcp_server.py"]
     }

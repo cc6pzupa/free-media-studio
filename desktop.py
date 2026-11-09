@@ -9,7 +9,7 @@ from easy_gateway import create_server
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Qwen Studio · Kaggle image client')
+    parser = argparse.ArgumentParser(description='CC Media Studio · Kaggle image client')
     parser.add_argument('--browser', action='store_true', help='Use the system browser instead of a native window')
     parser.add_argument('--no-open', action='store_true', help='Serve the GUI without opening a window (for remote/headless use)')
     parser.add_argument('--port', type=int, default=8787, help='Local port (default: 8787; 0 selects a free port)')
@@ -27,20 +27,20 @@ def main(argv=None):
                 raise ValueError()
         except Exception:
             raise SystemExit(f'{args.port} 端口已被其他程序占用。请关闭旧程序，或使用 --port 指定其他端口。')
-        print('Qwen Studio 已在运行：'+address, flush=True)
+        print('CC Media Studio 已在运行：'+address, flush=True)
         if not args.no_open:
             webbrowser.open(address)
         return
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     address = f'http://127.0.0.1:{server.server_port}'
-    print('Qwen Studio: '+address, flush=True)
+    print('CC Media Studio: '+address, flush=True)
     try:
         use_browser = args.browser or args.no_open
         if not use_browser:
             try:
                 import webview
-                webview.create_window('Qwen Studio', address, width=1300, height=880,
+                webview.create_window('CC Media Studio', address, width=1300, height=880,
                     min_size=(980, 700), background_color='#f5f6fa')
                 webview.start()
             except Exception:

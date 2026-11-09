@@ -40,7 +40,7 @@ class DesktopCLITest(unittest.TestCase):
                         if process.poll() is not None:break
                         continue
                     observed.append(line)
-                    match = re.match(r'Qwen Studio: (http://127\.0\.0\.1:\d+)',line)
+                    match = re.match(r'CC Media Studio: (http://127\.0\.0\.1:\d+)',line)
                     if match:
                         address = match.group(1)
                         break
@@ -49,7 +49,7 @@ class DesktopCLITest(unittest.TestCase):
                 self.assertEqual(health.status_code,200)
                 self.assertEqual(health.json()['app'],'qwen-studio')
                 page = requests.get(address, timeout=5)
-                self.assertIn('Qwen Studio',page.text)
+                self.assertIn('CC Media Studio',page.text)
                 nonce = re.search("const nonce='([^']+)'",page.text).group(1)
                 configuration = requests.get(address+'/configuration',
                     headers={'X-Local-Session':nonce},timeout=5).json()

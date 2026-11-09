@@ -129,7 +129,7 @@ def serve(directory=None,backend_factory=None):
 
 
 def main():
-    parser=argparse.ArgumentParser(description='Qwen Studio shared local worker')
+    parser=argparse.ArgumentParser(description='CC Media Studio shared local worker')
     parser.add_argument('--state-dir',type=Path)
     parser.add_argument('--stop',action='store_true',help='Stop the local worker after all jobs finish; does not stop Kaggle')
     args=parser.parse_args()

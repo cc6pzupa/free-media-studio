@@ -75,14 +75,14 @@ def run(_):
     finally:button.disabled=False
 
 button.on_click(run)
-display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">Qwen Studio · Kaggle</h2>'),prompt,steps,seed,cache_box,button,progress,status,image_view,info]))
+display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">CC Media Studio · Kaggle</h2>'),prompt,steps,seed,cache_box,button,progress,status,image_view,info]))
 '''
     def cell(kind,source,name):
         data={'id':name,'cell_type':kind,'metadata':{},'source':source.splitlines(keepends=True)}
         if kind=='code':data.update(execution_count=None,outputs=[])
         return data
     nb={'nbformat':4,'nbformat_minor':5,'metadata':{'kernelspec':{'name':'python3','display_name':'Python 3','language':'python'}},'cells':[
-        cell('markdown','# Qwen Studio — 从零自动准备\n\n选择 **GPU T4 ×2** 并开启 Internet，然后运行所有单元格。\n\n不需要已有 Dataset、模型文件或 Hugging Face Token。填提示词并点击按钮，首次自动下载公开权重，显示真实下载进度；之后复用已加载的模型。\n\n如需跨会话缓存，展开可选设置，填写自己的 Kaggle 用户名与 API Key。首次自动创建私有 `用户名/qwen-image-studio-assets`，后续优先读取。留空仍可生图，权重仅保存在当前会话临时磁盘。不要保存带凭据的单元格输出。','intro'),
+        cell('markdown','# CC Media Studio — 从零自动准备\n\n选择 **GPU T4 ×2** 并开启 Internet，然后运行所有单元格。\n\n不需要已有 Dataset、模型文件或 Hugging Face Token。填提示词并点击按钮，首次自动下载公开权重，显示真实下载进度；之后复用已加载的模型。\n\n如需跨会话缓存，展开可选设置，填写自己的 Kaggle 用户名与 API Key。首次自动创建私有 `用户名/qwen-image-studio-assets`，后续优先读取。留空仍可生图，权重仅保存在当前会话临时磁盘。不要保存带凭据的单元格输出。','intro'),
         cell('code','%pip install -q bitsandbytes==0.50.2 gguf requests ipywidgets','dependencies'),
         cell('code',ui,'studio-ui')]}
     path=Path(__file__).with_name('kaggle_standalone.ipynb')

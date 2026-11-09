@@ -1,8 +1,6 @@
-# Free Media Studio · Kaggle
+# CC Media Studio · Kaggle
 
 在 Windows、Linux、macOS 上使用自己的 Kaggle GPU 生图。客户端只负责界面、请求和图片显示，模型下载、加载、推理都在 Kaggle 完成；本机无需显卡、CUDA、PyTorch 或模型权重。
-
-![Qwen Studio 界面预览](docs/gui.jpg)
 
 ## 快速开始：clone → 安装依赖 → 运行
 
@@ -77,7 +75,7 @@ git clone https://github.com/cc6pzupa/free-media-studio.git ComfyUI/custom_nodes
 
 以上路径以 ComfyUI 的上级目录为基准；已经进入 `ComfyUI/custom_nodes` 时，直接 clone 到 `qwen-image-studio` 即可。
 
-先在 GUI 保存一次账号配置，或在启动 ComfyUI 前设置 `KAGGLE_USERNAME`、`KAGGLE_API_TOKEN`（旧 Key 可用 `KAGGLE_KEY`）。添加 **Kaggle Easy Image**，将 `IMAGE` 接到 **Save Image** 的 `images`。节点通过独立后台连接 Kaggle，不经过 GUI 的 HTTP 服务，凭据不写入工作流。本机 Torch、NumPy、Pillow 由 ComfyUI 环境提供。
+先在 GUI 保存一次账号配置，或在启动 ComfyUI 前设置 `KAGGLE_USERNAME`、`KAGGLE_API_TOKEN`（旧 Key 可用 `KAGGLE_KEY`）。添加 **CC Media Image**，将 `IMAGE` 接到 **Save Image** 的 `images`。节点通过独立后台连接 Kaggle，不经过 GUI 的 HTTP 服务，凭据不写入工作流。本机 Torch、NumPy、Pillow 由 ComfyUI 环境提供。
 
 ## Kaggle：直接运行 Notebook
 

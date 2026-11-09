@@ -9,7 +9,7 @@ from pathlib import Path
 
 def main():
     if sys.version_info < (3, 11):
-        raise SystemExit('请先安装 Python 3.11 或更新版本，再启动 Qwen Studio。')
+        raise SystemExit('请先安装 Python 3.11 或更新版本，再启动 CC Media Studio。')
     root = Path(__file__).resolve().parent
     folder = root/'.easy-venv'
     python = folder/('Scripts/python.exe' if os.name == 'nt' else 'bin/python')

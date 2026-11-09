@@ -1,0 +1,130 @@
+# 本地 MCP：第四个入口
+
+让支持本地 stdio MCP 的 AI 客户端调用 Kaggle 生图。GUI、ComfyUI 节点和 MCP 现在都连接同一个独立后台，后台拥有唯一任务队列、Kaggle 连接与图片记录；Kaggle 独立 Notebook 继续复用同一套云端运行时代码。
+
+本机不需要显卡、CUDA、Torch。MCP 依赖独立安装，不会增加普通 GUI 使用者的安装要求。
+
+## 安装
+
+在仓库根目录，用本项目的虚拟环境 Python 执行：
+
+```bash
+python -m pip install -r requirements-mcp.txt
+```
+
+这里的 `python` 指 `.venv` 内的 Python。没有激活环境时：
+
+```powershell
+# Windows
+.\.venv\Scripts\python.exe -m pip install -r requirements-mcp.txt
+```
+
+```bash
+# macOS / Linux
+.venv/bin/python -m pip install -r requirements-mcp.txt
+```
+
+MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化连接。
+
+## 配置账号
+
+推荐先在 GUI 保存一次 Kaggle 用户名与 Key，然后关闭 GUI。MCP 自动读取同一用户目录中的配置。
+
+也可在 MCP 客户端为这个服务设置环境变量：
+
+- `KAGGLE_USERNAME`：Kaggle 用户名。
+- `KAGGLE_API_TOKEN`：Kaggle API Token；旧 Key 可用 `KAGGLE_KEY`。
+- `EASY_CONFIG_PATH`：可选，指定另一份本机账号配置路径。
+
+已保存的 GUI 配置优先于环境变量。一个配置目录共用一个后台和一个账号；不同账号应使用不同的 `EASY_CONFIG_PATH`。正在排队或生成时不能切换账号。首次启动后台时会读取配置，客户端不会通过工具参数询问或返回 Key。
+
+未勾选“记住配置”时，账号只在后台内存中保留；关闭 GUI 不会清除运行中的后台配置，停止后台后需要重新配置。
+
+## 接入 MCP 客户端
+
+在支持 `mcpServers` 配置格式的客户端中添加以下内容，并把路径替换为 clone 后的真实绝对路径。其他客户端请在其“本地 MCP / stdio”设置中填写相同的可执行文件与参数。
+
+### Windows
+
+```json
+{
+  "mcpServers": {
+    "qwen-studio": {
+      "command": "C:/absolute/path/qwen-image-studio/.venv/Scripts/python.exe",
+      "args": ["C:/absolute/path/qwen-image-studio/mcp_server.py"]
+    }
+  }
+}
+```
+
+### macOS / Linux
+
+```json
+{
+  "mcpServers": {
+    "qwen-studio": {
+      "command": "/absolute/path/qwen-image-studio/.venv/bin/python",
+      "args": ["/absolute/path/qwen-image-studio/mcp_server.py"]
+    }
+  }
+}
+```
+
+自动启动器使用 `.easy-venv`；如果选择该环境，请先用它的 Python 安装 `requirements-mcp.txt`，再把上述 `.venv` 路径替换为 `.easy-venv`。
+
+不要在终端手动运行 MCP 之后等待网页打开。MCP 由 AI 客户端启动，通过标准输入输出通信；它本身不打开窗口，也不是 GUI 的 HTTP 地址。
+
+## 四个工具
+
+| 工具 | 参数 | 返回 |
+| --- | --- | --- |
+| `studio_status` | 无 | 账号是否配置、排队数量、当前任务、最近一次模型使用情况 |
+| `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`steps=20` | 立即返回任务 ID，不等待首次下载或生图 |
+| `get_job` | `job_id` | `queued/running/complete/error/interrupted`、真实阶段、下载字节与百分比、复用信息 |
+| `get_image` | 已完成的 `job_id` | MCP `image/png` 内容，以及图片尺寸和耗时等元数据 |
+
+初版固定一张 512×512 PNG。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。
+
+`studio_status` 不申请 GPU。`last_usage` 是历史信息，不保证 Kaggle 当前仍存活；实际生成时后端会重新检查会话和模型。
+
+## 一次完整调用
+
+1. 用户说“帮我生成一只窗边的小狐狸”。
+2. AI 调用 `studio_status`，确认本机已有配置。
+3. AI 调用 `generate_image(prompt=..., request_id=...)`，获得 `job_id`。
+4. 后台自动启动或找回 Kaggle 会话，复用热模型；必要时读取私有缓存或首次下载。
+5. AI 每隔至少两秒调用 `get_job(job_id)` 查询进度。
+6. 状态为 `complete` 后调用 `get_image(job_id)`。支持图片展示的客户端可直接显示图片；PNG 同时保留在本机。
+
+下载和复制阶段显示真实字节；加载、上传等阶段只显示实际状态，不伪造完成百分比。
+
+## 后台、持久化与恢复
+
+后台按需启动，只绑定 `127.0.0.1`，使用本机私有连接记录认证。MCP 的 stdout 只用于协议；普通日志在 stderr，后台日志单独保存。
+
+默认数据目录：`~/.kaggle-qwen-client/studio/`（Windows 同样位于当前用户目录）：
+
+- `jobs.sqlite3`：任务记录、参数、进度和使用统计，不保存 Kaggle Key。
+- `images/<job_id>.png`：已完成的图片。
+- `connection.json`：本机后台地址与访问凭据，不要分享。
+- `worker.log`：后台诊断日志。
+
+自定义 `EASY_CONFIG_PATH` 时，数据位于该配置文件旁边的 `studio/`。账号、连接记录、任务和图片只保存在本机；它们已被 `.gitignore` 排除。
+
+关闭 GUI、断开 MCP 或重启 MCP 客户端不会停止后台，任务继续执行，原任务 ID 仍可查询。GUI 重新打开后也能取回 MCP 提交的任务；ComfyUI 无需 GUI 窗口或 GUI 的 HTTP 服务。
+
+如果后台进程本身崩溃，已经执行中的任务会标为 `interrupted`，不会自动重发，因为远端可能仍在运行。已完成的图片仍可读取；未开始的队列任务可在同一配置下恢复。不要把“本机连接中断”当作远端任务已取消。
+
+需要关闭后台时，先等队列结束，再执行：
+
+```bash
+python studio_worker.py --stop
+```
+
+这只停止本机后台，不会停止 Kaggle GPU 会话。Kaggle 用完仍需在 Kaggle 主动停止。
+
+更新代码前也应先完成任务、停止本机后台，再 `git pull` 和更新依赖，之后重启 GUI / MCP 客户端，使后台使用新版本代码。
+
+## 验证范围
+
+自动测试使用真实 MCP SDK 客户端，覆盖 stdio 工具发现、提交、去重、进度、图片内容、断开重连、旧协议协商、后台独立存活、GUI/共享后端共用队列，以及 SQLite 恢复。协议测试使用确定性的模拟 Kaggle 后端，不消耗 GPU 额度。真实 Kaggle 推理沿用此前已经验证的会话后端；此次是否重跑 GPU 见 `verification.json`。

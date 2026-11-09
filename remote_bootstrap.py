@@ -1,0 +1,100 @@
+import json, shutil, time
+from pathlib import Path
+import torch
+import kagglehub
+from transformers import Qwen3VLForConditionalGeneration, Qwen3VLProcessor
+from diffusers import (QwenImage21Pipeline, QwenImage21Transformer2DModel,
+                       AutoencoderKLQwenImage21, FlowMatchEulerDiscreteScheduler,
+                       GGUFQuantizationConfig)
+
+assert torch.cuda.device_count() == 2, 'Select GPU T4 x2 before running.'
+started = time.perf_counter()
+ASSET_DIR = Path('/kaggle/temp/qwen-image-assets')
+_hf_mode = globals().get('_QWEN_ASSET_MODE') in ('huggingface','auto')
+if globals().get('_QWEN_ASSET_MODE') == 'auto':
+    source, _hf_mode = prepare_auto_assets(ASSET_DIR)
+elif _hf_mode:
+    source = prepare_hf_assets(ASSET_DIR)
+else:
+    emit_progress('dataset', '正在拉取 Kaggle 模型 Dataset。')
+    source = Path(kagglehub.dataset_download('faberbruntch/qwen-image-t4-assets'))
+    copy_assets(source, ASSET_DIR)
+copy_seconds = time.perf_counter()-started
+print(f'Local assets ready: {copy_seconds:.2f} seconds', flush=True)
+print('Loading INT8 text encoder on GPU 1...', flush=True)
+from transformers import BitsAndBytesConfig
+_encoder_options = {'quantization_config': BitsAndBytesConfig(load_in_8bit=True)} if _hf_mode else {}
+encoder = Qwen3VLForConditionalGeneration.from_pretrained(
+    ASSET_DIR/'text_encoder', dtype=torch.float16, device_map={'': 1},
+    attn_implementation='sdpa', local_files_only=True, **_encoder_options)
+print('Loading Q4 transformer on GPU 0...', flush=True)
+transformer = QwenImage21Transformer2DModel.from_single_file(
+    str(ASSET_DIR/'transformer-q4.gguf'), config=str(ASSET_DIR), subfolder='transformer',
+    quantization_config=GGUFQuantizationConfig(compute_dtype=torch.float16),
+    dtype=torch.float16, local_files_only=True).to('cuda:0')
+# Diffusers GGUFLinear handles packed matrices; custom RMSNorm vectors need
+# explicit decoding when a pre-converted GGUF stores them as BF16 bytes.
+from diffusers.quantizers.gguf.utils import dequantize_gguf_tensor
+_gguf_vector_fixes = 0
+for _name, _value in list(transformer.named_parameters()):
+    if _value.ndim == 1 and hasattr(_value, 'quant_type'):
+        _parent, _, _field = _name.rpartition('.')
+        _module = transformer.get_submodule(_parent) if _parent else transformer
+        _decoded = dequantize_gguf_tensor(_value).to(dtype=torch.float16)
+        _logical_shape = getattr(_value, 'quant_shape', None)
+        if _logical_shape is not None:
+            _decoded = _decoded.reshape(tuple(_logical_shape))
+        setattr(_module, _field, torch.nn.Parameter(_decoded, requires_grad=False))
+        _gguf_vector_fixes += 1
+print('GGUF vector compatibility:', _gguf_vector_fixes, flush=True)
+print('Loading VAE and processor...', flush=True)
+vae = AutoencoderKLQwenImage21.from_pretrained(
+    ASSET_DIR/'vae', dtype=torch.float16, local_files_only=True).to('cuda:0')
+processor = Qwen3VLProcessor.from_pretrained(ASSET_DIR/'processor', local_files_only=True)
+scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
+    ASSET_DIR/'scheduler', local_files_only=True)
+index = json.loads((ASSET_DIR/'model_index.json').read_text())
+pipe = QwenImage21Pipeline(scheduler=scheduler, vae=vae, text_encoder=encoder,
+    processor=processor, transformer=transformer, sample_sigmas=index.get('sample_sigmas'))
+load_stats = {'copy_seconds': round(copy_seconds, 2),
+              'loading_seconds': round(time.perf_counter()-started-copy_seconds, 2)}
+print('Pipeline ready:', load_stats, flush=True)
+for i in range(2):
+    print(f'GPU {i}: {torch.cuda.memory_allocated(i)/2**30:.2f} GiB allocated')
+
+import json, time, torch
+
+PROMPT = "A small orange fox sitting beside a ceramic teacup, soft morning window light, detailed natural photography, clean background"
+SEED = 42
+WIDTH = HEIGHT = 512
+STEPS = 35
+
+@torch.inference_mode()
+def generate_image(prompt, seed=42, width=512, height=512, steps=35):
+    for i in range(2):
+        torch.cuda.reset_peak_memory_stats(i)
+    started = time.perf_counter()
+    pipe.register_modules(text_encoder=encoder)
+    positive = pipe.encode_prompt(prompt, device=torch.device('cuda:1'))
+    negative = pipe.encode_prompt(' ', device=torch.device('cuda:1'))
+    torch.cuda.synchronize(1)
+    encoded = time.perf_counter()
+    positive = tuple(t.to('cuda:0') if t is not None else None for t in positive)
+    negative = tuple(t.to('cuda:0') if t is not None else None for t in negative)
+    pipe.register_modules(text_encoder=None)
+    try:
+        result = pipe(
+            prompt_embeds=positive[0], prompt_embeds_mask=positive[1],
+            negative_prompt_embeds=negative[0], negative_prompt_embeds_mask=negative[1],
+            width=width, height=height, num_inference_steps=steps,
+            sigmas=torch.linspace(1, 0, steps+1)[:-1].tolist(),
+            true_cfg_scale=5.0, use_kv_cache=True,
+            generator=torch.Generator(device='cuda:0').manual_seed(seed)).images[0]
+    finally:
+        pipe.register_modules(text_encoder=encoder)
+    torch.cuda.synchronize(0)
+    stats = {'encoding_seconds': round(encoded-started, 2),
+             'generation_seconds': round(time.perf_counter()-encoded, 2),
+             'width': width, 'height': height, 'steps': steps, 'seed': seed,
+             'peak_gpu_gib': [round(torch.cuda.max_memory_allocated(i)/2**30, 2) for i in range(2)]}
+    return result, stats

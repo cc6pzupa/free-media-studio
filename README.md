@@ -140,7 +140,7 @@ node --test tests/test_ui.cjs
 
 Linux 安装 MCP 依赖后的完整检查通过 **49 项 Python 测试、6 项页面逻辑测试**。MCP 协议测试使用真实 SDK 客户端和模拟 GPU 后端，不消耗 Kaggle 额度；真实 GPU 后端的既有验证记录仍保留。已验证本地 Git clone 后的手动启动和自动环境启动。
 
-[verification.json](verification.json) 保留真实 Kaggle 测试记录，[examples](examples) 包含结果图。已验证 HF 首次下载、私有缓存加载、跨客户端恢复会话，以及同一模型实例的连续请求。Windows/macOS 原生窗口与完整 ComfyUI 画布尚未实机验收；仓库包含三系统自动测试配置，上传后由 GitHub Actions 执行。
+[verification.json](verification.json) 保留 Kaggle 验证结论摘要（已移除私有资源标识），[examples](examples) 包含结果图。已验证 HF 首次下载、私有缓存加载、跨客户端恢复会话，以及同一模型实例的连续请求。Windows/macOS 原生窗口与完整 ComfyUI 画布尚未实机验收；仓库包含三系统自动测试配置，上传后由 GitHub Actions 执行。
 
 ## 配置与常见问题
 

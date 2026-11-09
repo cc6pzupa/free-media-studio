@@ -1,0 +1,20 @@
+{
+  "project": "Free Media Studio",
+  "verification_summary": {
+    "python_tests_passed": 49,
+    "ui_logic_tests_passed": 6,
+    "mcp_protocol": "Real SDK with simulated GPU backend",
+    "previous_gpu_checks": [
+      "First download from public Hugging Face",
+      "Private dataset cache reload",
+      "Live session recovery from a fresh client",
+      "Repeated generation reuses the loaded model"
+    ],
+    "limitations": [
+      "Windows/macOS native windows not tested on real devices",
+      "Full ComfyUI canvas not tested on real host",
+      "MCP protocol checks do not constitute a new live GPU test"
+    ]
+  },
+  "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."
+}

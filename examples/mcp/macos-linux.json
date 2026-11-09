@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "qwen-studio": {
+      "command": "/absolute/path/qwen-image-studio/.venv/bin/python",
+      "args": ["/absolute/path/qwen-image-studio/mcp_server.py"]
+    }
+  }
+}

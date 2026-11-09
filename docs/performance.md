@@ -55,7 +55,7 @@ python benchmark.py --run --models z-image-turbo --output .benchmarks/z-image
 | --- | --- | --- |
 | 编码器 / 生图模型分卡 | 编码完成后第二张卡不参与主要采样 | 当前默认 |
 | 两卡各生成不同图片 | 增加吞吐，单张延迟不因此减半 | 后续批量模式方向 |
-| CFG 正负分支并行 | 可以研究同时计算 Qwen 的两个分支 | 需第二份模型、编码器显存迁移与独立 KV cache 验证 |
+| CFG 正负分支并行 | 两卡同时计算 Qwen 的两个分支 | 已实现隔离实验，GPU 端验收未完成 |
 | Tensor parallel | 拆分每层矩阵计算 | 当前 Qwen 2.1 上游源码提供 `_tp_plan`；GGUF 分片与 KV cache 需另行适配验证 |
 | Context parallel | 拆分序列，适合更长序列 | 需要该版本的模型专用计划与注意力后端支持 |
 
@@ -74,6 +74,25 @@ python benchmark.py --gpu-probe
 它连接已记录、且只有一个内核的运行会话，返回 GPU 型号、显存、计算能力、peer-access、`nvidia-smi topo -m`、当前模型的 CP/TP 计划与量化状态；不申请新会话，也不切换模型。也可以把 `gpu_diagnostics.py` 放到 Kaggle 中运行。
 
 诊断中的 `single_image_parallel_ready=false` 表示本项目尚未验收双卡采样路径。即便检测到上游 TP 计划，也还需要验证当前量化与设备布局。
+
+## CFG 双卡实验
+
+`dual_gpu.py` 将正分支保留在 GPU 0，把负分支交给 GPU 1 的模型副本。两分支使用各自的 KV cache；输入复制发生在并行启动之前，负分支结果通过 CUDA event 同步后返回 GPU 0。实验上下文退出时恢复原始 `forward`。
+
+在独立 Kaggle Notebook 中安装运行依赖后，将项目源码放入工作目录，再执行：
+
+```python
+%pip install -q bitsandbytes==0.50.2 gguf 'diffusers>=0.36,<0.43' 'transformers>=4.51,<6' 'accelerate>=1.2'
+!python dual_gpu_benchmark.py --assets /kaggle/temp/qwen-image-assets --runs 3
+```
+
+`--assets` 指向已准备好的 INT8 / Q4 缓存。实验先编码固定提示词，释放编码器，再加载主模型和副本，以分离采样并行的效果。GGUF 检查点先复制到本地临时目录；相同的 512×512、20 步、CFG 5、KV cache 与 seed 42 用于所有采样。
+
+输出目录默认 `/kaggle/working/cc-dual-cfg`，包含原路径图片、三张双卡图片、回退图片和 `report.json`。报告分别记录预热、原路径中位数、副本加载、双卡中位数、像素误差与回退一致性。**该实验不包含编码器移出 / 恢复或重新加载的请求开销，因此结果只能衡量预编码后的采样阶段。**
+
+2026-11-09 现场已确认 Tesla T4 ×2、PyTorch 2.11.0+cu130 与 Diffusers 0.42.0。不加载模型的双卡会话检查连续运行约 127 秒并正常结束；完整模型测试会话显示 `Cancelled`，没有取得完整的基线、双卡和回退采样结果，取消来源未确认。本项目没有据此判定显存不足，也没有提供加速倍数。默认生成流程保持原设备分工。
+
+本地自动检查覆盖正负分支路由、各自的掩码与 KV cache、负分支异常后的原始调用恢复，以及副本和编码器的清理顺序。它们不替代 GPU 端的速度、画质和回退验收。
 
 ## 验证状态
 

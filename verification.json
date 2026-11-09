@@ -1,7 +1,7 @@
 {
   "project": "CC Media Studio",
   "verification_summary": {
-    "python_tests_passed": 65,
+    "python_tests_passed": 69,
     "ui_logic_tests_passed": 7,
     "mcp_protocol": "Real SDK with simulated GPU backend",
     "previous_gpu_checks": [
@@ -26,7 +26,17 @@
       "new_model_live_gpu_verified": false,
       "local_validation": "Model routing, defaults, isolated caches, managed model switching, MCP roundtrip and compiled standalone notebook"
     },
-    "performance": "CUDA phase timing, fixed-input warm benchmark and existing-kernel dual-GPU diagnostics; no measured dual-GPU speedup"
+    "performance": "CUDA phase timing, fixed-input warm benchmark and existing-kernel dual-GPU diagnostics; no measured dual-GPU speedup",
+    "dual_cfg_experiment": {
+      "production_enabled": false,
+      "local_tests_passed": 4,
+      "live_hardware": "Tesla T4 x2",
+      "minimal_session_check": "Completed normally in 127.277 seconds",
+      "inference_comparison": "Incomplete: test sessions showed Cancelled after dependency setup; cancellation source unconfirmed",
+      "measured_speedup": null,
+      "gpu_rollback_verified": false,
+      "original_application_path_changed": false
+    }
   },
   "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."
 }

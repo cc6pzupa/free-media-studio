@@ -35,7 +35,21 @@
       "inference_comparison": "Incomplete: test sessions showed Cancelled after dependency setup; cancellation source unconfirmed",
       "measured_speedup": null,
       "gpu_rollback_verified": false,
-      "original_application_path_changed": false
+      "original_application_path_changed": false,
+      "followup_diagnosis": {
+        "scope": "Independent private notebook and experiment branch only",
+        "probe": "Per-component imports in isolated child processes; no dependency installation",
+        "probe_gpu_execution_completed": false,
+        "platform_notice": "Kaggle editor reports an issue preventing notebooks from starting or staying connected",
+        "observation_date": "2026-11-09",
+        "earlier_cancellation_cause_confirmed": false,
+        "original_successful_environment_modified": false,
+        "local_probe_check": "Captured normal exit, SIGTERM, ImportError and subsequent success without terminating the parent",
+        "experimental_gpu_setting_disabled": true,
+        "experimental_session_display": "off",
+        "stop_request_submitted": true,
+        "queued_cancellation_confirmed": false
+      }
     }
   },
   "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."

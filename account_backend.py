@@ -78,8 +78,8 @@ class AccountBackend:
             if listing.get('nextPageToken') or any(k.get('ref')==self.slug or k.get('slug')==self.slug.split('/')[1] for k in listing.get('kernels',[])):
                 raise RuntimeError('无法安全确认专用 Notebook 不存在，没有覆盖任何内容。') from None
         notebook={'nbformat':4,'nbformat_minor':5,'metadata':{'kernelspec':{'name':'python3','display_name':'Python 3','language':'python'}},'cells':[
-            {'id':'studio-info','cell_type':'markdown','metadata':{},'source':['# Qwen Image Studio\nQWEN_STUDIO_MANAGED\n模型首次从 Hugging Face 自动下载；客户端连接后按需加载。']},
-            {'id':'studio-ready','cell_type':'code','metadata':{},'execution_count':None,'outputs':[],'source':["print('Qwen Image Studio session ready')"]}]}
+            {'id':'studio-info','cell_type':'markdown','metadata':{},'source':['# CC Media Studio\nQWEN_STUDIO_MANAGED\n模型首次从 Hugging Face 自动下载；客户端连接后按需加载。']},
+            {'id':'studio-ready','cell_type':'code','metadata':{},'execution_count':None,'outputs':[],'source':["print('CC Media Studio session ready')"]}]}
         data=self._call('kernels.KernelsApiService','SaveKernel',{'slug':self.slug,'newTitle':self.slug.split('/')[1],'text':json.dumps(notebook,ensure_ascii=False),'language':'python','kernelType':'notebook','isPrivate':True,'enableInternet':True,'enableGpu':False,'datasetDataSources':[],'kernelExecutionType':'QUICK_SAVE'})
         if data.get('error') or data.get('invalidDatasetSources'):raise RuntimeError('无法建立专用 Notebook，请检查 Kaggle 账号设置。')
 

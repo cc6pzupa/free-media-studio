@@ -16,7 +16,7 @@ from studio_client import StudioClient
 
 def build_server(client=None):
     service=client or StudioClient()
-    server=MCPServer('Qwen Studio',version='0.5.0',log_level='WARNING',instructions=(
+    server=MCPServer('CC Media Studio',version='0.5.0',log_level='WARNING',instructions=(
         'Generate images on the user\'s Kaggle GPU. Credentials are configured locally; never ask for a key in tool arguments. '
         'Call studio_status, then generate_image once with a unique request_id. Poll get_job with at least two seconds '
         'between calls. When complete, call get_image to display the PNG. Reuse the same request_id only for transport retries. '

@@ -2,13 +2,13 @@
 
 > 本页中的文件路径和命令以仓库根目录为基准。
 
-# Qwen Studio · Kaggle
+# CC Media Studio · Kaggle
 
 三个入口共用同一套常驻模型：本机 GUI、ComfyUI 节点、Kaggle 独立 Notebook。同一个 Kaggle 内核还在运行时只加载一次；关闭编辑器网页或重启本机客户端后，可以接回原模型。
 
 ## 本机 GUI
 
-需要 **Python 3.11 或更新版本**。Windows 双击 `start_windows.bat`；macOS 双击 `start_mac.command`。首次启动器自动安装客户端依赖，并打开 Qwen Studio 窗口。未安装原生窗口依赖时会打开本机浏览器页面：`http://127.0.0.1:8787`。
+需要 **Python 3.11 或更新版本**。Windows 双击 `start_windows.bat`；macOS 双击 `start_mac.command`。首次启动器自动安装客户端依赖，并打开 CC Media Studio 窗口。未安装原生窗口依赖时会打开本机浏览器页面：`http://127.0.0.1:8787`。
 
 只填写自己的 **Kaggle 用户名、API Key / API Token**。账号需要完成 Kaggle 验证并有可用 GPU 额度。程序会自动创建私有专用 Notebook、申请 T4 ×2、取得 Jupyter 连接，并检查已有模型。无需自己填写 Jupyter 地址或预先准备 Dataset。专用私有 Notebook 的元数据会保留启动任务编号（不含 Key 或连接地址），新装客户端也能通过账号认证找回仍在运行的模型。
 
@@ -36,7 +36,7 @@
 
 先在 GUI 保存一次账号配置，之后 GUI 和本机 HTTP 服务都可以关闭。或者在启动 ComfyUI 前设置 `KAGGLE_USERNAME` 与 `KAGGLE_API_TOKEN`（旧 Key 可用 `KAGGLE_KEY`）。
 
-添加 **Kaggle Easy Image**，将 `IMAGE` 接到 **Save Image** 的 `images`。节点直接启动或连接 Kaggle 后端，不通过本机 HTTP 服务，凭据不写入工作流。
+添加 **CC Media Image**，将 `IMAGE` 接到 **Save Image** 的 `images`。节点直接启动或连接 Kaggle 后端，不通过本机 HTTP 服务，凭据不写入工作流。
 
 ## Kaggle 直接运行
 

@@ -2,6 +2,8 @@
 
 [简体中文](README.md) | **English**
 
+**Source available · Free for permitted noncommercial use · Separate commercial licensing** — [License](LICENSE) · [Commercial licensing](COMMERCIAL.md)
+
 Generate images with your own Kaggle GPU quota. Start the launcher, enter your Kaggle username and API key, and create in a lightweight local interface. Model downloads, loading, and inference run in the cloud.
 
 ![CC Media Studio interface](docs/gui-en.jpg)
@@ -165,6 +167,12 @@ Content-Type: application/json
 GET http://127.0.0.1:8787/v1/studio/usage
 Authorization: Bearer <local API key>
 ```
+
+## License and commercial use
+
+Original project code and documentation use **PolyForm Noncommercial 1.0.0**. Noncommercial uses permitted by the license are free of charge; modification and redistribution are allowed under its terms. Retain the license and [NOTICE](NOTICE) when redistributing. Commercial uses outside those permissions require a separate written license before use; see [Commercial licensing](COMMERCIAL.md). The [LICENSE](LICENSE) defines the permitted purposes.
+
+Third-party dependencies, model weights and separately licensed materials retain their own licenses.
 
 ## Update
 

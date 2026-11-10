@@ -17,7 +17,7 @@ Generate images with your own Kaggle GPU quota. Start the launcher, enter your K
 
 ## Download and launch
 
-Install **Python 3.11 or 3.12**, then [download the ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) and extract it. This is a private repository; sign in with an authorized GitHub account to download.
+Install **Python 3.11 or 3.12**, then [download the ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) and extract it. The source is public on GitHub; download the ZIP or clone the repository.
 
 | System | Launch |
 | --- | --- |

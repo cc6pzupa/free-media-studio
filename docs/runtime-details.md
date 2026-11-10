@@ -24,11 +24,6 @@ Qwen 使用 `cfg_parallel`；Z-Image Turbo 和 SDXL-Lightning 使用 `encoder_sp
 
 账号配置位于当前用户目录 `.kaggle-qwen-client/settings.json`，任务和 PNG 位于同目录的 `studio/`。ComfyUI、GUI 与 MCP 使用同一系统用户时共享这些设置。
 
-## 检查
+## 更新客户端
 
-```bash
-python -m unittest discover -s tests -v
-node --test tests/test_ui.cjs
-```
-
-运行验收记录见 `verification.json`，可复现的性能数据见 `docs/benchmarks/`。更新项目时先完成队列，再按 README 的更新步骤重启本机后台；Kaggle 上仍存活的模型可重新连接。
+先完成队列，再按 [README 的更新步骤](../README.md#更新) 停止本机后台、更新代码和依赖，然后重新启动。Kaggle 会话仍存活时，客户端可重新连接并复用已加载模型。

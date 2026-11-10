@@ -17,7 +17,7 @@
 
 ## 下载与启动
 
-安装 **Python 3.11 或 3.12**，然后[下载 ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) 并解压。当前仓库为私有，下载需使用有访问权限的 GitHub 账号。
+安装 **Python 3.11 或 3.12**，然后[下载 ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) 并解压。源码已在 GitHub 公开，可直接下载 ZIP 或 clone 仓库。
 
 | 系统 | 启动方式 |
 | --- | --- |

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "cc-media-studio": {
-      "command": "C:/absolute/path/qwen-image-studio/.venv/Scripts/python.exe",
-      "args": ["C:/absolute/path/qwen-image-studio/mcp_server.py"]
-    }
-  }
-}

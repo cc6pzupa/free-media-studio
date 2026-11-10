@@ -41,7 +41,7 @@ Default idle retention is 15 minutes after the queue finishes. Change it in the 
 Before upgrading, finish tasks and run `python studio_worker.py --stop`. This stops the local worker only; explicitly stop unused remote sessions on Kaggle. An interrupted running job is never replayed automatically on recovery, while completed images remain available and unstarted queued jobs can resume with the same account configuration.
 
 
-## Model selection / 模型选择
+## Model selection
 
 `generate_image` accepts `model_id`: `qwen-image-2.1`, `z-image-turbo`, or `sdxl-lightning`. Omit `steps` to use 20, 9, or 4 respectively. SDXL-Lightning requires exactly 4 steps.
 
@@ -49,6 +49,6 @@ Before upgrading, finish tasks and run `python studio_worker.py --stop`. This st
 generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-001", model_id="z-image-turbo")
 ```
 
-模型切换时释放旧模型；同一模型继续复用。新增模型使用 GUI 保存的自动账号配置。返回的 usage 包含 model_id、编码、采样及解码耗时。
+Switching models releases the previous model; repeated requests for the same active model reuse it. Model selection uses the automatic account configuration saved in the GUI. Returned usage includes the model ID and encoding, sampling and decoding timings.
 
 Acceleration follows the saved GUI preference and defaults to `auto` (dual GPU preferred). `usage.parallel_strategy` reports `cfg_parallel` or `encoder_split`. For configurations without a saved preference, set `CC_MEDIA_ACCELERATION=auto` or `split`.

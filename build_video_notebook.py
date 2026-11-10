@@ -8,25 +8,17 @@ ROOT=Path(__file__).resolve().parent
 
 def build():
     sources={name:(ROOT/name).read_text(encoding='utf-8') for name in VIDEO_FILES}
-    setup=f'''import sys,subprocess,site,json
+    setup=f'''import sys,json
 from pathlib import Path
-environment=Path('/kaggle/temp/cc-video-environment')
-if not environment.exists():
-    subprocess.run([sys.executable,'-m','venv','--without-pip','--system-site-packages',str(environment)],check=True)
-subprocess.run([str(environment/'bin/python'),'-m','pip','install','-q',
-    'diffusers==0.42.1','transformers==4.57.6','accelerate==1.12.0',
-    'bitsandbytes==0.50.2','sentencepiece','imageio>=2.37','imageio-ffmpeg','ftfy>=6.3'],check=True)
-packages=environment/'lib'/('python'+str(sys.version_info.major)+'.'+str(sys.version_info.minor))/'site-packages'
-sys.path.insert(0,str(packages))
 modules=Path('/kaggle/temp/cc-video-modules');modules.mkdir(exist_ok=True)
 for name,source in {sources!r}.items():(modules/name).write_text(source,encoding='utf-8')
 sys.path.insert(0,str(modules))
-print('CC Media Studio video environment ready')
+print('CC Media Studio video ready; first generation installs an isolated environment')
 '''
     ui='''import ipywidgets as widgets
 from IPython.display import Video,display,clear_output
 from video_registry import VIDEO_MODELS
-from video_runtime import VideoRuntime
+from video_process import VideoProcess
 model=widgets.Dropdown(options=[(p['name'],p['id']) for p in VIDEO_MODELS.values()],value='wan21-t2v-1.3b',description='Model')
 prompt=widgets.Textarea(value='An adult anime catgirl reading by a sunlit window, hair moving gently in the breeze. Slow camera movement.',description='Prompt',layout=widgets.Layout(width='95%',height='100px'))
 frames=widgets.Dropdown(options=[9,17,33,49,65,81],value=33,description='Frames')
@@ -45,7 +37,7 @@ def generate(_):
         with output:
             clear_output(wait=True)
             if runtime is not None and runtime.profile['id']!=model.value:runtime.close();runtime=None
-            if runtime is None:runtime=VideoRuntime(model.value,acceleration=acceleration.value,progress=lambda event:print(event,flush=True)).prepare()
+            if runtime is None:runtime=VideoProcess(model.value,acceleration=acceleration.value,progress=lambda event:print(event,flush=True))
             runtime.acceleration=acceleration.value
             path,usage=runtime.generate(prompt.value,seed=seed.value,steps=steps.value,frames=frames.value,output='/kaggle/working/cc-media-video.mp4')
             display(Video(str(path),embed=True));print(usage)

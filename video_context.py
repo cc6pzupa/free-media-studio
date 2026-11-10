@@ -31,7 +31,7 @@ class LTXContextRunner:
         self.log=(self.directory/'worker.log').open('w',encoding='utf-8')
         self.process=subprocess.Popen([sys.executable,'-m','torch.distributed.run','--standalone',
             '--nproc_per_node=2',str(Path(__file__).resolve()),'--worker',str(self.directory)],
-            stdin=subprocess.DEVNULL,stdout=self.log,stderr=self.log,start_new_session=True)
+            stdin=subprocess.DEVNULL,stdout=self.log,stderr=self.log,start_new_session=not bool(os.environ.get('CC_VIDEO_ACTOR')))
         deadline=time.monotonic()+240
         while time.monotonic()<deadline:
             self._check()
@@ -72,12 +72,18 @@ class LTXContextRunner:
             time.sleep(.1)
         raise TimeoutError('Video sampling timed out')
 
+    def _terminate(self,kind):
+        try:
+            if os.environ.get('CC_VIDEO_ACTOR'):self.process.send_signal(kind)
+            else:os.killpg(self.process.pid,kind)
+        except ProcessLookupError:pass
+
     def close(self):
         if self.process is not None and self.process.poll() is None:
-            os.killpg(self.process.pid,signal.SIGTERM)
+            self._terminate(signal.SIGTERM)
             try:self.process.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                os.killpg(self.process.pid,signal.SIGKILL);self.process.wait(timeout=10)
+                self._terminate(signal.SIGKILL);self.process.wait(timeout=10)
         if hasattr(self,'log'):self.log.close()
         self.temporary.cleanup()
 

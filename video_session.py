@@ -7,7 +7,7 @@ from session_runtime import JupyterTransport,ModelSession
 from video_registry import video_profile,validate_video
 
 VIDEO_FILES=('asset_manager.py','cache_manager.py','video_precision.py','video_registry.py','video_assets.py',
-             'video_parallel.py','video_context.py','video_runtime.py')
+             'video_parallel.py','video_context.py','video_runtime.py','video_process.py','requirements-video-remote.txt')
 
 
 def video_bootstrap_code(model_id,acceleration='auto',install=True,cache_handle=None,api_token=None):
@@ -15,38 +15,37 @@ def video_bootstrap_code(model_id,acceleration='auto',install=True,cache_handle=
     if acceleration not in ('auto','split'):raise ValueError('Invalid acceleration')
     sources={name:Path(__file__).with_name(name).read_text(encoding='utf-8') for name in VIDEO_FILES}
     return f'''
-import sys,json,gc,importlib
+import sys,json,gc,hashlib
 from pathlib import Path
 _cc_video_modules=Path('/kaggle/temp/cc-media-video-runtime')
 _cc_video_modules.mkdir(parents=True,exist_ok=True)
-for _name,_source in {sources!r}.items():
-    (_cc_video_modules/_name).write_text(_source,encoding='utf-8')
-if str(_cc_video_modules) not in sys.path:sys.path.insert(0,str(_cc_video_modules))
-_cc_existing_video=globals().get('_CC_VIDEO_RUNTIME')
-if _cc_existing_video is None or _cc_existing_video.profile['id']!={model_id!r} or _cc_existing_video.pipe is None:
+_cc_video_sources={sources!r}
+_cc_video_hash=hashlib.sha256(json.dumps(_cc_video_sources,sort_keys=True).encode()).hexdigest()
+_cc_existing_video=globals().get('_CC_VIDEO_PROCESS')
+if _cc_existing_video is not None and (not _cc_existing_video.alive() or _cc_existing_video.profile['id']!={model_id!r} or globals().get('_CC_VIDEO_SOURCE_HASH')!=_cc_video_hash):
+    _cc_existing_video.close();globals().pop('_CC_VIDEO_PROCESS',None)
+if globals().get('_CC_VIDEO_PROCESS') is None:
     if (globals().get('pipe') is not None or globals().get('encoder') is not None) and not (globals().get('_CC_MANAGED_MODEL') or globals().get('_COMFY_QWEN_STATE')):
-        raise RuntimeError('Unmanaged model exists; select the video test notebook')
-    if _cc_existing_video is not None:_cc_existing_video.close()
+        raise RuntimeError('Unmanaged model exists; select a separate video notebook')
+    if globals().get('_CC_VIDEO_RUNTIME') is not None:globals()['_CC_VIDEO_RUNTIME'].close()
     for _name in ('pipe','encoder','transformer','vae','_COMFY_QWEN_STATE','_CC_DUAL_STATE','generate_image','_CC_VIDEO_RUNTIME','_cc_existing_video'):
         globals().pop(_name,None)
     gc.collect()
-    if {install!r}:
-        import subprocess
-        subprocess.run([sys.executable,'-m','pip','install','-q','diffusers==0.42.1','transformers==4.57.6','accelerate==1.12.0','bitsandbytes==0.50.2','safetensors','sentencepiece','imageio>=2.37','imageio-ffmpeg','ftfy>=6.3'],check=True,timeout=900)
-    import torch
-    torch.cuda.empty_cache()
-    from video_runtime import VideoRuntime
+    if 'torch' in sys.modules:sys.modules['torch'].cuda.empty_cache()
+    for _name,_source in _cc_video_sources.items():
+        (_cc_video_modules/_name).write_text(_source,encoding='utf-8')
+    if str(_cc_video_modules) not in sys.path:sys.path.insert(0,str(_cc_video_modules))
+    sys.modules.pop('video_process',None)
+    from video_process import VideoProcess
     def _cc_video_progress(event):print('COMFY_PROGRESS:'+json.dumps(event),flush=True)
-    _CC_VIDEO_RUNTIME=VideoRuntime({model_id!r},acceleration={acceleration!r},progress=_cc_video_progress,
-        cache_handle={cache_handle!r},cache_token={api_token!r})
-    try:_CC_VIDEO_RUNTIME.prepare()
-    except Exception:
-        _CC_VIDEO_RUNTIME.close();globals().pop('_CC_VIDEO_RUNTIME',None)
-        raise
-_CC_VIDEO_RUNTIME.acceleration={acceleration!r}
+    _CC_VIDEO_PROCESS=VideoProcess({model_id!r},acceleration={acceleration!r},progress=_cc_video_progress,
+        cache_handle={cache_handle!r},cache_token={api_token!r},install={install!r})
+    _CC_VIDEO_SOURCE_HASH=_cc_video_hash
+_CC_VIDEO_PROCESS.acceleration={acceleration!r}
 _CC_MODEL_ID={model_id!r};_CC_MANAGED_MODEL=True
 print('CC_VIDEO_READY',flush=True)
 '''
+
 
 
 def video_generation_code(prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None):
@@ -56,7 +55,7 @@ import json,base64
 assert globals().get('_CC_MODEL_ID')=={model_id!r},'Active model changed'
 _cc_video_args=json.loads({json.dumps(json.dumps(args))})
 _cc_video_args.pop('model_id')
-_cc_mp4,_cc_video_stats=_CC_VIDEO_RUNTIME.generate(**_cc_video_args)
+_cc_mp4,_cc_video_stats=_CC_VIDEO_PROCESS.generate(**_cc_video_args)
 print('CC_VIDEO_RESULT:'+json.dumps({{'mp4':base64.b64encode(_cc_mp4.read_bytes()).decode('ascii'),'stats':_cc_video_stats}}),flush=True)
 '''
 

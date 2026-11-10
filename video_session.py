@@ -6,11 +6,11 @@ from pathlib import Path
 from session_runtime import JupyterTransport,ModelSession
 from video_registry import video_profile,validate_video
 
-VIDEO_FILES=('asset_manager.py','video_precision.py','video_registry.py','video_assets.py',
-             'video_parallel.py','video_runtime.py')
+VIDEO_FILES=('asset_manager.py','cache_manager.py','video_precision.py','video_registry.py','video_assets.py',
+             'video_parallel.py','video_context.py','video_runtime.py')
 
 
-def video_bootstrap_code(model_id,acceleration='auto',install=True):
+def video_bootstrap_code(model_id,acceleration='auto',install=True,cache_handle=None,api_token=None):
     video_profile(model_id)
     if acceleration not in ('auto','split'):raise ValueError('Invalid acceleration')
     sources={name:Path(__file__).with_name(name).read_text(encoding='utf-8') for name in VIDEO_FILES}
@@ -32,12 +32,13 @@ if _cc_existing_video is None or _cc_existing_video.profile['id']!={model_id!r} 
     gc.collect()
     if {install!r}:
         import subprocess
-        subprocess.run([sys.executable,'-m','pip','install','-q','diffusers==0.36.0','transformers==4.57.6','accelerate==1.12.0','bitsandbytes==0.50.2','safetensors','sentencepiece','imageio-ffmpeg'],check=True,timeout=900)
+        subprocess.run([sys.executable,'-m','pip','install','-q','diffusers==0.42.1','transformers==4.57.6','accelerate==1.12.0','bitsandbytes==0.50.2','safetensors','sentencepiece','imageio>=2.37','imageio-ffmpeg','ftfy>=6.3'],check=True,timeout=900)
     import torch
     torch.cuda.empty_cache()
     from video_runtime import VideoRuntime
     def _cc_video_progress(event):print('COMFY_PROGRESS:'+json.dumps(event),flush=True)
-    _CC_VIDEO_RUNTIME=VideoRuntime({model_id!r},acceleration={acceleration!r},progress=_cc_video_progress)
+    _CC_VIDEO_RUNTIME=VideoRuntime({model_id!r},acceleration={acceleration!r},progress=_cc_video_progress,
+        cache_handle={cache_handle!r},cache_token={api_token!r})
     try:_CC_VIDEO_RUNTIME.prepare()
     except Exception:
         _CC_VIDEO_RUNTIME.close();globals().pop('_CC_VIDEO_RUNTIME',None)
@@ -61,10 +62,10 @@ print('CC_VIDEO_RESULT:'+json.dumps({{'mp4':base64.b64encode(_cc_mp4.read_bytes(
 
 
 class VideoSessionBackend:
-    def __init__(self,url,model_id,acceleration='auto',transport_factory=None):
+    def __init__(self,url,model_id,acceleration='auto',transport_factory=None,cache_handle=None,api_token=None):
         self.model_id=video_profile(model_id)['id'];self.lock=threading.Lock();self.progress=None;self.buffer=''
         self.session=ModelSession(transport_factory or (lambda:JupyterTransport(url,output_callback=self._output)),
-            video_bootstrap_code(model_id,acceleration),lifetime_seconds=None)
+            video_bootstrap_code(model_id,acceleration,cache_handle=cache_handle,api_token=api_token),lifetime_seconds=None)
 
     def _output(self,text):
         if not self.progress:return

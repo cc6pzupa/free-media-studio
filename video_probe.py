@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-def run(model,frames=9,steps=None,runs=1,acceleration='auto',output='/kaggle/working/cc-video-results'):
+def run(model,frames=9,steps=None,runs=1,acceleration='auto',output='/kaggle/working/cc-video-results',compare_split=False):
     from video_runtime import VideoRuntime
     target=Path(output);target.mkdir(parents=True,exist_ok=True)
     def progress(event):
@@ -18,6 +18,18 @@ def run(model,frames=9,steps=None,runs=1,acceleration='auto',output='/kaggle/wor
             seed=42,steps=steps,frames=frames,output=target/(model+'-'+str(index)+'.mp4'))
         reports.append(stats);print('VIDEO_RESULT:'+json.dumps(stats),flush=True)
         (target/(model+'-report.json')).write_text(json.dumps(reports,indent=2),encoding='utf-8')
+    if compare_split and model!='ltx-video-2b-distilled':
+        runtime.acceleration='split'
+        path,stats=runtime.generate('An adult anime catgirl reading a book by a sunlit window. '
+            'Her hair moves gently in the breeze. Slow smooth camera movement.',seed=42,
+            steps=steps,frames=frames,output=target/(model+'-split.mp4'))
+        import imageio
+        import numpy as np
+        with imageio.get_reader(str(target/(model+'-0.mp4')),'ffmpeg') as reader:a=np.stack(list(reader))
+        with imageio.get_reader(str(path),'ffmpeg') as reader:b=np.stack(list(reader))
+        stats['decoded_max_pixel_error']=int(np.abs(a.astype(np.int16)-b.astype(np.int16)).max())
+        reports.append(stats);print('VIDEO_SPLIT_RESULT:'+json.dumps(stats),flush=True)
+        (target/(model+'-report.json')).write_text(json.dumps(reports,indent=2),encoding='utf-8')
     return runtime
 
 
@@ -28,5 +40,6 @@ if __name__=='__main__':
     parser.add_argument('--steps',type=int)
     parser.add_argument('--runs',type=int,default=1)
     parser.add_argument('--acceleration',choices=['auto','split'],default='auto')
+    parser.add_argument('--compare-split',action='store_true')
     args=parser.parse_args()
-    runtime=run(args.model,args.frames,args.steps,args.runs,args.acceleration)
+    runtime=run(args.model,args.frames,args.steps,args.runs,args.acceleration,compare_split=args.compare_split)

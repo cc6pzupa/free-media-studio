@@ -14,8 +14,8 @@ environment=Path('/kaggle/temp/cc-video-environment')
 if not environment.exists():
     subprocess.run([sys.executable,'-m','venv','--without-pip','--system-site-packages',str(environment)],check=True)
 subprocess.run([str(environment/'bin/python'),'-m','pip','install','-q',
-    'diffusers==0.36.0','transformers==4.57.6','accelerate==1.12.0',
-    'bitsandbytes==0.50.2','sentencepiece','imageio-ffmpeg'],check=True)
+    'diffusers==0.42.1','transformers==4.57.6','accelerate==1.12.0',
+    'bitsandbytes==0.50.2','sentencepiece','imageio>=2.37','imageio-ffmpeg','ftfy>=6.3'],check=True)
 packages=environment/'lib'/('python'+str(sys.version_info.major)+'.'+str(sys.version_info.minor))/'site-packages'
 sys.path.insert(0,str(packages))
 modules=Path('/kaggle/temp/cc-video-modules');modules.mkdir(exist_ok=True)

@@ -4,6 +4,8 @@
 
 **Source available · Free for permitted noncommercial use · Separate commercial licensing** — [License](LICENSE) · [Commercial licensing](COMMERCIAL.md)
 
+This branch includes a [video preview](docs/video.md): three model tiers, MP4 playback/download, and GUI, MCP, ComfyUI and Kaggle notebook entry points.
+
 Generate images with your own Kaggle GPU quota. Start the launcher, enter your Kaggle username and API key, and create in a lightweight local interface. Model downloads, loading, and inference run in the cloud.
 
 ![CC Media Studio interface](docs/gui-en.jpg)

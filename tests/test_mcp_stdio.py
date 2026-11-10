@@ -150,13 +150,22 @@ class MCPStdioTest(unittest.TestCase):
             async def exercise():
                 async with Client(self.parameters(config)) as client:
                     result=await client.call_tool('studio_status',{})
-                    self.assertFalse(result.is_error)
+                    self.assertFalse(result.is_error, str(result))
                     self.assertFalse(result.structured_content['configured'])
             service=StudioClient(Path(d)/'studio',autostart=False)
+            process=None
+            if os.name=='nt':
+                # A stdio host can forbid breaking away from its Windows Job
+                # Object. The documented external worker survives that host.
+                process=subprocess.Popen([sys.executable,str(ROOT/'studio_worker.py'),
+                    '--state-dir',str(Path(d)/'studio')],
+                    env=dict(os.environ,EASY_CONFIG_PATH=str(config),PYTHONUTF8='1'),
+                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                wait_worker(service)
             try:
                 asyncio.run(exercise())
                 self.assertFalse(service.status()['configured'])
-            finally:stop_worker(service)
+            finally:stop_worker(service,process)
 
 
 if __name__=='__main__':unittest.main()

@@ -7,7 +7,8 @@ import secrets
 import threading
 import time
 import webbrowser
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+from local_http import LocalHTTPServer
 from pathlib import Path
 from batch_backend import BatchBackend
 
@@ -204,7 +205,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 with state_lock:jobs[job_id].update(result)
             threading.Thread(target=work,daemon=True).start()
             self.send(202,{'job_id':job_id})
-    return ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    return LocalHTTPServer(('127.0.0.1',port),Handler)
 
 
 def safe_error(error):

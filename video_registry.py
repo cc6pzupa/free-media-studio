@@ -1,0 +1,44 @@
+"""Video-only catalog; ordinary image clients do not import GPU packages."""
+VIDEO_MODELS = {
+    'ltx-video-2b-distilled': {
+        'id':'ltx-video-2b-distilled','name':'LTX-Video 2B · Efficient','tier':'efficient',
+        'family':'ltx','default_steps':8,'fixed_steps':8,'width':768,'height':448,
+        'frames':33,'fps':16,'guidance':1.0,'cache_slug':'cc-media-ltx-2b-distilled',
+        'repo':'Lightricks/LTX-Video','revision':'8984fa25007f376c1a299016d0957a37a2f797bb',
+        'checkpoint':'ltxv-2b-0.9.6-distilled-04-25.safetensors'},
+    'wan21-t2v-1.3b': {
+        'id':'wan21-t2v-1.3b','name':'Wan2.1 1.3B · Balanced','tier':'balanced',
+        'family':'wan','default_steps':30,'fixed_steps':None,'width':832,'height':480,
+        'frames':33,'fps':16,'guidance':5.0,'cache_slug':'cc-media-wan21-1-3b',
+        'repo':'Wan-AI/Wan2.1-T2V-1.3B-Diffusers','revision':'0fad780a534b6463e45facd96134c9f345acfa5b'},
+    'wan22-ti2v-5b': {
+        'id':'wan22-ti2v-5b','name':'Wan2.2 5B · Quality','tier':'quality',
+        'family':'wan22','default_steps':30,'fixed_steps':None,'width':768,'height':448,
+        'frames':33,'fps':24,'guidance':5.0,'cache_slug':'cc-media-wan22-5b',
+        'repo':'Wan-AI/Wan2.2-TI2V-5B-Diffusers','revision':'b8fff7315c768468a5333511427288870b2e9635'},
+}
+
+
+def video_profile(model_id='wan21-t2v-1.3b'):
+    if not isinstance(model_id,str) or model_id not in VIDEO_MODELS:
+        raise ValueError('未知视频模型 / Unknown video model.')
+    return dict(VIDEO_MODELS[model_id])
+
+
+def video_catalog():
+    return [{k:v for k,v in p.items() if k not in ('repo','revision','checkpoint')}
+            for p in VIDEO_MODELS.values()]
+
+
+def validate_video(prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None):
+    p=video_profile(model_id)
+    if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=4000:
+        raise ValueError('提示词需要 1–4000 个字符。')
+    if type(seed) is not int or not 0<=seed<=2147483647:raise ValueError('Invalid seed')
+    steps=p['default_steps'] if steps is None else steps
+    frames=p['frames'] if frames is None else frames
+    if type(steps) is not int or not 1<=steps<=50:raise ValueError('steps must be 1–50')
+    if p['fixed_steps'] and steps!=p['fixed_steps']:raise ValueError('LTX distilled requires 8 steps')
+    if type(frames) is not int or not 9<=frames<=81 or (frames-1)%8:
+        raise ValueError('frames must be 9, 17, …, 81')
+    return {'prompt':prompt,'seed':seed,'steps':steps,'model_id':p['id'],'frames':frames}

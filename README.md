@@ -2,6 +2,8 @@
 
 **简体中文** | [English](README.en.md)
 
+**源码可用 · 非商业使用免费 · 商业使用需另行授权** — [许可证](LICENSE) · [商业授权](COMMERCIAL.md)
+
 使用自己的 Kaggle GPU 额度生成图片。双击启动器，填写 Kaggle 用户名和 API Key，即可在本机界面创作；模型下载、加载和推理都在云端完成。
 
 ![CC Media Studio 界面](docs/gui.jpg)
@@ -165,6 +167,12 @@ Content-Type: application/json
 GET http://127.0.0.1:8787/v1/studio/usage
 Authorization: Bearer <本机 API Key>
 ```
+
+## 许可证与商业授权
+
+本项目原创代码与文档采用 **PolyForm Noncommercial 1.0.0**。许可范围内的非商业使用免费，允许修改和分发；分发时须保留许可证和 [NOTICE](NOTICE)。超出许可范围的商业使用需事先取得书面授权，申请方式见 [商业授权说明](COMMERCIAL.md)。具体允许用途以 [LICENSE](LICENSE) 为准。
+
+第三方依赖、模型权重及另行许可的材料遵循各自许可证。
 
 ## 更新
 

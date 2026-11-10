@@ -27,7 +27,7 @@ if _CC_PREVIOUS_MODEL != _CC_REQUESTED_MODEL:
     if (globals().get('pipe') is not None or globals().get('encoder') is not None) and not (globals().get('_COMFY_QWEN_STATE') or globals().get('_CC_MANAGED_MODEL')):
         raise RuntimeError('Existing unmanaged model; select the managed notebook kernel.')
     # Do not retain aliases to an old pipeline or its GPU modules during collection.
-    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_value','_module','_decoded'):
+    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_value','_module','_decoded'):
         globals().pop(_cc_key,None)
     import gc
     gc.collect()
@@ -43,8 +43,10 @@ _CC_MANAGED_MODEL = True
 def additional_bootstrap_code(model_id,install=True):
     profile=model_profile(model_id)
     sources=MODEL_SOURCES[model_id]
-    helpers='\n'.join(Path(__file__).with_name(name).read_text() for name in ('asset_manager.py','cache_manager.py','model_assets.py'))
-    runtime=Path(__file__).with_name('remote_models.py').read_text()
+    helpers='\n'.join(Path(__file__).with_name(name).read_text(encoding='utf-8') for name in ('asset_manager.py','cache_manager.py','model_assets.py','zimage_fp16.py'))
+    runtime=Path(__file__).with_name('remote_models.py').read_text(encoding='utf-8')
+    marker='@torch.inference_mode()\ndef generate_image'
+    shared_generation=runtime[runtime.index(marker):] if marker in runtime else ''
     return model_switch_code(model_id)+f"""
 import json,uuid
 _CC_MODEL_PROFILE = {profile!r}
@@ -68,17 +70,26 @@ if not (_existing_state and globals().get('pipe') is not None and callable(globa
 else:
     _existing_state['loaded_this_request']=False
 _COMFY_QWEN_STATE=_existing_state
+if {bool(shared_generation)!r}:
+    if _CC_MODEL_ID=='z-image-turbo' and globals().get('transformer') is not None:
+        stabilize_zimage_fp16(transformer)
+    if _CC_MODEL_ID=='sdxl-lightning':
+        pipe.text_encoder.to('cuda:1');pipe.text_encoder_2.to('cuda:1')
+    exec(compile({shared_generation!r},'<cc-model-generation>','exec'),globals())
 if globals().get('_QWEN_CACHE_HANDLE') and globals().get('_QWEN_CACHE_TOKEN'):
     save_private_cache(ASSET_DIR,encoder)
 print('COMFY_SESSION_READY:'+json.dumps({{'runtime_id':_existing_state['runtime_id'],'load_count':_existing_state['load_count'],'reused':not _existing_state['loaded_this_request']}}),flush=True)
 """
 
 
-def bootstrap_code(dataset, source=None, install=True, asset_mode="dataset", model_id=DEFAULT_MODEL):
+def bootstrap_code(dataset, source=None, install=True, asset_mode="dataset", model_id=DEFAULT_MODEL, acceleration="auto"):
+    if acceleration not in ("auto","split"):raise ValueError("Invalid acceleration mode")
+    install_shared_runtime=source is None
+    qwen_runtime="\n".join(Path(__file__).with_name(name).read_text(encoding='utf-8') for name in ("dual_gpu.py","remote_qwen.py")) if install_shared_runtime and model_id==DEFAULT_MODEL else ""
     model_profile(model_id)
     if model_id!=DEFAULT_MODEL:
         if asset_mode not in ("auto","huggingface"):raise ValueError("Additional models require automatic account mode.")
-        return additional_bootstrap_code(model_id,install)
+        return '_CC_ACCELERATION = '+repr(acceleration)+'\n'+additional_bootstrap_code(model_id,install)
     if not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+', dataset):
         raise ValueError('Dataset 请填写 用户名/数据集名称')
     requested_dataset = dataset
@@ -91,6 +102,7 @@ def bootstrap_code(dataset, source=None, install=True, asset_mode="dataset", mod
         source = helpers + "\n_QWEN_ASSET_MODE = " + repr(asset_mode) + "\n" + source
     cache_helpers = Path(__file__).with_name('asset_manager.py').read_text(encoding='utf-8') + '\n' + Path(__file__).with_name('cache_manager.py').read_text(encoding='utf-8')
     return model_switch_code(model_id)+f'''
+_CC_ACCELERATION = {acceleration!r}
 import json, os, uuid
 exec(compile({cache_helpers!r}, '<qwen-private-cache>', 'exec'), globals())
 _expected_dataset = {dataset!r}
@@ -104,7 +116,7 @@ if _existing_state and _existing_state['dataset'] != _expected_dataset:
         raise RuntimeError('This notebook holds a different dataset. Use its existing dataset or restart the notebook explicitly.')
 if _model_ready:
     if not _existing_state:
-        if _expected_dataset not in str(globals().get('source', '')):
+        if _expected_dataset not in str(globals().get('source', '')).replace(chr(92), '/'):
             raise RuntimeError('An existing model was found but its dataset cannot be verified. Select the correct notebook kernel; do not load a second model.')
         _existing_state = {{'dataset': _expected_dataset, 'runtime_id': uuid.uuid4().hex,
                            'load_count': 1, 'generations': 0, 'adopted': True}}
@@ -121,6 +133,8 @@ else:
                        'load_count': (_existing_state or {{}}).get('load_count', 0) + 1,
                        'generations': 0, 'adopted': False, 'loaded_this_request': True}}
 _COMFY_QWEN_STATE = _existing_state
+if {bool(qwen_runtime)!r}:
+    exec(compile({qwen_runtime!r}, '<cc-qwen-generation>', 'exec'), globals())
 if globals().get('_QWEN_CACHE_HANDLE') and globals().get('_QWEN_CACHE_TOKEN'):
     save_private_cache(ASSET_DIR, encoder)
 print('COMFY_SESSION_READY:' + json.dumps({{'runtime_id': _COMFY_QWEN_STATE['runtime_id'],
@@ -151,7 +165,7 @@ def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL):
 class SessionBackend:
     mode = 'session'
 
-    def __init__(self, user, dataset, jupyter_url, kernel_id=None, transport_factory=None, asset_mode="dataset", cache_handle=None, api_token=None, model_id=DEFAULT_MODEL):
+    def __init__(self, user, dataset, jupyter_url, kernel_id=None, transport_factory=None, asset_mode="dataset", cache_handle=None, api_token=None, model_id=DEFAULT_MODEL, acceleration="auto"):
         if not re.fullmatch(r'[A-Za-z0-9_-]+', user):
             raise ValueError('请填写 Kaggle 用户名')
         self.user, self.dataset, self.token = user, dataset, ''
@@ -164,7 +178,8 @@ class SessionBackend:
         probe = JupyterTransport(self.jupyter_url, kernel_id=self.kernel_id)
         probe.close()
         factory = transport_factory or (lambda: JupyterTransport(self.jupyter_url, kernel_id=self.kernel_id, output_callback=self._output))
-        bootstrap = bootstrap_code(dataset, asset_mode=asset_mode, model_id=self.model_id)
+        self.acceleration=acceleration
+        bootstrap = bootstrap_code(dataset, asset_mode=asset_mode, model_id=self.model_id,acceleration=acceleration)
         if cache_handle and api_token:
             if not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+',cache_handle):
                 raise ValueError('Invalid private cache handle')

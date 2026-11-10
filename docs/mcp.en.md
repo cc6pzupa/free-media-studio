@@ -16,14 +16,14 @@ For MCP clients using `mcpServers`, use absolute paths:
 {
   "mcpServers": {
     "cc-media-studio": {
-      "command": "/absolute/path/qwen-image-studio/.venv/bin/python",
-      "args": ["/absolute/path/qwen-image-studio/mcp_server.py"]
+      "command": "/absolute/path/free-media-studio/.easy-venv/bin/python",
+      "args": ["/absolute/path/free-media-studio/mcp_server.py"]
     }
   }
 }
 ```
 
-On Windows use `C:/absolute/path/qwen-image-studio/.venv/Scripts/python.exe`. If using the automatic launcher environment, replace `.venv` with `.easy-venv` and install the MCP requirements there. Complete examples are in `examples/mcp/`.
+On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe`. Before connecting MCP on Windows, save your account and submit a task in the GUI to start the independent worker. Alternatively, run `.\\.easy-venv\\Scripts\\python.exe studio_worker.py` in a separate terminal and keep that terminal open. macOS / Linux can start the worker automatically. Complete examples are in `examples/mcp/`.
 
 | Tool | Inputs | Output |
 | --- | --- | --- |
@@ -50,3 +50,5 @@ generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-
 ```
 
 模型切换时释放旧模型；同一模型继续复用。新增模型使用 GUI 保存的自动账号配置。返回的 usage 包含 model_id、编码、采样及解码耗时。
+
+Acceleration follows the saved GUI preference and defaults to `auto` (dual GPU preferred). `usage.parallel_strategy` reports `cfg_parallel` or `encoder_split`. For configurations without a saved preference, set `CC_MEDIA_ACCELERATION=auto` or `split`.

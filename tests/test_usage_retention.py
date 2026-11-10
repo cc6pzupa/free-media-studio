@@ -1,3 +1,4 @@
+import contextlib
 import importlib.util
 import json
 import tempfile
@@ -28,8 +29,16 @@ class ReleasableBackend(fixture.FakeBackend):
 class UsageRetentionTest(unittest.TestCase):
     def make_core(self,d):
         with patch('studio_core.load_config',return_value=None):core=StudioCore(d,backend_factory=ReleasableBackend)
-        core.configure(CONFIG);self.addCleanup(core.close)
+        core.configure(CONFIG);self.cores.append(core)
         return core
+
+    @contextlib.contextmanager
+    def directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.cores=[]
+            try:yield directory
+            finally:
+                for core in self.cores:core.close()
 
     def finish(self,core,job):
         core.start()
@@ -49,7 +58,7 @@ class UsageRetentionTest(unittest.TestCase):
         self.assertIsNone(normalize_quota({'gpuQuota':{'totalTimeAllowed':'108000s'}})['gpu']['remaining_seconds'])
 
     def test_idle_releases_once_and_next_generation_can_run(self):
-        with tempfile.TemporaryDirectory() as d:
+        with self.directory() as d:
             core=self.make_core(d);job=core.submit('fox',request_id='first')['job_id'];self.finish(core,job)
             self.assertEqual(core.status()['keep_alive_minutes'],15)
             self.assertGreater(core.status()['idle_remaining_seconds'],890)
@@ -64,7 +73,7 @@ class UsageRetentionTest(unittest.TestCase):
             self.assertEqual(core.store.get(new)['state'],'complete')
 
     def test_queue_and_running_job_prevent_release_even_after_timeout(self):
-        with tempfile.TemporaryDirectory() as d:
+        with self.directory() as d:
             core=self.make_core(d);job=core.submit('fox',request_id='queued')['job_id']
             core.idle_since=time.monotonic()-10000;core.session_state='active'
             core.expire_idle();self.assertEqual(core.backend.releases,0)
@@ -72,7 +81,7 @@ class UsageRetentionTest(unittest.TestCase):
             self.assertIsNone(core.status()['idle_remaining_seconds'])
 
     def test_timeout_change_preserves_backend_deduplication_and_zero_disables(self):
-        with tempfile.TemporaryDirectory() as d:
+        with self.directory() as d:
             core=self.make_core(d);backend=core.backend
             first=core.submit('fox',request_id='one')
             core.configure(dict(CONFIG,keep_alive_minutes=30))
@@ -88,7 +97,7 @@ class UsageRetentionTest(unittest.TestCase):
                 with self.assertRaises(ValueError):normalize_config(dict(CONFIG,keep_alive_minutes=value))
 
     def test_failed_release_is_visible_throttled_and_does_not_leak_errors(self):
-        with tempfile.TemporaryDirectory() as d:
+        with self.directory() as d:
             core=self.make_core(d);core.idle_since=time.monotonic()-901;core.session_state='active';core.backend.fail_release=True
             core.expire_idle();core.expire_idle()
             self.assertEqual(core.backend.releases,1)
@@ -96,13 +105,14 @@ class UsageRetentionTest(unittest.TestCase):
             self.assertNotIn('private transport detail',json.dumps(core.status()))
 
     def test_quota_reads_are_cached_and_do_not_extend_idle_deadline(self):
-        with tempfile.TemporaryDirectory() as d:
+        with self.directory() as d:
             core=self.make_core(d);core.idle_since=time.monotonic()-100;core.session_state='active';before=core.idle_since
-            self.assertTrue(core.quota()['available']);core.quota();core.status()
+            with patch('studio_core.time.monotonic',return_value=1):
+                self.assertTrue(core.quota()['available']);core.quota();core.status()
             self.assertEqual(core.backend.quota_calls,1);self.assertEqual(core.idle_since,before)
 
     def test_cancel_uses_exact_connected_session_and_failure_preserves_record(self):
-        with tempfile.TemporaryDirectory() as d:
+        with self.directory() as d:
             backend=AccountBackend('owner','KGAT_fixture_secret',cache_dir=d);self.addCleanup(backend.close)
             cached={'jupyter_url':'https://kkb-production.jupyter-proxy.kaggle.net/k/42/fixture/proxy','operation':'operations/fixture'}
             backend._save(cached)

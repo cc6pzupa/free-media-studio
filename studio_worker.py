@@ -6,12 +6,13 @@ import json
 import os
 import secrets
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+from local_http import LocalHTTPServer
 from pathlib import Path
 
 from studio_core import StudioCore, private_write, state_directory
 
-VERSION='0.6.0'
+VERSION='0.7.0'
 
 
 class ProcessLock:
@@ -64,7 +65,7 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if self.path.startswith('/jobs/'):
@@ -103,7 +104,7 @@ def create_worker_server(core, token, port=0):
                 # Validation messages are authored locally and contain no values.
                 return self.send(400,{'error':str(error) if type(error) is ValueError else '请求格式有误。'})
             except Exception:return self.send(500,{'error':'本机后台操作失败。'})
-    return ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    return LocalHTTPServer(('127.0.0.1',port),Handler)
 
 
 def serve(directory=None,backend_factory=None,keep_alive_minutes=None):

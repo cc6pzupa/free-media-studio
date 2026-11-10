@@ -33,6 +33,25 @@ def build_server(client=None):
         return dict(call(service.status),quota=call(service.quota))
 
     @server.tool(structured_output=True)
+    def generate_video(prompt:str,request_id:str,seed:int=42,steps:int|None=None,
+                       model_id:str='wan21-t2v-1.3b',frames:int|None=None) -> dict[str,Any]:
+        """Queue one experimental MP4 on Kaggle. Models: ltx-video-2b-distilled (8 steps),
+        wan21-t2v-1.3b (balanced), wan22-ti2v-5b (quality). Use a unique request_id.
+        Poll get_job every two seconds, then get_video for its local file URI.
+        Initial weights and video generation can take many minutes. Never resubmit automatically."""
+        return call(service.submit_video,prompt,seed,steps,request_id,model_id,frames)
+
+    @server.tool(structured_output=True)
+    def get_video(job_id:str) -> dict[str,Any]:
+        """Get the completed local MP4 path/URI and usage. Credentials are not included."""
+        job=call(service.get_job,job_id)
+        if not job.get('video_ready'):raise ToolError('Video is not ready')
+        raw=call(service.get_video,job_id)
+        path=(service.directory/'images'/(job_id+'.mp4')).resolve()
+        return {'job_id':job_id,'path':str(path),'uri':path.as_uri(),
+            'mime_type':'video/mp4','size_bytes':len(raw),'usage':job['usage']}
+
+    @server.tool(structured_output=True)
     def generate_image(prompt:str,request_id:str,seed:int=42,steps:int|None=None,model_id:str="qwen-image-2.1") -> dict[str,Any]:
         """Queue one 512x512 PNG and return its job_id immediately. Models: qwen-image-2.1 (20 steps default),
         z-image-turbo (9 steps default), sdxl-lightning (exactly 4 steps). Omit steps for the model default. Use a unique request_id per intended image;

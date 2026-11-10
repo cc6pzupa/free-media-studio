@@ -29,6 +29,11 @@ class FakeBackend:
             'generation_number':self.count,'request_seconds':.9,'seed':seed,'steps':steps,'width':512,'height':512,
             'token':self.config['token']}
     def close(self):pass
+    def generate_video_with_progress(self,prompt,seed=42,steps=30,model_id='wan21-t2v-1.3b',frames=33,progress=None):
+        if progress:progress({'phase':'exporting'})
+        return b'\0\0\0\x18ftypisom'+b'fixture-protocol-only',{
+            'model_id':model_id,'media_type':'video','frames':frames,'fps':16,'steps':steps,
+            'seed':seed,'parallel_strategy':'cfg_parallel','cfg_pairs':steps,'token':self.config['token']}
 
 
 if __name__=='__main__':serve(Path(sys.argv[1]),backend_factory=FakeBackend)

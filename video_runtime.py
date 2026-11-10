@@ -59,20 +59,24 @@ class VideoRuntime:
     def generate(self,prompt,seed=42,steps=None,frames=None,output=None):
         import torch
         from video_registry import validate_video
-        from dual_gpu import move_int8_encoder
+        from video_precision import move_video_encoder
         from video_parallel import WanParallelCFG
         p=self.profile;params=validate_video(prompt,seed,steps,p['id'],frames)
         if self.pipe is None:self.prepare()
         for i in range(2):torch.cuda.reset_peak_memory_stats(i)
         start=time.perf_counter();self.emit('encoding')
-        move_int8_encoder(self.encoder,'cuda:1')
-        positive,negative=self.pipe.encode_prompt(prompt=prompt,negative_prompt='',
-            do_classifier_free_guidance=p['guidance']>1,device=torch.device('cuda:1'))[:2]
+        move_video_encoder(self.encoder,'cuda:1')
+        encoded=self.pipe.encode_prompt(prompt=prompt,negative_prompt='',
+            do_classifier_free_guidance=p['guidance']>1,device=torch.device('cuda:1'))
+        if p['family']=='ltx':positive,mask,negative,negative_mask=encoded
+        else:positive,negative=encoded[:2]
         if not torch.isfinite(positive).all() or (negative is not None and not torch.isfinite(negative).all()):
             raise RuntimeError('Non-finite video prompt embeddings')
         positive=positive.to('cuda:0');negative=negative.to('cuda:0') if negative is not None else None
         torch.cuda.synchronize();encoding=time.perf_counter()-start
-        move_int8_encoder(self.encoder,'cpu');torch.cuda.empty_cache()
+        move_video_encoder(self.encoder,'cpu');torch.cuda.empty_cache()
+        if self.acceleration=='split' and self.replica is not None:
+            self.replica=None;gc.collect();torch.cuda.empty_cache()
         replica_reused=self.replica is not None;replica_seconds=0;strategy='encoder_split'
         if p['family']!='ltx' and self.acceleration=='auto' and not self.disabled:
             try:
@@ -93,17 +97,23 @@ class VideoRuntime:
             num_inference_steps=params['steps'],guidance_scale=p['guidance'],
             generator=torch.Generator(device='cuda:0').manual_seed(seed),
             callback_on_step_end=progress,output_type='np')
-        if p['family']=='ltx':kwargs.update(decode_timestep=.05,decode_noise_scale=.025)
+        if p['family']=='ltx':kwargs.update(decode_timestep=.05,decode_noise_scale=.025,
+            prompt_attention_mask=mask.to('cuda:0'),negative_prompt_attention_mask=negative_mask)
         # Wan2.2 hybrid generation accepts no input image for text-to-video.
         self.pipe.register_modules(text_encoder=None)
-        sampling=time.perf_counter();fallback=None
+        sampling=time.perf_counter();fallback=None;cfg_pairs=0
         try:
             if strategy=='cfg_parallel':
                 try:
-                    with WanParallelCFG(self.pipe.transformer,self.replica,negative):result=self.pipe(**kwargs)
+                    router=WanParallelCFG(self.pipe.transformer,self.replica,negative)
+                    try:
+                        with router:result=self.pipe(**kwargs)
+                        cfg_pairs=router.calls
+                    finally:del router
                 except RuntimeError as error:
                     if not isinstance(error,torch.cuda.OutOfMemoryError):raise
                     fallback=type(error).__name__;self.replica=None;self.disabled=True
+                if fallback:
                     gc.collect();torch.cuda.empty_cache();strategy='encoder_split'
                     kwargs['generator']=torch.Generator(device='cuda:0').manual_seed(seed)
                     result=self.pipe(**kwargs)
@@ -122,7 +132,7 @@ class VideoRuntime:
             encoding_seconds=round(encoding,3),generation_seconds=round(sampling_seconds,3),
             request_seconds=round(time.perf_counter()-start,3),loading_seconds=round(self.load_seconds,3),
             model_reused=self.calls>1,model_load_count=1,generation_number=self.calls,
-            parallel_strategy=strategy,acceleration_mode=self.acceleration,
+            parallel_strategy=strategy,acceleration_mode=self.acceleration,cfg_pairs=cfg_pairs,
             replica_load_seconds=round(replica_seconds,3),dual_model_reused=replica_reused,
             acceleration_fallback=fallback,peak_gpu_gib=[round(torch.cuda.max_memory_allocated(i)/2**30,3) for i in range(2)])
 

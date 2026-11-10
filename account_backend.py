@@ -37,7 +37,7 @@ class AccountBackend:
         self.http.headers.update({'Content-Type':'application/json','User-Agent':'qwen-image-studio/1'})
         directory=Path(cache_dir) if cache_dir else Path(os.environ.get('EASY_CONFIG_PATH',str(Path.home()/'.kaggle-qwen-client/settings.json'))).parent/'sessions'
         self.cache_file=directory/(user+'-'+notebook_slug+'.json')
-        self.backend=None;self.lock=threading.Lock()
+        self.backend=None;self.video_backend=None;self.lock=threading.Lock()
 
     def _call(self,service,method,body,timeout=(20,90)):
         try:
@@ -185,6 +185,8 @@ class AccountBackend:
         notify=progress or (lambda update:None)
         with self.lock:
             started=time.monotonic()
+            if self.video_backend is not None:
+                self.video_backend.close();self.video_backend=None
             if self.backend is not None and getattr(self.backend,"model_id","qwen-image-2.1")!=profile["id"]:
                 self.backend.close();self.backend=None
             if self.backend is None or self.backend.session.transport is None:
@@ -194,6 +196,20 @@ class AccountBackend:
             image,stats=self.backend.generate_with_progress(prompt,seed,steps,notify)
             stats.update(backend='account',request_seconds=round(time.monotonic()-started,2))
             return image,stats
+
+    def generate_video_with_progress(self,prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,progress=None):
+        from video_registry import validate_video
+        from video_session import VideoSessionBackend
+        params=validate_video(prompt,seed,steps,model_id,frames)
+        notify=progress or (lambda event:None)
+        with self.lock:
+            if self.backend is not None:self.backend.close();self.backend=None
+            if self.video_backend is not None and self.video_backend.model_id!=model_id:
+                self.video_backend.close();self.video_backend=None
+            if self.video_backend is None:
+                url=self._ensure_session(notify)
+                self.video_backend=VideoSessionBackend(url,model_id,self.acceleration)
+            return self.video_backend.generate_with_progress(**params,progress=notify)
 
     def quota(self):
         from usage_stats import normalize_quota
@@ -214,9 +230,11 @@ class AccountBackend:
             except KaggleApiError as error:
                 if error.status not in (404,410):raise
             if self.backend:self.backend.close();self.backend=None
+            if self.video_backend:self.video_backend.close();self.video_backend=None
             self._save({})
 
     def close(self):
         with self.lock:
             if self.backend:self.backend.close()
+            if self.video_backend:self.video_backend.close()
             self.http.close()

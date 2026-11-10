@@ -2,6 +2,16 @@
 
 视频功能位于 `feature/video-three-tiers` 开发分支。使用前先按主 README 启动客户端并保存自动账号配置。
 
+## 安装预览分支 / Install the preview branch
+
+```bash
+git clone --branch feature/video-three-tiers https://github.com/cc6pzupa/free-media-studio.git
+cd free-media-studio
+python launch.py
+```
+
+macOS / Linux 使用 `python3 launch.py`。启动器自动创建客户端环境并安装依赖。 / On macOS and Linux, use `python3 launch.py`. The launcher creates the client environment and installs dependencies.
+
 ## GUI
 
 打开左侧 **视频 / Video Preview**，或访问 `http://127.0.0.1:8787/video`。选择模型、输入画面与动作描述、调整帧数，然后点击生成。完成后可播放和保存 MP4。

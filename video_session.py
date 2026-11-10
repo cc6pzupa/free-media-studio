@@ -72,7 +72,7 @@ class VideoSessionBackend:
         lines=self.buffer.split('\n');self.buffer=lines.pop()
         for line in lines:
             if line.startswith('COMFY_PROGRESS:'):
-                try:self.progress(json.loads(line.split(':',1)[1]))
+                try:self.progress(dict(json.loads(line.split(':',1)[1]),media_type='video'))
                 except (ValueError,TypeError):pass
         if len(self.buffer)>2*1024*1024:self.buffer=''
 

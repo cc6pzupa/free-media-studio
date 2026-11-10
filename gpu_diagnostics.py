@@ -14,13 +14,18 @@ def inspect_gpu_runtime():
     cp=bool(getattr(model,'_cp_plan',None));tp=bool(getattr(model,'_tp_plan',None))
     try:topology=subprocess.run(['nvidia-smi','topo','-m'],capture_output=True,text=True,timeout=10).stdout.strip()
     except (OSError,subprocess.TimeoutExpired):topology=None
+    state=globals().get('_CC_DUAL_STATE') or {}
+    cfg_ready=bool(globals().get('_CC_ACCELERATION','auto')=='auto' and state.get('replica') is not None and not state.get('disabled'))
     return {'gpus':gpus,'peer_access':peers,'topology':topology,
         'model_id':globals().get('_CC_MODEL_ID'),'transformer_quantized':quantized,
         'context_parallel_plan':cp,'tensor_parallel_plan':tp,
-        'single_image_parallel_ready':False,
-        'notes':['Default encoder/model split saves memory; it does not parallelize denoising.',
-                 'A parallel plan alone does not validate GGUF, causal masks, KV cache or memory fit.',
-                 'Separate image replicas improve throughput, not latency of one image.']}
+        'single_image_parallel_ready':cfg_ready,
+        'acceleration_mode':globals().get('_CC_ACCELERATION','auto'),
+        'parallel_strategy':'cfg_parallel' if cfg_ready else 'encoder_split',
+        'notes':['Qwen CFG runs positive and negative branches on separate GPUs when its cached replica is ready.',
+                 'Z-Image Turbo and SDXL-Lightning use encoder/model split.',
+                 'Tensor/context-parallel plans are reported independently of the active strategy.']}
+
 
 
 if __name__=='__main__':

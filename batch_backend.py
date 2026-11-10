@@ -20,13 +20,15 @@ def kernel_status(output):
 
 
 class BatchBackend:
-    def __init__(self, user, dataset, token, runner=subprocess.run, poll_seconds=15, timeout_minutes=60):
+    def __init__(self, user, dataset, token, runner=subprocess.run, poll_seconds=15, timeout_minutes=60,acceleration='auto'):
         if not re.fullmatch(r'[A-Za-z0-9_-]+', user):
             raise ValueError('Kaggle 用户名只能包含字母、数字、下划线和短横线')
         if not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+', dataset):
             raise ValueError('Dataset 请填写 用户名/数据集名称')
         if not token.strip():
             raise ValueError('请填写 Kaggle API Token')
+        if acceleration not in ('auto','split'):raise ValueError('Invalid acceleration mode')
+        self.acceleration=acceleration
         self.user, self.dataset, self.token = user, dataset, token.strip()
         self.runner, self.poll, self.timeout = runner, poll_seconds, timeout_minutes*60
         self.lock = threading.Lock()
@@ -51,13 +53,14 @@ class BatchBackend:
                 progress(update)
         report('submitting', '正在向 Kaggle 提交新任务。', submitted=False)
         notebook=json.loads(Path(__file__).with_name('template.ipynb').read_text(encoding='utf-8'))
-        code=''.join(notebook['cells'][3]['source'])
-        for name,value in [('PROMPT',prompt),('SEED',seed),('STEPS',steps)]:
-            code=re.sub(r'^'+name+r'\s*=.*$',lambda m,n=name,v=value:n+' = '+repr(v),code,count=1,flags=re.M)
-        code=code.replace("'/kaggle/working/result.png'",repr('/kaggle/working/'+image_name))
+        from session_backend import bootstrap_code
+        notebook['cells'][2]['source']=bootstrap_code(self.dataset,install=False,acceleration=self.acceleration).splitlines(keepends=True)
+        code=("import json\nfrom pathlib import Path\n"
+              +"PROMPT = "+repr(prompt)+"\nSEED = "+repr(seed)+"\nSTEPS = "+repr(steps)+"\n"
+              +"image, stats = generate_image(PROMPT,seed=SEED,steps=STEPS,width=512,height=512)\n"
+              +"image.save("+repr('/kaggle/working/'+image_name)+")\n"
+              +"Path('/kaggle/working/benchmark.json').write_text(json.dumps(stats))\n")
         notebook['cells'][3]['source']=code.splitlines(keepends=True)
-        c=notebook['cells'][2]
-        c['source']=''.join(c['source']).replace('faberbruntch/qwen-image-t4-assets',self.dataset).splitlines(keepends=True)
         for c in notebook['cells']:
             if c['cell_type']=='code':c['execution_count']=None;c['outputs']=[]
         env=dict(os.environ,KAGGLE_API_TOKEN=self.token,PYTHONUTF8="1")

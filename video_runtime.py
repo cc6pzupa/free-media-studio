@@ -83,6 +83,9 @@ class VideoRuntime:
         if self.pipe is None:self.prepare()
         for i in range(2):torch.cuda.reset_peak_memory_stats(i)
         start=time.perf_counter();self.emit('encoding')
+        # The 5B replica and UMT5 encoding workspace should not overlap on GPU 1.
+        if p['family']=='wan22' and self.replica is not None:
+            move_video_encoder(self.replica,'cpu');torch.cuda.empty_cache()
         move_video_encoder(self.encoder,'cuda:1')
         encoded=self.pipe.encode_prompt(prompt=prompt,negative_prompt='',
             do_classifier_free_guidance=p['guidance']>1,device=torch.device('cuda:1'))
@@ -100,6 +103,7 @@ class VideoRuntime:
             try:
                 if self.replica is None:
                     tick=time.perf_counter();self.replica=self.load_transformer(1);replica_seconds=time.perf_counter()-tick
+                elif p['family']=='wan22':move_video_encoder(self.replica,'cuda:1')
                 strategy='cfg_parallel'
             except (RuntimeError,ValueError):
                 self.replica=None;self.disabled=True;gc.collect();torch.cuda.empty_cache()

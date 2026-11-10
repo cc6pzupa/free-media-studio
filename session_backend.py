@@ -116,7 +116,7 @@ if _existing_state and _existing_state['dataset'] != _expected_dataset:
         raise RuntimeError('This notebook holds a different dataset. Use its existing dataset or restart the notebook explicitly.')
 if _model_ready:
     if not _existing_state:
-        if _expected_dataset not in str(globals().get('source', '')):
+        if _expected_dataset not in str(globals().get('source', '')).replace(chr(92), '/'):
             raise RuntimeError('An existing model was found but its dataset cannot be verified. Select the correct notebook kernel; do not load a second model.')
         _existing_state = {{'dataset': _expected_dataset, 'runtime_id': uuid.uuid4().hex,
                            'load_count': 1, 'generations': 0, 'adopted': True}}

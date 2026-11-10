@@ -6,7 +6,8 @@ import json
 import os
 import secrets
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+from local_http import LocalHTTPServer
 from pathlib import Path
 
 from studio_core import StudioCore, private_write, state_directory
@@ -103,7 +104,7 @@ def create_worker_server(core, token, port=0):
                 # Validation messages are authored locally and contain no values.
                 return self.send(400,{'error':str(error) if type(error) is ValueError else '请求格式有误。'})
             except Exception:return self.send(500,{'error':'本机后台操作失败。'})
-    return ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    return LocalHTTPServer(('127.0.0.1',port),Handler)
 
 
 def serve(directory=None,backend_factory=None,keep_alive_minutes=None):

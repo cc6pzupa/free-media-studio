@@ -250,7 +250,7 @@ class StudioCore:
         self.wake=threading.Event();self.stopping=threading.Event()
         self.worker=None
         self.idle_since=None;self.session_state='not_started';self.releasing=False;self.release_retry_at=0
-        self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=0
+        self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=None
         self.quota_lock=threading.Lock()
         initial=load_config()
         if initial:self.configure(initial)
@@ -281,7 +281,7 @@ class StudioCore:
             previous=self.backend
             self.backend=candidate;self.config=normalized;self.fingerprint=fingerprint
             self.idle_since=None;self.session_state='not_started'
-            self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=0
+            self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=None
             if previous:
                 try:previous.close()
                 except Exception:pass
@@ -349,7 +349,7 @@ class StudioCore:
         with self.quota_lock:
             with self.lock:
                 backend=self.backend;fingerprint=self.fingerprint
-                if time.monotonic()-self.quota_checked_at<60:return dict(self.quota_cache)
+                if self.quota_checked_at is not None and time.monotonic()-self.quota_checked_at<60:return dict(self.quota_cache)
             getter=getattr(backend,'quota',None)
             try:result=getter() if callable(getter) else {'available':False,'reason':'unsupported_mode'}
             except Exception:result={'available':False,'reason':'api_unavailable'}

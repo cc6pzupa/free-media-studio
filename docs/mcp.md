@@ -73,7 +73,13 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 }
 ```
 
-自动启动器使用 `.easy-venv`；如果选择该环境，请先用它的 Python 安装 `requirements-mcp.txt`，再把上述 `.easy-venv` 路径替换为 `.easy-venv`。
+Windows 上，先在 GUI 保存账号并提交一次任务，让独立后台保持运行，再连接 MCP。也可以在单独的终端启动后台并保持该终端打开：
+
+```powershell
+.\.easy-venv\Scripts\python.exe studio_worker.py
+```
+
+macOS / Linux 可由 MCP 自动启动独立后台。
 
 不要在终端手动运行 MCP 之后等待网页打开。MCP 由 AI 客户端启动，通过标准输入输出通信；它本身不打开窗口，也不是 GUI 的 HTTP 地址。
 
@@ -84,7 +90,7 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 | 工具 | 参数 | 返回 |
 | --- | --- | --- |
 | `studio_status` | 无 | 账号是否配置、排队数量、当前任务、最近一次模型使用情况 |
-| `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`steps=20` | 立即返回任务 ID，不等待首次下载或生图 |
+| `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`model_id`、`steps`（省略时采用模型默认步数） | 立即返回任务 ID，不等待首次下载或生图 |
 | `get_job` | `job_id` | `queued/running/complete/error/interrupted`、真实阶段、下载字节与百分比、复用信息 |
 | `get_image` | 已完成的 `job_id` | MCP `image/png` 内容，以及图片尺寸和耗时等元数据 |
 

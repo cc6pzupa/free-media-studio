@@ -59,11 +59,14 @@ class StudioClient:
             log_path=self.directory/'worker.log'
             fd=os.open(log_path,os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)
             with os.fdopen(fd,'ab') as output:
-                options={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.DETACHED_PROCESS} if os.name=='nt' else {'start_new_session':True}
+                options={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.DETACHED_PROCESS|subprocess.CREATE_BREAKAWAY_FROM_JOB} if os.name=='nt' else {'start_new_session':True}
                 environment=dict(os.environ,EASY_CONFIG_PATH=str(config_path()),PYTHONUTF8='1')
-                subprocess.Popen([sys.executable,str(Path(__file__).with_name('studio_worker.py')),
-                    '--state-dir',str(self.directory.resolve())],stdin=subprocess.DEVNULL,stdout=output,stderr=output,
-                    cwd=str(Path(__file__).resolve().parent),env=environment,close_fds=True,**options)
+                try:
+                    subprocess.Popen([sys.executable,str(Path(__file__).with_name('studio_worker.py')),
+                        '--state-dir',str(self.directory.resolve())],stdin=subprocess.DEVNULL,stdout=output,stderr=output,
+                        cwd=str(Path(__file__).resolve().parent),env=environment,close_fds=True,**options)
+                except OSError:
+                    raise RuntimeError('无法启动独立后台。请先在终端运行 python studio_worker.py，再连接 MCP。 / Start python studio_worker.py in a terminal before connecting MCP.') from None
             deadline=time.monotonic()+20
             while time.monotonic()<deadline:
                 if self._probe(self._read_connection()):return

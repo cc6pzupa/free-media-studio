@@ -7,9 +7,11 @@ Generate images with your own Kaggle GPU quota. Start the launcher, enter your K
 ![CC Media Studio interface](docs/gui-en.jpg)
 
 - Windows, macOS, and Linux launchers with automatic dependency installation.
-- Three models, automatic downloads, private caches, and live model reuse.
+- Three models with automatic dual-GPU preference, downloads, private caches, and live model reuse.
 - Chinese / English interface with download progress, GPU usage, and idle countdown.
 - GUI, ComfyUI, standalone Kaggle notebook, local MCP, and HTTP API.
+
+[Illustrated guide in Chinese and English](docs/guide.html): download the repository, then open `docs/guide.html` in a browser.
 
 ## Download and launch
 
@@ -35,9 +37,11 @@ Use `python3 launch.py` on macOS/Linux. On Windows, select **Add python.exe to P
 
 ## Generate your first image
 
+A newly registered account can start from zero: complete Kaggle phone verification, confirm available GPU quota, and create an API key. The app prepares the notebook, connection, weights and cache; no existing dataset or Jupyter URL is needed.
+
 1. Open **Account & connection**.
 2. Enter your Kaggle profile **username** and **API key / API token**.
-3. Select **Remember configuration** and **Save connection**.
+3. Keep **Automatic · prefer dual GPU** and **15-minute idle retention**, select **Remember configuration**, and **Save connection**.
 4. Select a model, write a prompt, and click **Generate image**.
 5. Select **Save image** to download the PNG.
 
@@ -47,15 +51,17 @@ First use prepares a dual T4 session, downloads weights, and saves a private cac
 
 ## Choose a model
 
-| Model | Default steps | Use |
-| --- | --- | --- |
-| Qwen-Image 2.1 | 20, adjustable | General image generation |
-| Z-Image Turbo | 9, adjustable | Efficiency |
-| SDXL-Lightning | Fixed at 4 | Quick previews; English prompts recommended |
+| Model | Default steps | Use | Warm dual-T4 example |
+| --- | --- | --- | --- |
+| Qwen-Image 2.1 | 20, adjustable | General image generation | 49.7 s |
+| Z-Image Turbo | 9, adjustable | Efficiency | 8.2 s |
+| SDXL-Lightning | Fixed at 4 | Quick previews; English prompts recommended | 1.5 s |
 
-Selecting a model applies its recommended steps. Output is one **512×512 PNG**, with seed **42** by default. Completion status shows encoding, denoising, and decode time.
+Selecting a model applies its recommended steps. Output is one **512×512 PNG**, with seed **42** by default. Completion status shows the actual strategy and encoding, transfer, sampling, and decode timings.
 
 Each model has a separate private cache. Qwen's initial raw download is approximately 23.51 GB, with a prepared INT8/Q4 cache of about 16 GB. Other models show their actual download size in the progress card.
+
+Warm examples measure server-side generation after model loading. First downloads, cold loading, and client/network transfer are separate.
 
 ## Dual-GPU acceleration
 
@@ -76,6 +82,12 @@ python launch.py --acceleration split
 ```
 
 Use `--acceleration auto` for automatic acceleration. The Kaggle notebook has the same choice. ComfyUI and MCP use the saved preference.
+
+## Single images and queued tasks
+
+The GUI and HTTP image endpoint generate one PNG per request. MCP can submit separate tasks with unique `request_id` values to the shared serial queue. Poll and retrieve each image using its returned `job_id`; active models are reused.
+
+GUI batch counts, prompt lists, automatic seed increments, and ZIP export are on the roadmap.
 
 ## GPU usage and idle retention
 

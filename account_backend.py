@@ -22,10 +22,12 @@ class KaggleApiError(RuntimeError):
 class AccountBackend:
     mode='account'
 
-    def __init__(self,user,token,dataset=None,notebook_slug='qwen-image-studio',cache_dir=None,http=None):
+    def __init__(self,user,token,dataset=None,notebook_slug='qwen-image-studio',cache_dir=None,http=None,acceleration='auto'):
         if not re.fullmatch(r'[A-Za-z0-9_-]+',user):raise ValueError('请填写 Kaggle 账号用户名')
         if not isinstance(token,str) or not token.strip():raise ValueError('请填写 Kaggle API Key / Token')
         if not re.fullmatch(r'[A-Za-z0-9_-]+',notebook_slug):raise ValueError('Invalid notebook slug')
+        if acceleration not in ('auto','split'):raise ValueError('Invalid acceleration mode')
+        self.acceleration=acceleration
         self.user,self.token=user,token.strip()
         self.dataset=dataset or user+'/qwen-image-t4-assets'
         self.slug=user+'/'+notebook_slug
@@ -188,7 +190,7 @@ class AccountBackend:
             if self.backend is None or self.backend.session.transport is None:
                 url=self._ensure_session(notify)
                 self.backend=SessionBackend(self.user,self.dataset,url,asset_mode='auto',
-                    cache_handle=self.user+'/'+profile['cache_slug'],api_token=self.token,model_id=profile['id'])
+                    cache_handle=self.user+'/'+profile['cache_slug'],api_token=self.token,model_id=profile['id'],acceleration=self.acceleration)
             image,stats=self.backend.generate_with_progress(prompt,seed,steps,notify)
             stats.update(backend='account',request_seconds=round(time.monotonic()-started,2))
             return image,stats

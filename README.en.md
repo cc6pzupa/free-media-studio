@@ -57,6 +57,26 @@ Selecting a model applies its recommended steps. Output is one **512×512 PNG**,
 
 Each model has a separate private cache. Qwen's initial raw download is approximately 23.51 GB, with a prepared INT8/Q4 cache of about 16 GB. Other models show their actual download size in the progress card.
 
+## Dual-GPU acceleration
+
+**Automatic · prefer dual GPU** is the default across the GUI, ComfyUI, MCP, HTTP API, and Kaggle notebook.
+
+| Model | Dual-T4 execution |
+| --- | --- |
+| Qwen-Image 2.1 | Parallel positive/negative CFG branches; cached encoder and replica |
+| Z-Image Turbo | Encoding on GPU 1; sampling and decoding on GPU 0 |
+| SDXL-Lightning | Both text encoders on GPU 1; sampling and decoding on GPU 0 |
+
+Qwen preserves the original output for the same prompt and seed. The replica is prepared once and reused. If parallel acceleration is unavailable, generation returns to the encoder/model split. The result shows the actual strategy and encoding, transfer, sampling, and decode timings.
+
+Choose **Account & connection → Acceleration → Encoder/model split**, or start with:
+
+```bash
+python launch.py --acceleration split
+```
+
+Use `--acceleration auto` for automatic acceleration. The Kaggle notebook has the same choice. ComfyUI and MCP use the saved preference.
+
 ## GPU usage and idle retention
 
 The GUI shows used, reserved, available, and total GPU quota plus reset time. It refreshes every minute and supports manual refresh.

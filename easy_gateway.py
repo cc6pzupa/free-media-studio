@@ -24,7 +24,7 @@ def validate(data):
     return prompt,seed,steps
 
 
-def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=None):
+def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=None, acceleration=None):
     from studio_client import SharedBackend, StudioClient
     shared_mode=backend_factory is BatchBackend
     nonce=secrets.token_urlsafe(32); api_key=secrets.token_urlsafe(32)
@@ -33,6 +33,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
     saved_user=saved_dataset=''
     def make_backend(data):
         if keep_alive_minutes is not None:data=dict(data,keep_alive_minutes=keep_alive_minutes)
+        if acceleration is not None:data=dict(data,acceleration=acceleration)
         if shared_mode:
             return SharedBackend(dict(data,mode=data.get('mode','batch')),activate=False)
         user=data.get('user','').strip()
@@ -40,10 +41,10 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         mode=data.get('mode','batch')
         if mode=='account':
             from account_backend import AccountBackend
-            return AccountBackend(user,data.get('token','').strip(),dataset=dataset or None)
+            return AccountBackend(user,data.get('token','').strip(),dataset=dataset or None,**({'acceleration':data['acceleration']} if 'acceleration' in data else {}))
         if mode=='session':
             from session_backend import SessionBackend
-            return SessionBackend(user,dataset,data.get('jupyter_url','').strip(),data.get('kernel_id') or None)
+            return SessionBackend(user,dataset,data.get('jupyter_url','').strip(),data.get('kernel_id') or None,**({'acceleration':data['acceleration']} if 'acceleration' in data else {}))
         if mode!='batch':
             raise ValueError('请选择自动连接、常驻复用或批处理模式')
         return backend_factory(user,dataset,data.get('token','').strip())
@@ -87,7 +88,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if self.path=='/models':
                 from model_registry import model_catalog
                 return self.send(200,{'models':model_catalog()})
-            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.6.0'})
+            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.7.0'})
             if self.path in ('/usage','/v1/studio/usage'):
                 if not (self.ui_auth() if self.path=='/usage' else self.api_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
                 sync_shared_backend()
@@ -104,7 +105,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 if isinstance(backend,SharedBackend):
                     try:active_job_id=backend.client.status()['active_job_id']
                     except RuntimeError:pass
-                return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'keep_alive_minutes':getattr(backend,'keep_alive_minutes',keep_alive_minutes if keep_alive_minutes is not None else 15),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
+                return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'acceleration':getattr(backend,'acceleration',acceleration or 'auto'),'keep_alive_minutes':getattr(backend,'keep_alive_minutes',keep_alive_minutes if keep_alive_minutes is not None else 15),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
             if self.path=='/':return self.send(200,page.encode(),'text/html; charset=utf-8')
             if self.path=='/kaggle_standalone.ipynb':
                 notebook=Path(__file__).with_name('kaggle_standalone.ipynb')
@@ -135,6 +136,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 if is_config:
                     if not isinstance(data,dict):raise ValueError('配置格式有误')
                     if keep_alive_minutes is not None and 'keep_alive_minutes' not in data:data['keep_alive_minutes']=keep_alive_minutes
+                    if acceleration is not None and 'acceleration' not in data:data['acceleration']=acceleration
                     candidate=SharedBackend(dict(data,mode=data.get('mode','batch')),activate=False) if shared_mode else make_backend(data)
                     if not generation_lock.acquire(blocking=False):return self.send(409,{'error':{'message':'正在生成，请结束后再修改配置'}})
                     try:

@@ -14,28 +14,29 @@
 python -m pip install -r requirements-mcp.txt
 ```
 
-这里的 `python` 指 `.venv` 内的 Python。没有激活环境时：
+这里的 `python` 指 `.easy-venv` 内的 Python。没有激活环境时：
 
 ```powershell
 # Windows
-.\.venv\Scripts\python.exe -m pip install -r requirements-mcp.txt
+.\.easy-venv\Scripts\python.exe -m pip install -r requirements-mcp.txt
 ```
 
 ```bash
 # macOS / Linux
-.venv/bin/python -m pip install -r requirements-mcp.txt
+.easy-venv/bin/python -m pip install -r requirements-mcp.txt
 ```
 
 MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化连接。
 
 ## 配置账号
 
-推荐先在 GUI 保存一次 Kaggle 用户名与 Key，然后关闭 GUI。MCP 自动读取同一用户目录中的配置。
+推荐先在 GUI 保存一次 Kaggle 用户名与 Key，然后关闭 GUI。MCP 自动读取同一用户目录中的配置，包括默认“双卡优先”的加速策略。`get_job` 的 `usage.parallel_strategy` 显示实际执行方式；Qwen 双卡 CFG 为 `cfg_parallel`，编码 / 生成分卡为 `encoder_split`。
 
 也可在 MCP 客户端为这个服务设置环境变量：
 
 - `KAGGLE_USERNAME`：Kaggle 用户名。
 - `KAGGLE_API_TOKEN`：Kaggle API Token；旧 Key 可用 `KAGGLE_KEY`。
+- `CC_MEDIA_ACCELERATION`：可选，`auto`（默认双卡优先）或 `split`（原分卡），用于未保存加速设置的配置。
 - `EASY_CONFIG_PATH`：可选，指定另一份本机账号配置路径。
 
 已保存的 GUI 配置优先于环境变量。一个配置目录共用一个后台和一个账号；不同账号应使用不同的 `EASY_CONFIG_PATH`。正在排队或生成时不能切换账号。首次启动后台时会读取配置，客户端不会通过工具参数询问或返回 Key。
@@ -52,8 +53,8 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 {
   "mcpServers": {
     "cc-media-studio": {
-      "command": "C:/absolute/path/qwen-image-studio/.venv/Scripts/python.exe",
-      "args": ["C:/absolute/path/qwen-image-studio/mcp_server.py"]
+      "command": "C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe",
+      "args": ["C:/absolute/path/free-media-studio/mcp_server.py"]
     }
   }
 }
@@ -65,14 +66,14 @@ MCP 使用官方 Python SDK 2.x，支持自动协商新协议和旧版初始化�
 {
   "mcpServers": {
     "cc-media-studio": {
-      "command": "/absolute/path/qwen-image-studio/.venv/bin/python",
-      "args": ["/absolute/path/qwen-image-studio/mcp_server.py"]
+      "command": "/absolute/path/free-media-studio/.easy-venv/bin/python",
+      "args": ["/absolute/path/free-media-studio/mcp_server.py"]
     }
   }
 }
 ```
 
-自动启动器使用 `.easy-venv`；如果选择该环境，请先用它的 Python 安装 `requirements-mcp.txt`，再把上述 `.venv` 路径替换为 `.easy-venv`。
+自动启动器使用 `.easy-venv`；如果选择该环境，请先用它的 Python 安装 `requirements-mcp.txt`，再把上述 `.easy-venv` 路径替换为 `.easy-venv`。
 
 不要在终端手动运行 MCP 之后等待网页打开。MCP 由 AI 客户端启动，通过标准输入输出通信；它本身不打开窗口，也不是 GUI 的 HTTP 地址。
 

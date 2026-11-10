@@ -5,7 +5,9 @@ VIDEO_MODELS = {
         'family':'ltx','default_steps':8,'fixed_steps':8,'width':768,'height':448,
         'frames':33,'fps':16,'guidance':1.0,'cache_slug':'cc-media-ltx-2b-distilled',
         'repo':'Lightricks/LTX-Video','revision':'8984fa25007f376c1a299016d0957a37a2f797bb',
-        'checkpoint':'ltxv-2b-0.9.6-distilled-04-25.safetensors'},
+        'checkpoint':'ltxv-2b-0.9.6-distilled-04-25.safetensors',
+        'timesteps':[1000.0,993.7,987.5,981.2,975.0,909.4,725.0,421.9],
+        'config_repo':'Lightricks/LTX-Video-0.9.5','config_revision':'e58e28c39631af4d1468ee57a853764e11c1d37e'},
     'wan21-t2v-1.3b': {
         'id':'wan21-t2v-1.3b','name':'Wan2.1 1.3B · Balanced','tier':'balanced',
         'family':'wan','default_steps':30,'fixed_steps':None,'width':832,'height':480,
@@ -26,7 +28,7 @@ def video_profile(model_id='wan21-t2v-1.3b'):
 
 
 def video_catalog():
-    return [{k:v for k,v in p.items() if k not in ('repo','revision','checkpoint')}
+    return [{k:v for k,v in p.items() if k not in ('repo','revision','checkpoint','config_repo','config_revision')}
             for p in VIDEO_MODELS.values()]
 
 

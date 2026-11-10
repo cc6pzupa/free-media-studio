@@ -198,7 +198,7 @@ class AccountBackend:
             return image,stats
 
     def generate_video_with_progress(self,prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,progress=None):
-        from video_registry import validate_video
+        from video_registry import validate_video,video_profile
         from video_session import VideoSessionBackend
         params=validate_video(prompt,seed,steps,model_id,frames)
         notify=progress or (lambda event:None)
@@ -208,7 +208,8 @@ class AccountBackend:
                 self.video_backend.close();self.video_backend=None
             if self.video_backend is None:
                 url=self._ensure_session(notify)
-                self.video_backend=VideoSessionBackend(url,model_id,self.acceleration)
+                self.video_backend=VideoSessionBackend(url,model_id,self.acceleration,
+                    cache_handle=self.user+'/'+video_profile(model_id)['cache_slug'],api_token=self.token)
             return self.video_backend.generate_with_progress(**params,progress=notify)
 
     def quota(self):

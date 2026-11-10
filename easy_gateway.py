@@ -128,8 +128,8 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     except RuntimeError:pass
                 return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'acceleration':getattr(backend,'acceleration',acceleration or 'auto'),'keep_alive_minutes':getattr(backend,'keep_alive_minutes',keep_alive_minutes if keep_alive_minutes is not None else 15),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
             if self.path=='/':return self.send(200,page.encode(),'text/html; charset=utf-8')
-            if self.path=='/kaggle_standalone.ipynb':
-                notebook=Path(__file__).with_name('kaggle_standalone.ipynb')
+            if self.path in ('/kaggle_standalone.ipynb','/kaggle_video.ipynb'):
+                notebook=Path(__file__).with_name(self.path[1:])
                 if notebook.is_file():return self.send(200,notebook.read_bytes(),'application/x-ipynb+json')
             if self.path.startswith('/jobs/') and self.ui_auth():
                 sync_shared_backend()

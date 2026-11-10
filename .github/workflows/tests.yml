@@ -31,6 +31,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Check the standalone Notebook
         run: python -c "import nbformat; n=nbformat.read('kaggle_standalone.ipynb',as_version=4); nbformat.validate(n); compile(n.cells[2].source,'kaggle_standalone.ipynb','exec')"
+      - name: Check the video Notebook
+        run: python -c "import nbformat; n=nbformat.read('kaggle_video.ipynb',as_version=4); nbformat.validate(n); [compile(c.source,'kaggle_video.ipynb','exec') for c in n.cells if c.cell_type=='code']"
       - uses: actions/setup-node@v7
         with:
           node-version: '24'

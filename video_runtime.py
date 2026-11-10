@@ -125,6 +125,11 @@ class VideoRuntime:
         # Wan2.2 hybrid generation accepts no input image for text-to-video.
         self.pipe.register_modules(text_encoder=None)
         sampling=time.perf_counter();fallback=None;cfg_pairs=0
+        original_decode=self.pipe.vae.decode
+        def decode(*args,**kwargs):
+            self.emit('decoding')
+            return original_decode(*args,**kwargs)
+        self.pipe.vae.decode=decode
         try:
             if p['family']=='ltx' and self.acceleration=='auto' and not self.disabled:
                 from video_context import LTXContextRunner
@@ -183,7 +188,9 @@ class VideoRuntime:
                         context_transformer_folder(self.folder,p),torch_dtype=torch.float16,
                         device_map={'':0},local_files_only=True))
                 result=self.pipe(**kwargs)
-        finally:self.pipe.register_modules(text_encoder=self.encoder)
+        finally:
+            self.pipe.vae.decode=original_decode
+            self.pipe.register_modules(text_encoder=self.encoder)
         torch.cuda.synchronize();sampling_seconds=time.perf_counter()-sampling
         import numpy as np
         video=np.asarray(result.frames[0])

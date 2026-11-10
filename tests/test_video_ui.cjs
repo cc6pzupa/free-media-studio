@@ -36,3 +36,9 @@ test('video model defaults and download percentage stay visible',async()=>{
  p.elements.get('model').value='ltx-video-2b-distilled';p.elements.get('model').onchange();
  assert.equal(p.elements.get('steps').value,8);assert.equal(p.elements.get('steps').disabled,true);
 });
+test('video sampling displays real step progress and video wording',async()=>{
+ const p=page(async url=>url==='/video/models'?response({models}):response({state:'running',phase:'generating',step:15,steps:30,message:'正在生成图片。'}),'c'.repeat(32));
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('bar').style.width,'50%');
+ assert.match(p.elements.get('status').textContent,/正在生成视频.*15\/30/);
+});

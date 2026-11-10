@@ -10,6 +10,7 @@ from unittest.mock import patch
 from video_process import VideoProcess
 
 
+@unittest.skipUnless(os.name=='posix','Remote video actor runs on Kaggle Linux')
 class VideoProcessTest(unittest.TestCase):
     def test_reuses_worker_and_forwards_progress(self):
         # A real pipe worker exercises framing/select, repeated calls and graceful exit.

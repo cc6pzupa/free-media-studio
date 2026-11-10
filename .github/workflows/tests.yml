@@ -36,7 +36,7 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - name: Test GUI logic
-        run: node --test tests/test_ui.cjs
+        run: node --test tests/test_ui.cjs tests/test_video_ui.cjs
 
   mcp:
     strategy:

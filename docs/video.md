@@ -45,3 +45,7 @@ ComfyUI 添加 **CC Media Video (Preview)** 节点，输出 `mp4_path` 字符串
 The video preview is on the `feature/video-three-tiers` development branch. Save your automatic account configuration in the main GUI, then open `/video`. Choose the efficient LTX 2B distilled model, balanced Wan2.1 1.3B or quality Wan2.2 5B. First use downloads weights; repeated requests reuse the active model. Image and video tasks share the serial worker queue and idle-retention setting.
 
 The HTTP API queues tasks at `POST /v1/videos/generations`, reports progress at `GET /v1/videos/jobs/<job_id>`, and serves completed MP4 files at `GET /v1/videos/jobs/<job_id>/content`. Authenticate with the local API key. MCP provides `generate_video` and `get_video`; the ComfyUI preview node returns an MP4 path. A standalone Kaggle video notebook is included.
+
+视频 GPU 依赖在 Kaggle 的独立 Python 环境中运行。Notebook 重连复用存活的视频进程，切回图片模型时释放视频进程。
+
+Video GPU dependencies run in an isolated Python environment on Kaggle. Reconnecting reuses the live video process; switching to an image model releases it.

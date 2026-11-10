@@ -13,7 +13,7 @@ import ipywidgets as widgets
 from IPython.display import display
 from PIL import Image
 
-'''+Path(__file__).with_name('model_registry.py').read_text()+'''
+'''+Path(__file__).with_name('model_registry.py').read_text(encoding='utf-8')+'''
 _BOOTSTRAPS = '''+repr(bootstraps)+'\n'+inspect.getsource(generation_code)+'''
 model = widgets.Dropdown(options=[(p['name'],key) for key,p in MODELS.items()],value=DEFAULT_MODEL,description='Model / 模型',layout=widgets.Layout(width='95%'))
 prompt = widgets.Textarea(value='A small orange fox beside a ceramic teacup, soft morning window light, natural photography', description='Prompt / 提示词', layout=widgets.Layout(width='95%', height='110px'))
@@ -21,6 +21,7 @@ steps = widgets.IntSlider(value=20,min=1,max=50,description='Steps / 步数')
 def model_changed(change):
     profile=model_profile(model.value);steps.value=profile['default_steps'];steps.disabled=profile['fixed_steps'] is not None
 model.observe(model_changed,names='value')
+acceleration = widgets.Dropdown(options=[('Auto · 双卡优先','auto'),('Encoder/model split · 原分卡','split')],value='auto',description='Acceleration / 加速',layout=widgets.Layout(width='95%'))
 seed = widgets.IntText(value=42,description='Seed / 种子')
 button = widgets.Button(description='Generate / 生成',button_style='primary',icon='magic')
 progress = widgets.IntProgress(value=0,min=0,max=100,description='Setup / 准备',bar_style='info',layout=widgets.Layout(width='95%'))
@@ -46,10 +47,11 @@ def run(_):
     if not prompt.value.strip():
         status.value='请填写提示词。 / Enter a prompt.'
         return
-    button.disabled=True;model.disabled=True
+    button.disabled=True;model.disabled=True;acceleration.disabled=True
     started=time.perf_counter()
     try:
         globals()['_QWEN_PROGRESS_CALLBACK']=on_progress
+        globals()['_CC_ACCELERATION']=acceleration.value
         capture=io.StringIO()
         if cache_user.value.strip() and cache_token.value.strip():
             import re
@@ -62,6 +64,7 @@ def run(_):
             globals().pop('_QWEN_CACHE_TOKEN',None)
             globals().pop('_QWEN_CACHE_HANDLE',None)
             cache_token.value=''
+        globals()['_CC_ACCELERATION']=acceleration.value
         status.value='模型已就绪，正在生成… / Model ready, generating…'
         progress.value=0
         capture=io.StringIO()
@@ -74,14 +77,14 @@ def run(_):
         progress.value=100
         stats=result['stats']
         status.value='生成完成 · '+('已复用模型' if stats['model_reused'] else '首次准备完成，后续复用')
-        info.value='本次 %.1f 秒 · 模型加载 %d 次 · PNG 512 × 512' % (time.perf_counter()-started,stats['model_load_count'])
+        info.value='本次 %.1f 秒 · 模型加载 %d 次 · PNG 512 × 512' % (time.perf_counter()-started,stats['model_load_count'])+' · '+html.escape(stats.get('parallel_strategy',''))
         button.description='Generate / 生成'
     except Exception as error:
         status.value='<span style="color:#b94747">'+html.escape(str(error))+'</span>'
-    finally:button.disabled=False;model.disabled=False
+    finally:button.disabled=False;model.disabled=False;acceleration.disabled=False
 
 button.on_click(run)
-display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">CC Media Studio · Kaggle</h2>'),model,prompt,steps,seed,cache_box,button,progress,status,image_view,info]))
+display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">CC Media Studio · Kaggle</h2>'),model,prompt,steps,seed,acceleration,cache_box,button,progress,status,image_view,info]))
 '''
     def cell(kind,source,name):
         data={'id':name,'cell_type':kind,'metadata':{},'source':source.splitlines(keepends=True)}
@@ -93,6 +96,12 @@ display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">CC Media Studio ·
         cell('code',ui,'studio-ui')]}
     path=Path(__file__).with_name('kaggle_standalone.ipynb')
     path.write_text(json.dumps(nb,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
+    legacy={'nbformat':4,'nbformat_minor':5,'metadata':nb['metadata'],'cells':[
+        cell('markdown','# CC Media Studio · Qwen on dual T4\n\nAutomatic dual-GPU CFG with persistent model reuse.','intro'),
+        cell('code',"%pip install -q bitsandbytes==0.50.2 gguf",'dependencies'),
+        cell('code',bootstrap_code('faberbruntch/qwen-image-t4-assets',install=False),'runtime'),
+        cell('code',"import json\nfrom pathlib import Path\nPROMPT = 'An adult orange-haired catgirl beside a sunlit window, detailed anime illustration'\nSEED = 42\nWIDTH = HEIGHT = 512\nSTEPS = 20\nimage, stats = generate_image(PROMPT,seed=SEED,width=WIDTH,height=HEIGHT,steps=STEPS)\nimage.save('/kaggle/working/result.png')\nPath('/kaggle/working/benchmark.json').write_text(json.dumps(stats,indent=2))\nprint(stats)\ndisplay(image)\n",'generate')]}
+    Path(__file__).with_name('template.ipynb').write_text(json.dumps(legacy,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
     return path
 
 if __name__=='__main__':print(build())

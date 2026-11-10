@@ -11,7 +11,7 @@ from pathlib import Path
 
 from studio_core import StudioCore, private_write, state_directory
 
-VERSION='0.6.0'
+VERSION='0.7.0'
 
 
 class ProcessLock:
@@ -64,7 +64,7 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if self.path.startswith('/jobs/'):

@@ -91,3 +91,26 @@ test('model selection uses trained defaults and includes the selected model in s
     choice.value='qwen-image-2.1';choice.onchange();
     assert.equal(p.elements.get('steps').value,20);
 });
+
+test('saved acceleration selection is restored and submitted with account configuration',async()=>{
+    const calls=[];
+    const p=page(async(url,options)=>{
+        calls.push([url,options]);
+        if(url==='/configuration')return response({configured:true,user:'owner',dataset:'owner/assets',acceleration:'split'});
+        return response({ok:true,endpoint:'local',api_key:'local'});
+    });
+    for(let i=0;i<5;i++)await tick();
+    assert.equal(p.elements.get('acceleration').value,'split');
+    p.elements.get('acceleration').value='auto';
+    for(const [id,value] of [['token','key'],['keepAlive','15'],['jupyterUrl','']])p.elements.set(id,{value,style:{}});
+    p.elements.set('remember',{checked:true,style:{}});
+    await p.elements.get('configure').onclick();
+    assert.equal(JSON.parse(calls.find(([url])=>url==='/configure')[1].body).acceleration,'auto');
+});
+
+test('completed image shows actual dual strategy and model transfer timing',async()=>{
+    const p=page(async url=>url==='/configuration'?config('dual'):response({state:'complete',result:{data:[{b64_json:'cG5n'}],usage:{backend:'account',model_reused:true,request_seconds:52,parallel_strategy:'cfg_parallel',migration_seconds:13}}}));
+    for(let i=0;i<5;i++)await tick();
+    assert.match(p.elements.get('resultMeta').textContent,/CFG 双卡并行/);
+    assert.match(p.elements.get('status').textContent,/迁移 13/);
+});

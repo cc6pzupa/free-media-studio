@@ -24,7 +24,7 @@ class StudioClient:
         self.autostart=autostart
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -45,6 +45,7 @@ class StudioClient:
             if response.ok and result.get('app')=='qwen-studio-worker' and result.get('protocol')==1:
                 self.url,self.token=data['url'],data['token']
                 self.model_selection_supported=result.get('model_selection') is True
+                self.acceleration_supported=result.get('dual_cfg') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -71,6 +72,8 @@ class StudioClient:
 
     def _request(self,method,path,body=None,binary=False):
         self.ensure()
+        if method=='POST' and path in ('/configure','/jobs') and not self.acceleration_supported:
+            raise RuntimeError('请先停止旧后台并重启客户端以启用双卡加速。 / Restart the old worker to enable dual-GPU acceleration.')
         for attempt in range(2):
             try:
                 response=self.http.request(method,self.url+path,json=body,
@@ -144,6 +147,7 @@ class SharedBackend:
         self.mode=normalized['mode'];self.user=normalized['user'];self.dataset=normalized['dataset']
         self.token=normalized.get('token','');self.jupyter_url=normalized.get('jupyter_url','')
         self.kernel_id=normalized.get('kernel_id')
+        self.acceleration=normalized['acceleration']
         self.keep_alive_minutes=normalized['keep_alive_minutes']
         if activate:self.activate()
 
@@ -155,6 +159,7 @@ class SharedBackend:
         result=cls.__new__(cls)
         result.client=client;result.mode=status['mode'];result.user=status['user'];result.dataset=status['dataset']
         result.token='';result.jupyter_url='';result.kernel_id=None;result.config=None
+        result.acceleration=status.get('acceleration','auto')
         result.keep_alive_minutes=status.get('keep_alive_minutes',15)
         result.client.autostart=True
         return result

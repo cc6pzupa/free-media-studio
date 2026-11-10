@@ -47,6 +47,8 @@ def normalize_config(config):
         raise ValueError('请配置 Kaggle 用户名。')
     result = {'mode':mode, 'user':user, 'dataset':config.get('dataset', '').strip(),
               'keep_alive_minutes':keep_alive_value(config.get('keep_alive_minutes',os.environ.get('CC_MEDIA_KEEP_ALIVE_MINUTES','15')))}
+    result['acceleration']=config.get('acceleration',os.environ.get('CC_MEDIA_ACCELERATION','auto'))
+    if result['acceleration'] not in ('auto','split'):raise ValueError('加速模式请选择 auto 或 split。')
     if mode == 'session':
         result.update(jupyter_url=config.get('jupyter_url', '').strip(), kernel_id=config.get('kernel_id') or None)
         if __package__:
@@ -90,12 +92,12 @@ def configuration_fingerprint(config):
 def make_backend(config):
     if config['mode'] == 'account':
         from account_backend import AccountBackend
-        return AccountBackend(config['user'], config['token'], dataset=config['dataset'])
+        return AccountBackend(config['user'], config['token'], dataset=config['dataset'],acceleration=config['acceleration'])
     if config['mode'] == 'session':
         from session_backend import SessionBackend
-        return SessionBackend(config['user'], config['dataset'], config['jupyter_url'], config['kernel_id'])
+        return SessionBackend(config['user'], config['dataset'], config['jupyter_url'], config['kernel_id'],acceleration=config['acceleration'])
     from batch_backend import BatchBackend
-    return BatchBackend(config['user'], config['dataset'], config['token'])
+    return BatchBackend(config['user'], config['dataset'], config['token'],acceleration=config['acceleration'])
 
 
 def validate_generation(prompt, seed, steps, model_id=None):
@@ -120,7 +122,8 @@ def validate_generation(prompt, seed, steps, model_id=None):
 STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width','height',
     'steps','seed','peak_gpu_gib','runtime_id','model_load_count','model_reused',
     'generation_number','asset_source','cache_status','backend','model_id','denoising_seconds','decode_seconds',
-    'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy'}
+    'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy','total_generation_seconds','migration_seconds','replica_load_seconds',
+    'dual_model_reused','acceleration_mode','acceleration_fallback'}
 PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
@@ -300,7 +303,7 @@ class StudioCore:
                 'user':config.get('user',''),'dataset':config.get('dataset',''),
                 'pending_jobs':self.store.pending(),'active_job_id':self.store.active_id(),
                 'last_usage':last_usage,'models':model_catalog(),
-                'keep_alive_minutes':config.get('keep_alive_minutes',15),
+                'keep_alive_minutes':config.get('keep_alive_minutes',15),'acceleration':config.get('acceleration','auto'),
                 'idle_remaining_seconds':self.idle_remaining(),
                 'session_state':self.session_state,
                 'quota':dict(self.quota_cache),

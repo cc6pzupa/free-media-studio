@@ -31,7 +31,7 @@ def main():
                 except subprocess.CalledProcessError:
                     print('原生窗口依赖暂不可用，将使用本机浏览器界面。', flush=True)
             marker.write_text(fingerprint, encoding='utf-8')
-        env = dict(os.environ)
+        env = dict(os.environ,PYTHONUTF8='1')
         env['PATH'] = str(python.parent)+os.pathsep+env.get('PATH', '')
         result = subprocess.run([str(python), str(root/'desktop.py'), *sys.argv[1:]], env=env)
         return result.returncode

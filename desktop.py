@@ -14,13 +14,14 @@ def main(argv=None):
     parser.add_argument('--no-open', action='store_true', help='Serve the GUI without opening a window (for remote/headless use)')
     parser.add_argument('--port', type=int, default=8787, help='Local port (default: 8787; 0 selects a free port)')
     parser.add_argument('--keep-alive-minutes',type=int,help='Idle retention in minutes (default: 15; 0 disables auto-release)')
+    parser.add_argument('--acceleration',choices=['auto','split'],help='auto: prefer supported dual-GPU acceleration (default); split: encoder/model split')
     args = parser.parse_args(argv)
     if args.keep_alive_minutes is not None and not 0<=args.keep_alive_minutes<=1440:
         parser.error('--keep-alive-minutes must be between 0 and 1440')
     if not 0 <= args.port <= 65535:
         parser.error('--port must be between 0 and 65535')
     try:
-        server = create_server(args.port,keep_alive_minutes=args.keep_alive_minutes)
+        server = create_server(args.port,keep_alive_minutes=args.keep_alive_minutes,acceleration=args.acceleration)
     except OSError:
         address = f'http://127.0.0.1:{args.port}'
         try:

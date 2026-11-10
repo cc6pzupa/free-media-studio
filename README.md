@@ -7,7 +7,7 @@
 ![CC Media Studio 界面](docs/gui.jpg)
 
 - 支持 Windows、macOS、Linux，首次启动自动安装依赖。
-- 三种模型可选，自动准备权重、保存私有缓存，并复用活跃会话中的模型。
+- 三种模型可选，默认自动加速、双卡优先；自动准备权重并复用模型。
 - 中文 / English 界面，显示下载进度、GPU 用量和空闲倒计时。
 - 支持 GUI、ComfyUI、Kaggle Notebook、本地 MCP 和 HTTP API。
 
@@ -53,9 +53,29 @@ API Token 可在 [Kaggle API 设置](https://www.kaggle.com/settings/api) 中创
 | Z-Image Turbo | 9，可调整 | 效率优先 |
 | SDXL-Lightning | 固定 4 | 快速预览，推荐英文提示词 |
 
-选择模型后自动应用推荐步数。当前输出为单张 **512×512 PNG**，随机种子默认为 **42**。完成状态显示编码、采样和解码耗时。
+选择模型后自动应用推荐步数。当前输出为单张 **512×512 PNG**，随机种子默认为 **42**。完成状态显示实际执行策略，以及编码、模型迁移、采样和解码耗时。
 
 每个模型使用独立私有缓存。Qwen 首次原始权重下载约 23.51 GB，准备后的 INT8 / Q4 缓存约 16 GB；其他模型的实际下载量以进度显示为准。
+
+## 双卡加速
+
+默认 **自动加速 · 双卡优先**，GUI、ComfyUI、MCP、HTTP API 和 Kaggle Notebook 使用相同策略。
+
+| 模型 | 双 T4 执行方式 |
+| --- | --- |
+| Qwen-Image 2.1 | 两张卡同时计算 CFG 正负分支；编码器与副本缓存复用 |
+| Z-Image Turbo | GPU 1 编码，GPU 0 采样与解码 |
+| SDXL-Lightning | 两个文本编码器在 GPU 1，GPU 0 采样与解码 |
+
+Qwen 的同提示词、同种子输出与原模式一致。双卡副本首次准备需要额外时间，后续请求直接复用；加速不可用时自动恢复原分卡生成。生成结果会显示实际使用的策略。
+
+在 **账号与连接 → 加速策略** 中可选择 **原分卡模式**，或设置启动参数：
+
+```bash
+python launch.py --acceleration split
+```
+
+`--acceleration auto` 恢复自动加速。Kaggle 独立 Notebook 提供相同选项；ComfyUI 和 MCP 读取已保存的配置。
 
 ## GPU 用量与保活
 

@@ -55,13 +55,13 @@ python benchmark.py --run --models z-image-turbo --output .benchmarks/z-image
 | --- | --- | --- |
 | 编码器 / 生图模型分卡 | 编码完成后第二张卡不参与主要采样 | 当前默认 |
 | 两卡各生成不同图片 | 增加吞吐，单张延迟不因此减半 | 后续批量模式方向 |
-| CFG 正负分支并行 | 两卡同时计算 Qwen 的两个分支 | 三轮采样中位数 37.621 秒，原路径 75.107 秒，逐像素一致；完整请求验收中 |
+| CFG 正负分支并行 | 两卡同时计算 Qwen 的两个分支 | 采样中位数 37.621 秒；完整热请求中位数 52.030 秒，三张逐像素一致、回退通过 |
 | Tensor parallel | 拆分每层矩阵计算 | 当前 Qwen 2.1 上游源码提供 `_tp_plan`；GGUF 分片与 KV cache 需另行适配验证 |
 | Context parallel | 拆分序列，适合更长序列 | 需要该版本的模型专用计划与注意力后端支持 |
 
 T4 使用 PCIe Gen3；逐层通信会抵消部分计算收益。Qwen 的 GGUF 矩阵是压缩存储，普通 FP16 线性层的张量分片计划不能直接视为已支持这条量化路径。Qwen 2.1 还涉及块因果注意力、前缀 KV cache 与 CFG 两个缓存域。
 
-独立 Tesla T4 ×2 实测确认 CFG 双分支并行可以缩短单张采样时间。512×512、20 步的采样加解码中位耗时从 75.107 秒降至 37.621 秒，约 2.00 倍速度。三张输出与基线逐像素一致，退出实验后的原路径输出也一致。完整请求还包括编码和设备迁移，另行计时。默认生成流程保持原设备分工。
+独立 Tesla T4 ×2 实测确认 CFG 双分支并行可以缩短单张采样时间。512×512、20 步的采样加解码中位耗时从 75.107 秒降至 37.621 秒，约 2.00 倍速度。三张输出与基线逐像素一致，退出实验后的原路径输出也一致。完整热请求（编码、设备迁移、采样与解码）三次为 56.378 / 52.030 / 51.946 秒，中位数 52.030 秒。默认生成流程保持原设备分工。
 
 ## 读取已连接会话的硬件诊断
 
@@ -101,13 +101,24 @@ python benchmark.py --gpu-probe
 
 三次双卡输出的最大像素误差均为 0，每张完成 20 对 CFG 前向。副本首次加载 4.486 秒；恢复原始调用后的采样为 75.638 秒，图片与基线一致。详见 [JSON 报告](benchmarks/dual-cfg-sampling-2026-11-10.json)。
 
-完整热请求测试使用 `--encoder-mode offload`，保留同一编码器和两个 Transformer 实例，逐次测量编码器与副本的 CPU / GPU 迁移、真实提示词编码、双卡采样和解码。模型文件只在初始化时加载；每次请求的设备迁移计入总耗时。
+完整热请求使用 `--encoder-mode offload`，保留同一编码器和两个 Transformer 实例。每次计入模型的 CPU / GPU 迁移、真实提示词编码、双卡采样与解码；不含首次加载、客户端等待、网络传输和保存 PNG。
+
+| 路径 | 请求耗时（秒） | 统计 |
+| --- | --- | --- |
+| 原路径，编码器常驻 GPU 1 | 75.877 | 一次热基线；此前三次采样基线见上表 |
+| 双卡 CFG，缓存模型并迁移 | 56.378 / 52.030 / 51.946 | 三次中位数 52.030 |
+
+相对本轮完整热基线，耗时减少约 31.4%，速度约 1.46 倍。三张输出逐像素一致，每张完成 20 对 CFG 前向。编码器只加载一次、Transformer 加载两份；每次请求复用相同实例。最终编码器成功恢复到 GPU 1，原始 `forward` 已恢复，回退采样 75.321 秒且图片一致。见 [完整热请求报告](benchmarks/dual-cfg-warm-2026-11-10.json)。
 
 ```bash
 python dual_gpu_benchmark.py --assets /kaggle/temp/qwen-image-assets --runs 3 --encoder-mode offload
 ```
 
-English: On two Tesla T4 GPUs, median sampling plus VAE decode fell from 75.107 s to 37.621 s across three warm runs. All outputs were pixel-identical; restoring the original forward path also preserved the output. These figures exclude prompt encoding and model transfers. Full warm requests are measured separately with `--encoder-mode offload`.
+仅复测完整请求时，可加 `--baseline-runs 1 --sampling-runs 0`，仍先预热，并在最后验证原路径回退。
+
+`move_int8_encoder` 同时迁移 INT8 参数与量化层单独保存的 CB / SCB 状态。独立 GPU 验证连续三次 CPU / GPU 往返后，编码嵌入均逐元素一致；移出后 GPU 1 的 PyTorch 分配量为 8,798,208 字节。三次迁移加编码耗时为 12.250 / 11.013 / 11.044 秒，见 [迁移验证报告](benchmarks/int8-encoder-swap-2026-11-10.json)。GGUF 与 VAE 文件在初始化时复制到本地磁盘，后续请求无需重新读取权重。
+
+English: Across three warm runs on two Tesla T4 GPUs, median sampling plus VAE decode fell from 75.107 s to 37.621 s. Full warm server requests, including prompt encoding and model transfers, took 56.378 / 52.030 / 51.946 s versus one 75.877 s baseline request (31.4% lower median latency, 1.46× speed). All images were pixel-identical. The encoder and original forward were restored, and rollback output matched. Cold loading and client/network overhead are excluded. This option remains on the experiment branch; the default app path is unchanged.
 
 本地自动检查覆盖正负分支路由、各自的掩码与 KV cache、负分支异常后的原始调用恢复，以及副本和编码器的清理顺序。它们不替代 GPU 端的速度、画质和回退验收。
 
@@ -119,7 +130,7 @@ English: On two Tesla T4 GPUs, median sampling plus VAE decode fell from 75.107 
 
 ## 验证状态
 
-本地验证覆盖模型参数、缓存隔离、旧模型释放、重复请求去重、模型路由、生成代码和 Notebook 编译，以及基准工具的预热/采样分离。新增模型的 T4 画质、实际延迟与显存峰值尚未实测。Qwen CFG 双卡采样、像素一致性与原路径回退已完成实测；完整请求结果另列。
+本地验证覆盖模型参数、缓存隔离、旧模型释放、重复请求去重、模型路由、生成代码和 Notebook 编译，以及基准工具的预热/采样分离。新增模型的 T4 画质、实际延迟与显存峰值尚未实测。Qwen CFG 双卡采样、像素一致性与原路径回退已完成实测；完整请求的编码、设备迁移、采样和解码已连续实测三次，结果见上表与报告。
 
 ## 一手资料
 

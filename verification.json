@@ -1,7 +1,7 @@
 {
   "project": "CC Media Studio",
   "verification_summary": {
-    "python_tests_passed": 69,
+    "python_tests_passed": 71,
     "ui_logic_tests_passed": 7,
     "mcp_protocol": "Real SDK with simulated GPU backend",
     "previous_gpu_checks": [
@@ -26,10 +26,10 @@
       "new_model_live_gpu_verified": false,
       "local_validation": "Model routing, defaults, isolated caches, managed model switching, MCP roundtrip and compiled standalone notebook"
     },
-    "performance": "Measured dual-T4 CFG sampling and VAE decode; full warm request validation pending",
+    "performance": "Dual T4: sampling/decode 75.107 -> 37.621 seconds; full warm server request 75.877 -> median 52.030 seconds, pixel-identical with verified rollback",
     "dual_cfg_experiment": {
       "production_enabled": false,
-      "local_tests_passed": 4,
+      "local_tests_passed": 6,
       "live_hardware": "Tesla T4 x2",
       "minimal_session_check": "Completed normally in 127.277 seconds",
       "inference_comparison": "Three warm baseline samples and three parallel samples, 512x512, 20 steps, CFG 5, KV cache, seed 42",
@@ -42,7 +42,7 @@
         "component_imports_passed": 9,
         "observation_date": "2026-11-10",
         "original_successful_environment_modified": false,
-        "experimental_session_display": "running validation",
+        "experimental_session_display": "off (run a cell to start)",
         "runtime": {
           "python": "3.13.16",
           "torch": "2.11.0+cu130",
@@ -51,14 +51,26 @@
           "bitsandbytes": "0.50.2",
           "gguf": "0.19.0"
         },
-        "environment": "Isolated system-site-packages venv with bitsandbytes and gguf installed locally"
+        "environment": "Isolated system-site-packages venv with bitsandbytes and gguf installed locally",
+        "experimental_session_stopped": true
       },
       "observation_date": "2026-11-10",
       "baseline_median_seconds": 75.107,
       "parallel_median_seconds": 37.621,
       "max_pixel_error": 0,
       "report": "docs/benchmarks/dual-cfg-sampling-2026-11-10.json",
-      "full_warm_request_verified": false
+      "full_warm_request_verified": true,
+      "full_warm_request_baseline_runs": 1,
+      "full_warm_request_runs": 3,
+      "full_warm_request_baseline_seconds": 75.877,
+      "full_warm_request_median_seconds": 52.03,
+      "full_warm_request_speedup": 1.4583317316932538,
+      "full_warm_request_report": "docs/benchmarks/dual-cfg-warm-2026-11-10.json",
+      "encoder_restored_to_gpu1": true,
+      "encoder_load_count": 1,
+      "transformer_load_count": 2,
+      "int8_migration_verified": true,
+      "int8_migration_report": "docs/benchmarks/int8-encoder-swap-2026-11-10.json"
     }
   },
   "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."

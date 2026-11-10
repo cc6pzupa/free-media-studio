@@ -15,6 +15,8 @@ def main(argv=None):
     parser.add_argument('--output',type=Path,default=Path('/kaggle/working/cc-dual-cfg'))
     parser.add_argument('--runs',type=int,default=3)
     parser.add_argument('--steps',type=int,default=20)
+    parser.add_argument('--baseline-runs',type=int,default=None,help='Override warm baseline count, 1–10')
+    parser.add_argument('--sampling-runs',type=int,default=None,help='Override preencoded parallel count, 0–10; zero requires offload mode')
     parser.add_argument('--seed',type=int,default=42)
     parser.add_argument('--encoder-mode',choices=['release','offload'],default='release',
         help='release measures preencoded sampling; offload also measures full warm requests with cached models')
@@ -22,13 +24,18 @@ def main(argv=None):
     args=parser.parse_args(argv)
     if not 1<=args.runs<=10:parser.error('--runs must be 1–10')
     if not 1<=args.steps<=100:parser.error('--steps must be 1–100')
+    baseline_runs=args.runs if args.baseline_runs is None else args.baseline_runs
+    sampling_runs=args.runs if args.sampling_runs is None else args.sampling_runs
+    if not 1<=baseline_runs<=10:parser.error('--baseline-runs must be 1–10')
+    if not 0<=sampling_runs<=10 or sampling_runs==0 and args.encoder_mode!='offload':
+        parser.error('--sampling-runs must be 1–10, or 0 in offload mode')
 
     print('PHASE import_runtime',flush=True)
     import numpy as np
     import torch
     from transformers import Qwen3VLForConditionalGeneration,Qwen3VLProcessor
     from diffusers import QwenImage21Pipeline,AutoencoderKLQwenImage21,FlowMatchEulerDiscreteScheduler
-    from dual_gpu import ParallelCFG,load_replica
+    from dual_gpu import ParallelCFG,load_replica,move_int8_encoder
 
     if torch.cuda.device_count()!=2:raise RuntimeError('Select GPU T4 x2')
     print('PHASE runtime_ready',json.dumps({'torch':torch.__version__,'gpus':[torch.cuda.get_device_name(i) for i in range(2)]}),flush=True)
@@ -97,7 +104,7 @@ def main(argv=None):
     print('SAMPLE baseline_warmup',cold_seconds,flush=True)
     reference.save(args.output/'baseline.png')
     baseline=[];baseline_matches=[];baseline_requests=[]
-    for repeat in range(args.runs):
+    for repeat in range(baseline_runs):
         request_start=time.perf_counter()
         if args.encoder_mode=='offload':positive,negative,encoding_seconds=encode_request()
         image,seconds=sample()
@@ -106,7 +113,7 @@ def main(argv=None):
         baseline.append(seconds)
         baseline_matches.append(bool(np.array_equal(np.asarray(reference),np.asarray(image))))
     report={'gpu':[torch.cuda.get_device_name(i) for i in range(2)],'steps':args.steps,'seed':args.seed,
-        'resolution':[512,512],'runs':args.runs,'mode':'preencoded_encoder_'+('released' if args.encoder_mode=='release' else 'offloaded'),
+        'resolution':[512,512],'runs':args.runs,'baseline_runs':baseline_runs,'sampling_runs':sampling_runs,'mode':'preencoded_encoder_'+('released' if args.encoder_mode=='release' else 'offloaded'),
         'includes_encoder_transfer_or_reload':False,'production_enabled':False,
         'sampling_scope':'Preencoded sampling and VAE decode',
         'baseline_cold_seconds':cold_seconds,'baseline_seconds':baseline,
@@ -120,7 +127,7 @@ def main(argv=None):
         if args.encoder_mode=='offload':
             print('PHASE offload_encoder',flush=True)
             start=time.perf_counter()
-            encoder.to('cpu');torch.cuda.synchronize(1)
+            move_int8_encoder(encoder,'cpu');torch.cuda.synchronize(1)
             gc.collect();torch.cuda.empty_cache()
             report['encoder_offload_seconds']=round(time.perf_counter()-start,3)
         print('PHASE load_replica',flush=True)
@@ -128,7 +135,7 @@ def main(argv=None):
         replica=load_replica(assets,'cuda:1',checkpoint_path=local_checkpoint)
         report['replica_load_seconds']=round(time.perf_counter()-start,3)
         parallel_times=[];errors=[];pairs=[]
-        for repeat in range(args.runs):
+        for repeat in range(sampling_runs):
             print('PHASE parallel_sample',repeat,flush=True)
             with ParallelCFG(primary,replica,negative) as parallel:
                 image,seconds=sample()
@@ -137,7 +144,7 @@ def main(argv=None):
             pairs.append(parallel.calls);parallel_times.append(seconds)
             print('SAMPLE parallel',repeat,seconds,'PIXEL_ERROR',errors[-1],flush=True)
             image.save(args.output/f'parallel-{repeat}.png')
-        report.update(parallel_seconds=parallel_times,parallel_median_seconds=statistics.median(parallel_times),
+        report.update(parallel_seconds=parallel_times,parallel_median_seconds=statistics.median(parallel_times) if parallel_times else None,
             pixel_errors=errors,cfg_pairs=pairs,parallel_same_pixels=all(row['max']==0 for row in errors))
         if args.encoder_mode=='offload':
             requests=[]
@@ -145,9 +152,9 @@ def main(argv=None):
                 print('PHASE full_warm_request',repeat,flush=True)
                 start=time.perf_counter()
                 replica.to('cpu');torch.cuda.synchronize(1);torch.cuda.empty_cache()
-                encoder.to('cuda:1');torch.cuda.synchronize(1)
+                move_int8_encoder(encoder,'cuda:1');torch.cuda.synchronize(1)
                 positive,negative,encoding_seconds=encode_request()
-                encoder.to('cpu');torch.cuda.synchronize(1);torch.cuda.empty_cache()
+                move_int8_encoder(encoder,'cpu');torch.cuda.synchronize(1);torch.cuda.empty_cache()
                 replica.to('cuda:1');torch.cuda.synchronize(1)
                 with ParallelCFG(primary,replica,negative) as parallel:
                     image,seconds=sample()
@@ -163,6 +170,8 @@ def main(argv=None):
                 encoder_load_count=1,transformer_load_count=2,
                 warm_request_includes_encoding_and_device_transfers=True)
     except Exception as error:
+        import traceback
+        traceback.print_exc()
         report.update(error_type=type(error).__name__,error=str(error).split('\n')[0][:200])
     finally:
         primary.forward=original
@@ -170,8 +179,13 @@ def main(argv=None):
         del replica
         gc.collect();torch.cuda.empty_cache()
         if args.encoder_mode=='offload':
-            encoder.to('cuda:1');torch.cuda.synchronize(1)
-            report['encoder_restored_to_gpu1']=str(encoder.device)=='cuda:1'
+            try:
+                move_int8_encoder(encoder,'cuda:1');torch.cuda.synchronize(1)
+                report['encoder_restored_to_gpu1']=str(encoder.device)=='cuda:1'
+            except Exception as restore_error:
+                report.update(encoder_restored_to_gpu1=False,restore_error_type=type(restore_error).__name__)
+                # Preencoded rollback remains possible without the encoder.
+                move_int8_encoder(encoder,'cpu');gc.collect();torch.cuda.empty_cache()
         report['forward_restored']=primary.forward==original
     print('PHASE rollback_sample',flush=True)
     rollback,seconds=sample()

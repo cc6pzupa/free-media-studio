@@ -6,7 +6,7 @@ from pathlib import Path
 from session_runtime import JupyterTransport,ModelSession
 from video_registry import video_profile,validate_video
 
-VIDEO_FILES=('asset_manager.py','dual_gpu.py','video_registry.py','video_assets.py',
+VIDEO_FILES=('asset_manager.py','video_precision.py','video_registry.py','video_assets.py',
              'video_parallel.py','video_runtime.py')
 
 
@@ -23,7 +23,7 @@ for _name,_source in {sources!r}.items():
     (_cc_video_modules/_name).write_text(_source,encoding='utf-8')
 if str(_cc_video_modules) not in sys.path:sys.path.insert(0,str(_cc_video_modules))
 _cc_existing_video=globals().get('_CC_VIDEO_RUNTIME')
-if _cc_existing_video is None or _cc_existing_video.profile['id']!={model_id!r}:
+if _cc_existing_video is None or _cc_existing_video.profile['id']!={model_id!r} or _cc_existing_video.pipe is None:
     if (globals().get('pipe') is not None or globals().get('encoder') is not None) and not (globals().get('_CC_MANAGED_MODEL') or globals().get('_COMFY_QWEN_STATE')):
         raise RuntimeError('Unmanaged model exists; select the video test notebook')
     if _cc_existing_video is not None:_cc_existing_video.close()
@@ -32,12 +32,16 @@ if _cc_existing_video is None or _cc_existing_video.profile['id']!={model_id!r}:
     gc.collect()
     if {install!r}:
         import subprocess
-        subprocess.run([sys.executable,'-m','pip','install','-q','diffusers>=0.36,<0.43','transformers>=4.51,<6','accelerate>=1.2','bitsandbytes==0.50.2','safetensors','sentencepiece','imageio-ffmpeg'],check=True,timeout=900)
+        subprocess.run([sys.executable,'-m','pip','install','-q','diffusers==0.36.0','transformers==4.57.6','accelerate==1.12.0','bitsandbytes==0.50.2','safetensors','sentencepiece','imageio-ffmpeg'],check=True,timeout=900)
     import torch
     torch.cuda.empty_cache()
     from video_runtime import VideoRuntime
     def _cc_video_progress(event):print('COMFY_PROGRESS:'+json.dumps(event),flush=True)
-    _CC_VIDEO_RUNTIME=VideoRuntime({model_id!r},acceleration={acceleration!r},progress=_cc_video_progress).prepare()
+    _CC_VIDEO_RUNTIME=VideoRuntime({model_id!r},acceleration={acceleration!r},progress=_cc_video_progress)
+    try:_CC_VIDEO_RUNTIME.prepare()
+    except Exception:
+        _CC_VIDEO_RUNTIME.close();globals().pop('_CC_VIDEO_RUNTIME',None)
+        raise
 _CC_VIDEO_RUNTIME.acceleration={acceleration!r}
 _CC_MODEL_ID={model_id!r};_CC_MANAGED_MODEL=True
 print('CC_VIDEO_READY',flush=True)

@@ -70,7 +70,7 @@ class MCPStdioTest(unittest.TestCase):
             async def exercise():
                 async with Client(self.parameters(config_path)) as client:
                     tools=await client.list_tools()
-                    self.assertEqual({t.name for t in tools.tools},{'studio_status','generate_image','get_job','get_image'})
+                    self.assertEqual({t.name for t in tools.tools},{'studio_status','generate_image','get_job','get_image','generate_video','get_video'})
                     for tool in tools.tools:
                         self.assertNotIn('token',json.dumps(tool.input_schema).lower())
                     status=await client.call_tool('studio_status',{})
@@ -139,6 +139,20 @@ class MCPStdioTest(unittest.TestCase):
                         invalid=await client.call_tool('generate_image',{'prompt':'catgirl','request_id':'bad-model','model_id':'unknown'})
                         self.assertTrue(invalid.is_error)
                 asyncio.run(model_choice())
+                async def video_roundtrip():
+                    async with Client(self.parameters(config_path)) as client:
+                        submitted=await client.call_tool('generate_video',{'prompt':'catgirl','request_id':'mcp-video'})
+                        self.assertFalse(submitted.is_error)
+                        selected=submitted.structured_content['job_id']
+                        for _ in range(60):
+                            result=await client.call_tool('get_job',{'job_id':selected})
+                            if result.structured_content['state']=='complete':break
+                            await asyncio.sleep(.1)
+                        video=await client.call_tool('get_video',{'job_id':selected})
+                        self.assertFalse(video.is_error)
+                        self.assertTrue(video.structured_content['path'].endswith('.mp4'))
+                        self.assertNotIn('KGAT_fixture_secret',json.dumps(video.model_dump()))
+                asyncio.run(video_roundtrip())
             finally:
                 if thread.is_alive():gui.shutdown();thread.join();gui.server_close()
                 stop_worker(service,process)

@@ -55,13 +55,13 @@ python benchmark.py --run --models z-image-turbo --output .benchmarks/z-image
 | --- | --- | --- |
 | 编码器 / 生图模型分卡 | 编码完成后第二张卡不参与主要采样 | 当前默认 |
 | 两卡各生成不同图片 | 增加吞吐，单张延迟不因此减半 | 后续批量模式方向 |
-| CFG 正负分支并行 | 两卡同时计算 Qwen 的两个分支 | 已实现隔离实验，GPU 端验收未完成 |
+| CFG 正负分支并行 | 两卡同时计算 Qwen 的两个分支 | 三轮采样中位数 37.621 秒，原路径 75.107 秒，逐像素一致；完整请求验收中 |
 | Tensor parallel | 拆分每层矩阵计算 | 当前 Qwen 2.1 上游源码提供 `_tp_plan`；GGUF 分片与 KV cache 需另行适配验证 |
 | Context parallel | 拆分序列，适合更长序列 | 需要该版本的模型专用计划与注意力后端支持 |
 
 T4 使用 PCIe Gen3；逐层通信会抵消部分计算收益。Qwen 的 GGUF 矩阵是压缩存储，普通 FP16 线性层的张量分片计划不能直接视为已支持这条量化路径。Qwen 2.1 还涉及块因果注意力、前缀 KV cache 与 CFG 两个缓存域。
 
-结论：双卡并行有研究路径；当前默认分卡配置不是双卡采样。先用诊断确认真实硬件互访与已安装模型的并行计划，再进行量化适配和同画质 A/B 测试，之后决定是否提供生产选项。
+独立 Tesla T4 ×2 实测确认 CFG 双分支并行可以缩短单张采样时间。512×512、20 步的采样加解码中位耗时从 75.107 秒降至 37.621 秒，约 2.00 倍速度。三张输出与基线逐像素一致，退出实验后的原路径输出也一致。完整请求还包括编码和设备迁移，另行计时。默认生成流程保持原设备分工。
 
 ## 读取已连接会话的硬件诊断
 
@@ -90,7 +90,24 @@ python benchmark.py --gpu-probe
 
 输出目录默认 `/kaggle/working/cc-dual-cfg`，包含原路径图片、三张双卡图片、回退图片和 `report.json`。报告分别记录预热、原路径中位数、副本加载、双卡中位数、像素误差与回退一致性。**该实验不包含编码器移出 / 恢复或重新加载的请求开销，因此结果只能衡量预编码后的采样阶段。**
 
-2026-11-09 现场已确认 Tesla T4 ×2、PyTorch 2.11.0+cu130 与 Diffusers 0.42.0。不加载模型的双卡会话检查连续运行约 127 秒并正常结束；完整模型测试会话显示 `Cancelled`，没有取得完整的基线、双卡和回退采样结果，取消来源未确认。本项目没有据此判定显存不足，也没有提供加速倍数。默认生成流程保持原设备分工。
+### T4 ×2 实测（2026-11-10）
+
+固定 512×512、20 步、CFG 5、KV cache、seed 42；预热一次后各测三次。该组仅计采样与 VAE 解码，编码器已释放。
+
+| 路径 | 三次耗时（秒） | 中位数（秒） |
+| --- | --- | --- |
+| 原路径 | 75.525 / 75.107 / 75.065 | 75.107 |
+| 双卡 CFG | 38.507 / 37.591 / 37.621 | 37.621 |
+
+三次双卡输出的最大像素误差均为 0，每张完成 20 对 CFG 前向。副本首次加载 4.486 秒；恢复原始调用后的采样为 75.638 秒，图片与基线一致。详见 [JSON 报告](benchmarks/dual-cfg-sampling-2026-11-10.json)。
+
+完整热请求测试使用 `--encoder-mode offload`，保留同一编码器和两个 Transformer 实例，逐次测量编码器与副本的 CPU / GPU 迁移、真实提示词编码、双卡采样和解码。模型文件只在初始化时加载；每次请求的设备迁移计入总耗时。
+
+```bash
+python dual_gpu_benchmark.py --assets /kaggle/temp/qwen-image-assets --runs 3 --encoder-mode offload
+```
+
+English: On two Tesla T4 GPUs, median sampling plus VAE decode fell from 75.107 s to 37.621 s across three warm runs. All outputs were pixel-identical; restoring the original forward path also preserved the output. These figures exclude prompt encoding and model transfers. Full warm requests are measured separately with `--encoder-mode offload`.
 
 本地自动检查覆盖正负分支路由、各自的掩码与 KV cache、负分支异常后的原始调用恢复，以及副本和编码器的清理顺序。它们不替代 GPU 端的速度、画质和回退验收。
 
@@ -98,11 +115,11 @@ python benchmark.py --gpu-probe
 
 `python runtime_import_probe.py` 不安装或修改任何依赖。它在独立子进程中逐项导入运行组件，记录退出码、异常和耗时；即使组件进程收到终止信号，主诊断进程也能继续。完整结果保存在已排除提交的 `.benchmarks/import-diagnostics.json`。
 
-2026-11-09 的后续独立 Notebook 检查尚在排队，诊断代码未开始执行。Kaggle 编辑器同时显示官方公告：Notebook 存在无法启动或保持连接的故障，平台正在修复。因此当前阻塞已经有平台故障证据；先前各次取消的具体原因仍未证实，不能直接归因于依赖、显存或双卡算法。原有成功环境未参与本轮诊断。
+独立环境的九项运行组件导入检查已通过。测试使用隔离虚拟环境，仅安装 bitsandbytes 0.50.2 和 gguf；原应用环境保持不变。
 
 ## 验证状态
 
-本地验证覆盖模型参数、缓存隔离、旧模型释放、重复请求去重、模型路由、生成代码和 Notebook 编译，以及基准工具的预热/采样分离。新增模型的 T4 画质、实际延迟、显存峰值与双卡性能尚未实测，本版不提供推测加速倍数。
+本地验证覆盖模型参数、缓存隔离、旧模型释放、重复请求去重、模型路由、生成代码和 Notebook 编译，以及基准工具的预热/采样分离。新增模型的 T4 画质、实际延迟与显存峰值尚未实测。Qwen CFG 双卡采样、像素一致性与原路径回退已完成实测；完整请求结果另列。
 
 ## 一手资料
 

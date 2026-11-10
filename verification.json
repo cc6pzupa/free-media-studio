@@ -26,30 +26,39 @@
       "new_model_live_gpu_verified": false,
       "local_validation": "Model routing, defaults, isolated caches, managed model switching, MCP roundtrip and compiled standalone notebook"
     },
-    "performance": "CUDA phase timing, fixed-input warm benchmark and existing-kernel dual-GPU diagnostics; no measured dual-GPU speedup",
+    "performance": "Measured dual-T4 CFG sampling and VAE decode; full warm request validation pending",
     "dual_cfg_experiment": {
       "production_enabled": false,
       "local_tests_passed": 4,
       "live_hardware": "Tesla T4 x2",
       "minimal_session_check": "Completed normally in 127.277 seconds",
-      "inference_comparison": "Incomplete: test sessions showed Cancelled after dependency setup; cancellation source unconfirmed",
-      "measured_speedup": null,
-      "gpu_rollback_verified": false,
+      "inference_comparison": "Three warm baseline samples and three parallel samples, 512x512, 20 steps, CFG 5, KV cache, seed 42",
+      "measured_speedup": 1.9964,
+      "gpu_rollback_verified": true,
       "original_application_path_changed": false,
       "followup_diagnosis": {
         "scope": "Independent private notebook and experiment branch only",
-        "probe": "Per-component imports in isolated child processes; no dependency installation",
-        "probe_gpu_execution_completed": false,
-        "platform_notice": "Kaggle editor reports an issue preventing notebooks from starting or staying connected",
-        "observation_date": "2026-11-09",
-        "earlier_cancellation_cause_confirmed": false,
+        "probe_gpu_execution_completed": true,
+        "component_imports_passed": 9,
+        "observation_date": "2026-11-10",
         "original_successful_environment_modified": false,
-        "local_probe_check": "Captured normal exit, SIGTERM, ImportError and subsequent success without terminating the parent",
-        "experimental_gpu_setting_disabled": true,
-        "experimental_session_display": "off",
-        "stop_request_submitted": true,
-        "queued_cancellation_confirmed": false
-      }
+        "experimental_session_display": "running validation",
+        "runtime": {
+          "python": "3.13.16",
+          "torch": "2.11.0+cu130",
+          "diffusers": "0.42.0",
+          "transformers": "5.20.2",
+          "bitsandbytes": "0.50.2",
+          "gguf": "0.19.0"
+        },
+        "environment": "Isolated system-site-packages venv with bitsandbytes and gguf installed locally"
+      },
+      "observation_date": "2026-11-10",
+      "baseline_median_seconds": 75.107,
+      "parallel_median_seconds": 37.621,
+      "max_pixel_error": 0,
+      "report": "docs/benchmarks/dual-cfg-sampling-2026-11-10.json",
+      "full_warm_request_verified": false
     }
   },
   "privacy": "Private dataset handles, job IDs, runtime identifiers and raw environment traces are omitted."

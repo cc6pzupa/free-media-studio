@@ -26,7 +26,7 @@ def validate(data):
 
 
 def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=None, acceleration=None):
-    from studio_client import SharedBackend, StudioClient
+    from studio_client import SharedBackend, StudioClient, StudioHTTPError
     shared_mode=backend_factory is BatchBackend
     nonce=secrets.token_urlsafe(32); api_key=secrets.token_urlsafe(32)
     backend=None; state_lock=threading.Lock(); generation_lock=threading.Lock(); jobs={}
@@ -107,7 +107,11 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     job=backend.client.get_job(job_id)
                     if job.get('media_type')!='video':raise ValueError('不是视频任务。')
                     return self.send(200,backend.client.get_video(job_id),'video/mp4') if content else self.send(200,job)
-                except (RuntimeError,ValueError):return self.send(404,{'error':{'message':'视频任务不存在、未完成或后台暂不可用。'}})
+                except ValueError:return self.send(404,{'error':{'message':'视频任务不存在。'}})
+                except StudioHTTPError as error:
+                    status=404 if error.status_code==404 else 409 if error.status_code==409 else 503
+                    return self.send(status,{'error':{'message':str(error)}})
+                except RuntimeError:return self.send(503,{'error':{'message':'本机后台暂不可用，正在保留原视频任务。'}})
             if self.path in ('/usage','/v1/studio/usage'):
                 if not (self.ui_auth() if self.path=='/usage' else self.api_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
                 sync_shared_backend()

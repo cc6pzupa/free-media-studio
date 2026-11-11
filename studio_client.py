@@ -18,6 +18,11 @@ else:
     from studio_core import config_path,load_config,normalize_config,state_directory
 
 
+class StudioHTTPError(RuntimeError):
+    def __init__(self,status_code,message):
+        super().__init__(message);self.status_code=status_code
+
+
 class StudioClient:
     def __init__(self,directory=None,autostart=True):
         self.directory=Path(directory or state_directory())
@@ -89,7 +94,7 @@ class StudioClient:
             if not response.ok:
                 try:message=response.json().get('error','本机后台请求失败。')
                 except ValueError:message='本机后台请求失败。'
-                raise RuntimeError(message)
+                raise StudioHTTPError(response.status_code,message)
             return response.content if binary else response.json()
         raise RuntimeError('本机后台不可用。')
 

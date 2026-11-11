@@ -8,7 +8,7 @@ const models=[{id:'wan21-t2v-1.3b',default_steps:30,width:832,height:480,fps:16,
  {id:'ltx-video-2b-distilled',default_steps:8,fixed_steps:true,width:768,height:448,fps:16,tier:'efficient'}];
 const response=body=>({ok:true,json:async()=>body,blob:async()=>({})});
 function page(fetch,saved){
- const elements=new Map(),storage=new Map(saved?[['cc.media.video.job.v1',saved]]:[]);
+ const elements=new Map(),storage=new Map(saved instanceof Map?saved:saved?[['cc.media.video.job.v1',saved]]:[]);
  const element=id=>{if(!elements.has(id))elements.set(id,{style:{},value:id==='lang'?'zh':'',append(){},hidden:true});return elements.get(id)};
  const context=vm.createContext({fetch,console,Promise,crypto:{randomUUID:()=> 'request-id'},
   setTimeout:()=>1,clearTimeout(){},URL:{createObjectURL:()=> 'blob:video',revokeObjectURL(){}},
@@ -41,4 +41,42 @@ test('video sampling displays real step progress and video wording',async()=>{
  for(let i=0;i<6;i++)await tick();
  assert.equal(p.elements.get('bar').style.width,'50%');
  assert.match(p.elements.get('status').textContent,/正在生成视频.*15\/30/);
+});
+
+test('temporary backend outage keeps the video job and never submits again',async()=>{
+ const calls=[],id='d'.repeat(32);
+ const p=page(async(url,options)=>{calls.push([url,options]);return url==='/video/models'?response({models}):{ok:false,status:503,json:async()=>({error:{message:'Worker unavailable'}})}},id);
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.storage.get('cc.media.video.job.v1'),id);assert.equal(p.elements.get('generate').disabled,true);
+ assert.ok(calls.every(x=>x[1].method==='GET'));
+});
+test('missing video job releases controls without submitting a replacement',async()=>{
+ const calls=[],id='e'.repeat(32);
+ const p=page(async(url,options)=>{calls.push([url,options]);return url==='/video/models'?response({models}):{ok:false,status:404,json:async()=>({error:{message:'Not found'}})}},id);
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.storage.size,0);assert.equal(p.elements.get('generate').disabled,false);
+ assert.match(p.elements.get('status').textContent,/原任务 ID/);assert.ok(calls.every(x=>x[1].method==='GET'));
+});
+test('lost submission response survives refresh and resumes the same request',async()=>{
+ const payloads=[],id='f'.repeat(32);let lost=true;
+ const fetch=async(url,options)=>{
+  if(url==='/video/models')return response({models});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));if(lost){lost=false;throw Error('Response lost')}return response({job_id:id})}
+  if(url.endsWith('/content'))return response({});
+  return response({state:'complete',usage:{model_id:'wan21-t2v-1.3b',model_reused:true}});
+ };
+ const first=page(fetch);for(let i=0;i<6;i++)await tick();
+ for(const [id,value] of [['prompt','anime catgirl'],['seed','42'],['frames','33']])first.elements.get(id).value=value;
+ await first.elements.get('generate').onclick();
+ assert.equal(payloads.length,1);assert.ok(first.storage.has('cc.media.video.pending.v1'));
+ assert.equal(first.elements.get('prompt').disabled,true);
+ const next=page(fetch,first.storage);for(let i=0;i<6;i++)await tick();
+ assert.equal(payloads.length,1);assert.equal(next.elements.get('prompt').value,'anime catgirl');
+ assert.match(next.elements.get('generate').textContent,/恢复/);
+ await next.elements.get('generate').onclick();
+ assert.deepEqual(payloads[0],payloads[1]);assert.equal(new Set(payloads.map(p=>p.request_id)).size,1);
+ assert.equal(next.storage.size,0);assert.equal(next.elements.get('download').hidden,false);
+ next.elements.get('lang').value='en';next.elements.get('lang').onchange();
+ assert.equal(next.elements.get('status').textContent,'Video ready');assert.match(next.elements.get('meta').textContent,/Model reused/);
+ assert.doesNotMatch(next.elements.get('meta').textContent,/undefined/);
 });

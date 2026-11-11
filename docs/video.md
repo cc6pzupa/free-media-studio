@@ -14,7 +14,9 @@ macOS / Linux 使用 `python3 launch.py`。启动器自动创建客户端环境�
 
 ## GUI
 
-打开左侧 **视频 / Video Preview**，或访问 `http://127.0.0.1:8787/video`。选择模型、输入画面与动作描述、调整帧数，然后点击生成。完成后可播放和保存 MP4。
+打开左侧 **视频 / Video Preview**，或访问 `http://127.0.0.1:8787/video`。选择模型、输入画面与动作描述、调整帧数，然后点击生成。完成后可播放和保存 MP4。图文操作与实际样片见 [HTML 教程](guide.html#video)。
+
+提交响应丢失时，页面会保留原请求，点击“恢复上次提交”继续；刷新后仍可恢复。后台短暂离线时继续跟踪原任务，避免重复生成。
 
 | 档位 | 模型 | 默认步数 |
 | --- | --- | --- |
@@ -54,7 +56,7 @@ ComfyUI 添加 **CC Media Video (Preview)** 节点，输出 `mp4_path` 字符串
 
 The video preview is on the `feature/video-three-tiers` development branch. Save your automatic account configuration in the main GUI, then open `/video`. Choose the efficient LTX 2B distilled model, balanced Wan2.1 1.3B or quality Wan2.2 5B. First use downloads weights; repeated requests reuse the active model. Image and video tasks share the serial worker queue and idle-retention setting.
 
-The HTTP API queues tasks at `POST /v1/videos/generations`, reports progress at `GET /v1/videos/jobs/<job_id>`, and serves completed MP4 files at `GET /v1/videos/jobs/<job_id>/content`. Authenticate with the local API key. MCP provides `generate_video` and `get_video`; the ComfyUI preview node returns an MP4 path. A standalone Kaggle video notebook is included.
+The HTTP API queues tasks at `POST /v1/videos/generations`, reports progress at `GET /v1/videos/jobs/<job_id>`, and serves completed MP4 files at `GET /v1/videos/jobs/<job_id>/content`. Authenticate with the local API key. MCP provides `generate_video` and `get_video`; the ComfyUI preview node returns an MP4 path. A standalone Kaggle video notebook is included. If a submission response is lost, use Resume submission to retry the saved request with its original ID, even after refresh. Temporary backend outages preserve the active job. See the [illustrated guide and actual sample](guide.html#video-en).
 
 视频 GPU 依赖在 Kaggle 的独立 Python 环境中运行。Notebook 重连复用存活的视频进程，切回图片模型时释放视频进程。
 

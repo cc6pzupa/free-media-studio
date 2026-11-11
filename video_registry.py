@@ -6,7 +6,7 @@ VIDEO_MODELS = {
         'frames':33,'fps':16,'guidance':1.0,'cache_slug':'cc-media-ltx-2b-distilled',
         'repo':'Lightricks/LTX-Video','revision':'8984fa25007f376c1a299016d0957a37a2f797bb',
         'checkpoint':'ltxv-2b-0.9.6-distilled-04-25.safetensors',
-        'timesteps':[1000.0,993.7,987.5,981.2,975.0,909.4,725.0,421.9],
+        'sigmas':[1.0,.9937,.9875,.9812,.975,.9094,.725,.4219],
         'config_repo':'Lightricks/LTX-Video-0.9.5','config_revision':'e58e28c39631af4d1468ee57a853764e11c1d37e'},
     'wan21-t2v-1.3b': {
         'id':'wan21-t2v-1.3b','name':'Wan2.1 1.3B · Balanced','tier':'balanced',

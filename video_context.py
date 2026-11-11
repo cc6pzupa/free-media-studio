@@ -93,7 +93,8 @@ def worker(directory):
     import torch.distributed as dist
     from accelerate import init_empty_weights
     from diffusers import (LTXPipeline,LTXVideoTransformer3DModel,AutoencoderKLLTXVideo,
-                           FlowMatchEulerDiscreteScheduler,ContextParallelConfig)
+                           ContextParallelConfig)
+    from video_schedule import ltx_distilled_scheduler
     rank=int(os.environ['LOCAL_RANK']);device=torch.device(f'cuda:{rank}')
     torch.cuda.set_device(device)
     dist.init_process_group(backend='nccl')
@@ -107,7 +108,7 @@ def worker(directory):
         @property
         def _execution_device(self):return device
     pipeline=DevicePipeline(transformer=transformer,vae=vae,text_encoder=None,tokenizer=None,
-        scheduler=FlowMatchEulerDiscreteScheduler.from_config(config['scheduler']))
+        scheduler=ltx_distilled_scheduler(config['scheduler'],p['sigmas']))
     (directory/f'ready-{rank}').touch();previous=None
     try:
         while True:
@@ -127,7 +128,7 @@ def worker(directory):
                 prompt_attention_mask=inputs['mask'].to(device),guidance_scale=1,
                 height=p['height'],width=p['width'],num_frames=params['frames'],
                 frame_rate=p['fps'],num_inference_steps=params['steps'],generator=generator,
-                timesteps=p['timesteps'],callback_on_step_end=progress,output_type='latent').frames
+                callback_on_step_end=progress,output_type='latent').frames
             torch.cuda.synchronize(device)
             (directory/f'{job}.rank-{rank}.json').write_text(json.dumps({'peak_gpu_gib':torch.cuda.max_memory_allocated(device)/2**30}))
             dist.barrier()

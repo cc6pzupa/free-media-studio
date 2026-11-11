@@ -47,9 +47,8 @@ class VideoRuntime:
             self.pipe=LTXPipeline.from_single_file(str(self.folder/p['checkpoint']),
                 config=str(self.folder),text_encoder=self.encoder,torch_dtype=torch.float16,
                 local_files_only=True)
-            from diffusers import FlowMatchEulerDiscreteScheduler
-            self.pipe.scheduler=FlowMatchEulerDiscreteScheduler.from_config(self.pipe.scheduler.config,
-                use_dynamic_shifting=False,shift=1.0)
+            from video_schedule import ltx_distilled_scheduler
+            self.pipe.scheduler=ltx_distilled_scheduler(self.pipe.scheduler.config,p['sigmas'])
             self.pipe.transformer.to('cuda:0');self.pipe.vae.to(device='cuda:0',dtype=torch.float32)
         else:
             self.pipe_class=WanPipeline
@@ -120,8 +119,7 @@ class VideoRuntime:
             generator=torch.Generator(device='cuda:0').manual_seed(seed),
             callback_on_step_end=progress,output_type='np')
         if p['family']=='ltx':kwargs.update(decode_timestep=.05,decode_noise_scale=.025,frame_rate=p['fps'],
-            prompt_attention_mask=mask.to('cuda:0'),negative_prompt_attention_mask=negative_mask,
-            timesteps=p['timesteps'])
+            prompt_attention_mask=mask.to('cuda:0'),negative_prompt_attention_mask=negative_mask)
         # Wan2.2 hybrid generation accepts no input image for text-to-video.
         self.pipe.register_modules(text_encoder=None)
         sampling=time.perf_counter();fallback=None;cfg_pairs=0

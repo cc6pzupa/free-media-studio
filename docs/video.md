@@ -1,11 +1,11 @@
 # 视频预览 / Video preview
 
-视频功能位于 `feature/video-three-tiers` 开发分支。使用前先按主 README 启动客户端并保存自动账号配置。
+主分支已包含视频预览功能。使用前先按主 README 启动客户端并保存自动账号配置。
 
-## 安装预览分支 / Install the preview branch
+## 安装 / Install
 
 ```bash
-git clone --branch feature/video-three-tiers https://github.com/cc6pzupa/free-media-studio.git
+git clone https://github.com/cc6pzupa/free-media-studio.git
 cd free-media-studio
 python launch.py
 ```
@@ -54,7 +54,7 @@ ComfyUI 添加 **CC Media Video (Preview)** 节点，输出 `mp4_path` 字符串
 
 ## English
 
-The video preview is on the `feature/video-three-tiers` development branch. Save your automatic account configuration in the main GUI, then open `/video`. Choose the efficient LTX 2B distilled model, balanced Wan2.1 1.3B or quality Wan2.2 5B. First use downloads weights; repeated requests reuse the active model. Image and video tasks share the serial worker queue and idle-retention setting.
+The video preview is included on main. Save your automatic account configuration in the main GUI, then open `/video`. Choose the efficient LTX 2B distilled model, balanced Wan2.1 1.3B or quality Wan2.2 5B. First use downloads weights; repeated requests reuse the active model. Image and video tasks share the serial worker queue and idle-retention setting.
 
 The HTTP API queues tasks at `POST /v1/videos/generations`, reports progress at `GET /v1/videos/jobs/<job_id>`, and serves completed MP4 files at `GET /v1/videos/jobs/<job_id>/content`. Authenticate with the local API key. MCP provides `generate_video` and `get_video`; the ComfyUI preview node returns an MP4 path. A standalone Kaggle video notebook is included. If a submission response is lost, use Resume submission to retry the saved request with its original ID, even after refresh. Temporary backend outages preserve the active job. See the [illustrated guide and actual sample](guide.html#video-en).
 

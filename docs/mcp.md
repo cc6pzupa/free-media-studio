@@ -152,7 +152,7 @@ generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-
 
 ## 通过 MCP 生成视频
 
-视频入口位于本仓库的 `feature/video-three-tiers` 预览分支。先按上面的步骤保存账号、安装 MCP 依赖并连接客户端。
+主分支提供视频预览入口。先按上面的步骤保存账号、安装 MCP 依赖并连接客户端。
 
 | 档位 | `model_id` | 默认步数 |
 | --- | --- | --- |

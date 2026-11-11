@@ -12,7 +12,7 @@ from pathlib import Path
 
 from studio_core import StudioCore, private_write, state_directory
 
-VERSION='0.7.0'
+VERSION='0.8.0-dev'
 
 
 class ProcessLock:
@@ -65,13 +65,14 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if self.path.startswith('/jobs/'):
                     pieces=self.path.split('/')
                     if len(pieces)==3:return self.send(200,core.store.get(pieces[2]))
                     if len(pieces)==4 and pieces[3]=='image':return self.send(200,core.store.image(pieces[2]),'image/png')
+                    if len(pieces)==4 and pieces[3]=='video':return self.send(200,core.store.video(pieces[2]),'video/mp4')
                 return self.send(404,{'error':'接口不存在。'})
             except KeyError:return self.send(404,{'error':'任务不存在。'})
             except ValueError:return self.send(409,{'error':'任务 ID 无效或图片尚未就绪，请先查询任务。'})
@@ -90,6 +91,10 @@ def create_worker_server(core, token, port=0):
                     return self.send(200,core.status())
                 if self.path=='/jobs':
                     job=core.submit(body.get('prompt'),body.get('seed',42),body.get('steps'),body.get('request_id'),body.get('model_id'))
+                    return self.send(202,job)
+                if self.path=='/video/jobs':
+                    job=core.submit_video(body.get('prompt'),body.get('seed',42),body.get('steps'),
+                        body.get('request_id'),body.get('model_id','wan21-t2v-1.3b'),body.get('frames'))
                     return self.send(202,job)
                 if self.path=='/shutdown':
                     with core.lock:

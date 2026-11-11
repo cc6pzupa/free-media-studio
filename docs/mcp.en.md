@@ -28,9 +28,11 @@ On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe
 | Tool | Inputs | Output |
 | --- | --- | --- |
 | `studio_status` | None | Configuration, queue, previous model usage, GPU quota, idle retention, countdown |
-| `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `steps=20` | Immediate durable `job_id` |
+| `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `model_id`, `steps` (model default when omitted) | Immediate durable `job_id` |
 | `get_job` | `job_id` | State, real progress, downloaded bytes, model reuse |
 | `get_image` | Completed `job_id` | PNG image content and usage metadata |
+| `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed` and `steps` | Video job ID |
+| `get_video` | Completed video job ID | Local MP4 path, URI, file size and usage |
 
 Call status, submit once, poll the job at least two seconds apart, then retrieve the image. Reuse a request ID only when retrying the same intended submission. A different payload with the same ID is rejected. Do not automatically resubmit errored or interrupted tasks; the remote task may still be running.
 
@@ -52,3 +54,28 @@ generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-
 Switching models releases the previous model; repeated requests for the same active model reuse it. Model selection uses the automatic account configuration saved in the GUI. Returned usage includes the model ID and encoding, sampling and decoding timings.
 
 Acceleration follows the saved GUI preference and defaults to `auto` (dual GPU preferred). `usage.parallel_strategy` reports `cfg_parallel` or `encoder_split`. For configurations without a saved preference, set `CC_MEDIA_ACCELERATION=auto` or `split`.
+
+## Video generation
+
+The video preview is available on `feature/video-three-tiers`. Use the same saved account, MCP configuration and worker as images.
+
+| Tier | `model_id` | Default steps |
+| --- | --- | --- |
+| Efficient | `ltx-video-2b-distilled` | Exactly 8 |
+| Balanced | `wan21-t2v-1.3b` | 30 |
+| Quality | `wan22-ti2v-5b` | 30 |
+
+Frames default to 33; supported values are 9, 17, 25, …, 81. Omit steps to use the model default.
+
+```text
+studio_status()
+generate_video(prompt="An adult anime catgirl reading by a sunlit window. Her hair moves gently in the breeze.", request_id="cc-video-001", model_id="ltx-video-2b-distilled", frames=33, seed=42)
+get_job(job_id="<returned job_id>")
+get_video(job_id="<same job_id>")
+```
+
+Submission returns immediately. Keep the job ID, poll `get_job` at least two seconds apart, and call `get_video` after state becomes `complete`. Progress includes real download bytes, sampling steps, decoding and export.
+
+`get_video` returns `path`, `uri`, `mime_type=video/mp4`, `size_bytes` and `usage`. Open or download the local MP4 using the returned path. Videos persist as `studio/images/<job_id>.mp4` beside completed PNG files.
+
+Image and video requests share one serial queue. Repeated requests reuse the active video process; switching models releases the previous one. Video tasks use the acceleration and idle-retention settings saved in the GUI.

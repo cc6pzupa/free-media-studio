@@ -2,7 +2,7 @@
 
 **简体中文** | [English](mcp.en.md)
 
-让支持本地 stdio MCP 的 AI 客户端调用 Kaggle 生图。GUI、ComfyUI 节点和 MCP 现在都连接同一个独立后台，后台拥有唯一任务队列、Kaggle 连接与图片记录；Kaggle 独立 Notebook 继续复用同一套云端运行时代码。
+让支持本地 stdio MCP 的 AI 客户端调用 Kaggle 生成图片和视频。GUI、ComfyUI 节点和 MCP 现在都连接同一个独立后台，后台拥有唯一任务队列、Kaggle 连接与图片记录；Kaggle 独立 Notebook 继续复用同一套云端运行时代码。
 
 本机不需要显卡、CUDA、Torch。MCP 依赖独立安装，不会增加普通 GUI 使用者的安装要求。
 
@@ -85,7 +85,7 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 
 默认空闲保活 15 分钟，可在 GUI 修改；`studio_status` 同时返回 GPU 额度、保活配置及倒计时。查询额度不启动 GPU，也不重置保活计时。自动释放需要本机后台在线，只作用于自动账号模式的当前会话。
 
-## 四个工具
+## 六个工具
 
 | 工具 | 参数 | 返回 |
 | --- | --- | --- |
@@ -93,8 +93,10 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 | `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`model_id`、`steps`（省略时采用模型默认步数） | 立即返回任务 ID，不等待首次下载或生图 |
 | `get_job` | `job_id` | `queued/running/complete/error/interrupted`、真实阶段、下载字节与百分比、复用信息 |
 | `get_image` | 已完成的 `job_id` | MCP `image/png` 内容，以及图片尺寸和耗时等元数据 |
+| `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps` | 立即返回视频任务 ID |
+| `get_video` | 已完成的视频 `job_id` | 本机 MP4 路径、文件 URI、文件大小与耗时 |
 
-初版固定一张 512×512 PNG。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。
+每个图片任务输出一张 512×512 PNG；视频任务输出一个 MP4。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。
 
 `studio_status` 不申请 GPU。`last_usage` 是历史信息，不保证 Kaggle 当前仍存活；实际生成时后端会重新检查会话和模型。
 
@@ -117,6 +119,7 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 
 - `jobs.sqlite3`：任务记录、参数、进度和使用统计，不保存 Kaggle Key。
 - `images/<job_id>.png`：已完成的图片。
+- `images/<job_id>.mp4`：已完成的视频。
 - `connection.json`：本机后台地址与访问凭据，不要分享。
 - `worker.log`：后台诊断日志。
 
@@ -145,3 +148,33 @@ generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-
 ```
 
 模型切换时释放旧模型；同一模型继续复用。新增模型使用 GUI 保存的自动账号配置。返回的 usage 包含 model_id、编码、采样及解码耗时。
+
+
+## 通过 MCP 生成视频
+
+视频入口位于本仓库的 `feature/video-three-tiers` 预览分支。先按上面的步骤保存账号、安装 MCP 依赖并连接客户端。
+
+| 档位 | `model_id` | 默认步数 |
+| --- | --- | --- |
+| 效率 | `ltx-video-2b-distilled` | 固定 8 |
+| 平衡 | `wan21-t2v-1.3b` | 30 |
+| 质量 | `wan22-ti2v-5b` | 30 |
+
+省略 `frames` 时生成 33 帧，可设为 9、17、25……81。省略 `steps` 使用该模型的默认值。
+
+可以直接对 AI 说：“用 CC Media Studio 的效率档生成一段窗边读书的成年猫娘视频，33 帧。完成后给我 MP4 文件。”
+
+对应调用顺序：
+
+```text
+studio_status()
+generate_video(prompt="An adult anime catgirl reading by a sunlit window. Her hair moves gently in the breeze.", request_id="cc-video-001", model_id="ltx-video-2b-distilled", frames=33, seed=42)
+get_job(job_id="<generate_video 返回的 job_id>")
+get_video(job_id="<同一个 job_id>")
+```
+
+`generate_video` 只提交任务。保留返回的 `job_id`，每隔至少两秒查询 `get_job`，直到 `state` 为 `complete`，再调用 `get_video`。首次使用显示下载字节与百分比，生成时显示采样步数，之后依次解码和导出。
+
+`get_video` 返回 `path`、`uri`、`mime_type=video/mp4`、`size_bytes` 与 `usage`。AI 客户端可以用本机路径打开视频或提供文件下载。视频不作为 PNG 图片返回。
+
+图片与视频共用一个串行队列。连续请求同一视频模型会复用活跃进程；切换到图片或另一模型会释放旧模型。GUI 保存的加速策略和空闲保活时间同样适用于 MCP 视频任务。

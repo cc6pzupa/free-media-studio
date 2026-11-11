@@ -18,13 +18,18 @@ else:
     from studio_core import config_path,load_config,normalize_config,state_directory
 
 
+class StudioHTTPError(RuntimeError):
+    def __init__(self,status_code,message):
+        super().__init__(message);self.status_code=status_code
+
+
 class StudioClient:
     def __init__(self,directory=None,autostart=True):
         self.directory=Path(directory or state_directory())
         self.autostart=autostart
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -46,6 +51,7 @@ class StudioClient:
                 self.url,self.token=data['url'],data['token']
                 self.model_selection_supported=result.get('model_selection') is True
                 self.acceleration_supported=result.get('dual_cfg') is True
+                self.video_supported=result.get('video') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -88,7 +94,7 @@ class StudioClient:
             if not response.ok:
                 try:message=response.json().get('error','本机后台请求失败。')
                 except ValueError:message='本机后台请求失败。'
-                raise RuntimeError(message)
+                raise StudioHTTPError(response.status_code,message)
             return response.content if binary else response.json()
         raise RuntimeError('本机后台不可用。')
 
@@ -125,6 +131,20 @@ class StudioClient:
         self.get_job(job_id)
         return self._request('GET','/jobs/'+job_id+'/image',binary=True)
 
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None):
+        if __package__:
+            from .video_registry import validate_video
+        else:
+            from video_registry import validate_video
+        params=validate_video(prompt,seed,steps,model_id,frames)
+        self.status()
+        if not self.video_supported:raise RuntimeError('请重启本机后台以启用视频 / Restart the worker to enable video.')
+        return self._request('POST','/video/jobs',dict(params,request_id=request_id or secrets.token_hex(16)))
+
+    def get_video(self,job_id):
+        self.get_job(job_id)
+        return self._request('GET','/jobs/'+job_id+'/video',binary=True)
+
     def wait(self,job_id,progress=None,timeout=14400):
         deadline=time.monotonic()+timeout
         previous=None
@@ -132,7 +152,7 @@ class StudioClient:
             job=self.get_job(job_id)
             if progress and job!=previous:progress(job)
             previous=job
-            if job['state']=='complete':return self.get_image(job_id),job['usage']
+            if job['state']=='complete':return (self.get_video(job_id) if job.get('media_type')=='video' else self.get_image(job_id)),job['usage']
             if job['state'] in ('error','interrupted'):raise RuntimeError(job['message'])
             time.sleep(.5)
         raise TimeoutError('等待超时；任务未取消，请使用原任务 ID 继续查询。')

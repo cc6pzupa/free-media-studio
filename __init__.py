@@ -1,4 +1,7 @@
 from .node import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+from .video_node import CCMediaVideo
+NODE_CLASS_MAPPINGS['CCMediaVideo']=CCMediaVideo
+NODE_DISPLAY_NAME_MAPPINGS['CCMediaVideo']='CC Media Video (Preview)'
 from .easy_node import KaggleEasyImage
 NODE_CLASS_MAPPINGS['KaggleEasyImage'] = KaggleEasyImage
 NODE_DISPLAY_NAME_MAPPINGS['KaggleEasyImage'] = 'CC Media Image'

@@ -27,7 +27,9 @@ if _CC_PREVIOUS_MODEL != _CC_REQUESTED_MODEL:
     if (globals().get('pipe') is not None or globals().get('encoder') is not None) and not (globals().get('_COMFY_QWEN_STATE') or globals().get('_CC_MANAGED_MODEL')):
         raise RuntimeError('Existing unmanaged model; select the managed notebook kernel.')
     # Do not retain aliases to an old pipeline or its GPU modules during collection.
-    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_value','_module','_decoded'):
+    if globals().get('_CC_VIDEO_PROCESS') is not None:globals()['_CC_VIDEO_PROCESS'].close()
+    if globals().get('_CC_VIDEO_RUNTIME') is not None:globals()['_CC_VIDEO_RUNTIME'].close()
+    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_CC_VIDEO_RUNTIME','_CC_VIDEO_PROCESS','_value','_module','_decoded'):
         globals().pop(_cc_key,None)
     import gc
     gc.collect()

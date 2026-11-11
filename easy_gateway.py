@@ -26,7 +26,7 @@ def validate(data):
 
 
 def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=None, acceleration=None):
-    from studio_client import SharedBackend, StudioClient
+    from studio_client import SharedBackend, StudioClient, StudioHTTPError
     shared_mode=backend_factory is BatchBackend
     nonce=secrets.token_urlsafe(32); api_key=secrets.token_urlsafe(32)
     backend=None; state_lock=threading.Lock(); generation_lock=threading.Lock(); jobs={}
@@ -89,7 +89,29 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if self.path=='/models':
                 from model_registry import model_catalog
                 return self.send(200,{'models':model_catalog()})
-            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.7.0'})
+            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.8.0-dev'})
+            if self.path=='/video':
+                video_page=Path(__file__).with_name('video_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
+                return self.send(200,video_page.encode(),'text/html; charset=utf-8')
+            if self.path=='/video/models':
+                from video_registry import video_catalog
+                return self.send(200,{'models':video_catalog()})
+            if self.path.startswith(('/video/jobs/','/v1/videos/jobs/')):
+                api=self.path.startswith('/v1/')
+                if not (self.api_auth() if api else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
+                sync_shared_backend()
+                if not isinstance(backend,SharedBackend):return self.send(409,{'error':{'message':'先在主界面配置自动账号模式。'}})
+                parts=self.path.split('/');job_id=parts[4] if api and len(parts)>=5 else parts[3] if len(parts)>=4 else ''
+                content=parts[-1]=='content'
+                try:
+                    job=backend.client.get_job(job_id)
+                    if job.get('media_type')!='video':raise ValueError('不是视频任务。')
+                    return self.send(200,backend.client.get_video(job_id),'video/mp4') if content else self.send(200,job)
+                except ValueError:return self.send(404,{'error':{'message':'视频任务不存在。'}})
+                except StudioHTTPError as error:
+                    status=404 if error.status_code==404 else 409 if error.status_code==409 else 503
+                    return self.send(status,{'error':{'message':str(error)}})
+                except RuntimeError:return self.send(503,{'error':{'message':'本机后台暂不可用，正在保留原视频任务。'}})
             if self.path in ('/usage','/v1/studio/usage'):
                 if not (self.ui_auth() if self.path=='/usage' else self.api_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
                 sync_shared_backend()
@@ -104,12 +126,14 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 with state_lock:
                     active_job_id=next((key for key,job in jobs.items() if job['state']=='running'),None)
                 if isinstance(backend,SharedBackend):
-                    try:active_job_id=backend.client.status()['active_job_id']
+                    try:
+                        active_job_id=backend.client.status()['active_job_id']
+                        if active_job_id and backend.client.get_job(active_job_id).get('media_type')=='video':active_job_id=None
                     except RuntimeError:pass
                 return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'acceleration':getattr(backend,'acceleration',acceleration or 'auto'),'keep_alive_minutes':getattr(backend,'keep_alive_minutes',keep_alive_minutes if keep_alive_minutes is not None else 15),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
             if self.path=='/':return self.send(200,page.encode(),'text/html; charset=utf-8')
-            if self.path=='/kaggle_standalone.ipynb':
-                notebook=Path(__file__).with_name('kaggle_standalone.ipynb')
+            if self.path in ('/kaggle_standalone.ipynb','/kaggle_video.ipynb'):
+                notebook=Path(__file__).with_name(self.path[1:])
                 if notebook.is_file():return self.send(200,notebook.read_bytes(),'application/x-ipynb+json')
             if self.path.startswith('/jobs/') and self.ui_auth():
                 sync_shared_backend()
@@ -127,6 +151,20 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         def do_POST(self):
             nonlocal backend, saved_user, saved_dataset
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
+            if self.path in ('/video/jobs','/v1/videos/generations'):
+                if not (self.api_auth() if self.path.startswith('/v1/') else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=32768:raise ValueError('请求过大或为空')
+                    data=json.loads(self.rfile.read(length))
+                    if not isinstance(data,dict):raise ValueError('请求必须为对象')
+                    sync_shared_backend()
+                    if not isinstance(backend,SharedBackend):raise ValueError('先在主界面配置自动账号模式。')
+                    job=backend.client.submit_video(data.get('prompt'),data.get('seed',42),data.get('steps'),
+                        data.get('request_id'),data.get('model_id','wan21-t2v-1.3b'),data.get('frames'))
+                    return self.send(202,job)
+                except (ValueError,TypeError,AttributeError):return self.send(400,{'error':{'message':'检查视频模型、提示词、种子、步数与帧数。'}})
+                except RuntimeError as error:return self.send(409,{'error':{'message':str(error)}})
             is_config=self.path=='/configure';is_job=self.path=='/jobs';is_api=self.path=='/v1/images/generations'
             if not (is_config or is_job or is_api):return self.send(404,{'error':{'message':'地址不存在'}})
             if not (self.api_auth() if is_api else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})

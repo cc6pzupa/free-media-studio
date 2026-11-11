@@ -123,12 +123,14 @@ STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width'
     'steps','seed','peak_gpu_gib','runtime_id','model_load_count','model_reused',
     'generation_number','asset_source','cache_status','backend','model_id','denoising_seconds','decode_seconds',
     'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy','total_generation_seconds','migration_seconds','replica_load_seconds',
-    'dual_model_reused','acceleration_mode','acceleration_fallback'}
+    'dual_model_reused','acceleration_mode','acceleration_fallback','media_type','frames','fps','loading_seconds','cfg_pairs'}
 PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
-    'cache-prepare','cache-upload','cache-processing','cache-saved','cache-warning','session-warning'}
+    'cache-prepare','cache-upload','cache-processing','cache-saved','cache-warning','session-warning','encoding','decoding','exporting','installing'}
 MESSAGES = {
+    'installing':'正在安装视频环境。','decoding':'正在解码视频画面。',
+    'encoding':'正在编码视频提示词。','exporting':'正在保存 MP4 视频。',
     'session':'正在检查 Kaggle 会话。','checking':'正在检查专用 Notebook。',
     'connecting':'正在恢复已有会话。','starting':'正在申请 Kaggle GPU。',
     'queued':'正在等待 Kaggle 准备 GPU。','connected':'会话已连接。',
@@ -196,7 +198,10 @@ class JobStore:
                 'created':row['created'],'updated':row['updated'],**json.loads(row['progress']),
                 'queue_position':position if row['state']=='queued' else 0}
             if row['stats']:result['usage']=json.loads(row['stats'])
-            result['image_ready']=row['state']=='complete'
+            video=json.loads(row['params']).get('media_type')=='video'
+            result['media_type']='video' if video else 'image'
+            result['image_ready']=row['state']=='complete' and not video
+            result['video_ready']=row['state']=='complete' and video
             return result
 
     def update(self, job_id, state=None, progress=None, stats=None):
@@ -233,8 +238,14 @@ class JobStore:
 
     def image(self, job_id):
         job=self.get(job_id)
+        if job['media_type']!='image':raise ValueError('该任务是视频，请使用视频接口。')
         if job['state']!='complete':raise ValueError('图片尚未生成完成，请先查询 get_job。')
         return (self.outputs/(job_id+'.png')).read_bytes()
+
+    def video(self,job_id):
+        job=self.get(job_id)
+        if not job['video_ready']:raise ValueError('视频尚未就绪。')
+        return (self.outputs/(job_id+'.mp4')).read_bytes()
 
     def close(self):
         with self.lock:self.db.close()
@@ -299,7 +310,8 @@ class StudioCore:
             else:
                 from model_registry import model_catalog
             last_usage=self.store.last_usage(self.fingerprint)
-            return {'configured':self.backend is not None,'mode':config.get('mode','account'),
+            from video_registry import video_catalog
+            return {'configured':self.backend is not None,'mode':config.get('mode','account'),'video_models':video_catalog(),
                 'user':config.get('user',''),'dataset':config.get('dataset',''),
                 'pending_jobs':self.store.pending(),'active_job_id':self.store.active_id(),
                 'last_usage':last_usage,'models':model_catalog(),
@@ -325,6 +337,17 @@ class StudioCore:
         if not minutes or self.idle_since is None or self.store.pending() or self.session_state not in ('active','release_failed'):
             return None
         return max(0,math.ceil(minutes*60-(time.monotonic()-self.idle_since)))
+
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None):
+        from video_registry import validate_video
+        params=dict(validate_video(prompt,seed,steps,model_id,frames),media_type='video')
+        with self.lock:
+            if not self.backend or (self.config or {}).get('mode')!='account':
+                raise ValueError('视频需要自动账号模式。')
+            if self.releasing:raise ValueError('正在释放会话，请稍后重试。')
+            job,reused=self.store.submit(params,self.fingerprint,request_id or secrets.token_hex(16))
+        self.wake.set()
+        return dict(job,deduplicated=reused)
 
     def expire_idle(self):
         with self.lock:
@@ -362,7 +385,8 @@ class StudioCore:
         phase=event.get('phase')
         if phase not in PHASES:return
         clean={'phase':phase,'message':MESSAGES[phase]}
-        for name in ('downloaded_bytes','total_bytes','percent'):
+        if phase=='generating' and event.get('media_type')=='video':clean['message']='正在生成视频。'
+        for name in ('downloaded_bytes','total_bytes','percent','step','steps'):
             value=event.get(name)
             if isinstance(value,(int,float)) and not isinstance(value,bool) and value>=0:
                 clean[name]=value
@@ -389,15 +413,19 @@ class StudioCore:
                 continue
             try:
                 params=json.loads(row['params'])
-                if callable(getattr(backend,'generate_with_progress',None)):
+                video=params.pop('media_type',None)=='video'
+                if video:
+                    raw,stats=backend.generate_video_with_progress(**params,progress=lambda event:self._progress(job_id,event))
+                elif callable(getattr(backend,'generate_with_progress',None)):
                     raw,stats=backend.generate_with_progress(**params,progress=lambda event:self._progress(job_id,event))
                 else:
                     raw,stats=backend.generate(**params)
-                if not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)<24 or struct.unpack('>II',raw[16:24])!=(512,512):
+                if video and (len(raw)<12 or raw[4:8]!=b'ftyp'):raise ValueError('Invalid MP4 result')
+                if not video and (not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)<24 or struct.unpack('>II',raw[16:24])!=(512,512)):
                     raise ValueError('Invalid image result')
                 clean_stats={key:value for key,value in stats.items() if key in STAT_FIELDS}
-                private_write(self.store.outputs/(job_id+'.png'),raw)
-                self.store.update(job_id,state='complete',progress={'phase':'complete','message':'图片已生成并保存。'},stats=clean_stats)
+                private_write(self.store.outputs/(job_id+('.mp4' if video else '.png')),raw)
+                self.store.update(job_id,state='complete',progress={'phase':'complete','message':'视频已生成并保存。' if video else '图片已生成并保存。'},stats=clean_stats)
             except Exception:
                 self.store.update(job_id,state='error',progress={'phase':'error','message':'生成失败；该任务没有自动重发。请检查配置、网络或 Kaggle 会话后再决定是否提交新任务。'})
 

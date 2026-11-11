@@ -4,6 +4,8 @@
 
 **源码可用 · 非商业使用免费 · 商业使用需另行授权** — [许可证](LICENSE) · [商业授权](COMMERCIAL.md)
 
+本分支提供 [视频功能预览](docs/video.md)：三档模型、MP4 播放与下载，以及 GUI、MCP、ComfyUI 和 Kaggle Notebook 入口。
+
 使用自己的 Kaggle GPU 额度生成图片。双击启动器，填写 Kaggle 用户名和 API Key，即可在本机界面创作；模型下载、加载和推理都在云端完成。
 
 ![CC Media Studio 界面](docs/gui.jpg)

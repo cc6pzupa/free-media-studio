@@ -101,6 +101,8 @@ def worker(directory):
     config=json.loads((directory/'config.json').read_text());p=config['profile']
     transformer=LTXVideoTransformer3DModel.from_pretrained(config['weights'],
         torch_dtype=torch.float16,device_map={'':rank},low_cpu_mem_usage=True,local_files_only=True)
+    from video_attention import enable_ltx_parallel_mask_broadcast
+    enable_ltx_parallel_mask_broadcast()
     transformer.enable_parallelism(config=ContextParallelConfig(ulysses_degree=2))
     transformer.set_attention_backend('native')
     with init_empty_weights():vae=AutoencoderKLLTXVideo.from_config(config['vae'])

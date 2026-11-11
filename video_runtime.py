@@ -97,7 +97,8 @@ class VideoRuntime:
         move_video_encoder(self.encoder,'cpu');torch.cuda.empty_cache()
         if self.acceleration=='split' and self.replica is not None:
             self.replica=None;gc.collect();torch.cuda.empty_cache()
-        replica_reused=self.replica is not None;replica_seconds=0;strategy='encoder_split'
+        replica_reused=self.replica is not None;context_reused=self.context is not None
+        replica_seconds=0;strategy='encoder_split'
         if p['family']!='ltx' and self.acceleration=='auto' and not self.disabled:
             try:
                 if self.replica is None:
@@ -205,7 +206,7 @@ class VideoRuntime:
             request_seconds=round(time.perf_counter()-start,3),loading_seconds=round(self.load_seconds,3),
             model_reused=self.calls>1,model_load_count=1,generation_number=self.calls,
             parallel_strategy=strategy,acceleration_mode=self.acceleration,cfg_pairs=cfg_pairs,
-            replica_load_seconds=round(replica_seconds,3),dual_model_reused=replica_reused,
+            replica_load_seconds=round(replica_seconds,3),dual_model_reused=(replica_reused if strategy=='cfg_parallel' else context_reused if strategy=='context_parallel' else False),
             acceleration_fallback=fallback,peak_gpu_gib=[round(v,3) for v in peaks])
 
     def decode_context_latents(self,latents,frames,generator):

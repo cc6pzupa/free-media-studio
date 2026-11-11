@@ -42,6 +42,9 @@ class VideoHTTPTest(unittest.TestCase):
                     if status['state']=='complete':break
                     time.sleep(.02)
                 self.assertTrue(status['video_ready'])
+                self.assertEqual(requests.get(base+'/video/jobs/'+'0'*32,headers=headers,timeout=5).status_code,404)
+                with patch('studio_client.StudioClient.get_job',side_effect=RuntimeError('Worker offline')):
+                    self.assertEqual(requests.get(base+'/video/jobs/'+job,headers=headers,timeout=5).status_code,503)
                 self.assertEqual(requests.get(base+'/video/jobs/'+job+'/content',timeout=5).status_code,401)
                 content=requests.get(base+'/video/jobs/'+job+'/content',headers=headers,timeout=5)
                 self.assertEqual(content.headers['Content-Type'],'video/mp4');self.assertEqual(content.content[4:8],b'ftyp')

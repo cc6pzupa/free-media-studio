@@ -57,7 +57,7 @@ Acceleration follows the saved GUI preference and defaults to `auto` (dual GPU p
 
 ## Video generation
 
-The video preview is available on `feature/video-three-tiers`. Use the same saved account, MCP configuration and worker as images.
+The video preview is included on main. Use the same saved account, MCP configuration and worker as images.
 
 | Tier | `model_id` | Default steps |
 | --- | --- | --- |

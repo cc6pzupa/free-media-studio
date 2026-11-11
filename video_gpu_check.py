@@ -43,4 +43,5 @@ def run(models,output='/kaggle/working/cc-video-results'):
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--models',nargs='+',default=['ltx-video-2b-distilled','wan22-ti2v-5b','wan21-t2v-1.3b'])
-    args=parser.parse_args();run(args.models)
+    args=parser.parse_args();reports=run(args.models)
+    raise SystemExit(1 if any('error' in result for result in reports) else 0)

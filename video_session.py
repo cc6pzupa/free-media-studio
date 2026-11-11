@@ -7,7 +7,7 @@ from session_runtime import JupyterTransport,ModelSession
 from video_registry import video_profile,validate_video
 
 VIDEO_FILES=('asset_manager.py','cache_manager.py','video_precision.py','video_registry.py','video_assets.py',
-             'video_parallel.py','video_schedule.py','video_context.py','video_runtime.py','video_process.py','requirements-video-remote.txt')
+             'video_parallel.py','video_attention.py','video_schedule.py','video_context.py','video_runtime.py','video_process.py','requirements-video-remote.txt')
 
 
 def video_bootstrap_code(model_id,acceleration='auto',install=True,cache_handle=None,api_token=None):

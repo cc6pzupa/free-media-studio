@@ -66,7 +66,9 @@ class LTXContextRunner:
             output=self.directory/(job+'.result.pt')
             if output.is_file():
                 result=torch.load(output,map_location='cpu',weights_only=True)
-                result['worker_peak_gib']=[json.loads((self.directory/f'{job}.rank-{i}.json').read_text())['peak_gpu_gib'] for i in range(2)]
+                footprints=[json.loads((self.directory/f'{job}.rank-{i}.json').read_text()) for i in range(2)]
+                result['worker_peak_gib']=[item['peak_gpu_gib'] for item in footprints]
+                result['worker_resident_gib']=[item['resident_gpu_gib'] for item in footprints]
                 (self.directory/(job+'.input.pt')).unlink();output.unlink()
                 return result
             time.sleep(.1)
@@ -111,6 +113,7 @@ def worker(directory):
         def _execution_device(self):return device
     pipeline=DevicePipeline(transformer=transformer,vae=vae,text_encoder=None,tokenizer=None,
         scheduler=ltx_distilled_scheduler(config['scheduler'],p['sigmas']))
+    resident_gpu_gib=torch.cuda.memory_allocated(device)/2**30
     (directory/f'ready-{rank}').touch();previous=None
     try:
         while True:
@@ -132,7 +135,7 @@ def worker(directory):
                 frame_rate=p['fps'],num_inference_steps=params['steps'],generator=generator,
                 callback_on_step_end=progress,output_type='latent').frames
             torch.cuda.synchronize(device)
-            (directory/f'{job}.rank-{rank}.json').write_text(json.dumps({'peak_gpu_gib':torch.cuda.max_memory_allocated(device)/2**30}))
+            (directory/f'{job}.rank-{rank}.json').write_text(json.dumps({'peak_gpu_gib':torch.cuda.max_memory_allocated(device)/2**30,'resident_gpu_gib':resident_gpu_gib}))
             dist.barrier()
             if rank==0:
                 target=directory/(job+'.result.tmp')

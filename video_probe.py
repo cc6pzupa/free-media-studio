@@ -23,11 +23,17 @@ def run(model,frames=9,steps=None,runs=1,acceleration='auto',output='/kaggle/wor
         path,stats=runtime.generate('An adult anime catgirl reading a book by a sunlit window. '
             'Her hair moves gently in the breeze. Slow smooth camera movement.',seed=42,
             steps=steps,frames=frames,output=target/(model+'-split.mp4'))
+        print('VIDEO_SPLIT_GENERATED:'+json.dumps(stats),flush=True)
         import imageio
         import numpy as np
-        with imageio.get_reader(str(target/(model+'-0.mp4')),'ffmpeg') as reader:a=np.stack(list(reader))
-        with imageio.get_reader(str(path),'ffmpeg') as reader:b=np.stack(list(reader))
-        stats['decoded_max_pixel_error']=int(np.abs(a.astype(np.int16)-b.astype(np.int16)).max())
+        from itertools import zip_longest
+        maximum=0;count=0
+        with imageio.get_reader(str(target/(model+'-0.mp4')),'ffmpeg') as left, imageio.get_reader(str(path),'ffmpeg') as right:
+            for a,b in zip_longest(left,right):
+                if a is None or b is None or a.shape!=b.shape:raise RuntimeError('Video comparison shape mismatch')
+                maximum=max(maximum,int(np.abs(a.astype(np.int16)-b.astype(np.int16)).max()));count+=1
+        if not count:raise RuntimeError('Empty video comparison')
+        stats['decoded_max_pixel_error']=maximum
         reports.append(stats);print('VIDEO_SPLIT_RESULT:'+json.dumps(stats),flush=True)
         (target/(model+'-report.json')).write_text(json.dumps(reports,indent=2),encoding='utf-8')
     return runtime

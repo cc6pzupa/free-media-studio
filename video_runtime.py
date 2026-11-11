@@ -199,7 +199,10 @@ class VideoRuntime:
         export_to_video(video,str(output),fps=p['fps'])
         self.calls+=1
         peaks=[torch.cuda.max_memory_allocated(i)/2**30 for i in range(2)]
-        if strategy=='context_parallel':peaks=[max(peaks[i],packed['worker_peak_gib'][i]+torch.cuda.memory_allocated(i)/2**30) for i in range(2)]
+        if strategy=='context_parallel':
+            # Worker weights remain resident while the parent encodes or decodes.
+            peaks=[max(peaks[i]+packed['worker_resident_gib'][i],
+                packed['worker_peak_gib'][i]+torch.cuda.memory_allocated(i)/2**30) for i in range(2)]
         return output,dict(model_id=p['id'],media_type='video',width=p['width'],height=p['height'],
             frames=params['frames'],fps=p['fps'],steps=params['steps'],seed=seed,
             encoding_seconds=round(encoding,3),generation_seconds=round(sampling_seconds,3),

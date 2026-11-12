@@ -25,8 +25,7 @@ def check(executable):
             port=reservation.getsockname()[1]
         address=f'http://127.0.0.1:{port}'
         # A GUI gallery read must start its own durable worker without a GPU.
-        gui=subprocess.Popen([executable,'--no-open','--port',str(port)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        worker=None
+        gui=None;worker=None
         async def mcp_check():
             from mcp import Client
             from mcp.client.stdio import StdioServerParameters
@@ -36,6 +35,8 @@ def check(executable):
                 assert len(tools.tools)==6
         try:
             asyncio.run(asyncio.wait_for(mcp_check(),timeout=30))
+            with (root/'gui-launch.log').open('wb') as output:
+                gui=subprocess.Popen([executable,'--no-open','--port',str(port)],env=env,stdout=output,stderr=output)
             deadline=time.monotonic()+45
             while time.monotonic()<deadline:
                 try:
@@ -60,7 +61,7 @@ def check(executable):
                 print(path.name+':\n'+path.read_text(encoding='utf-8',errors='replace'),flush=True)
             raise
         finally:
-            if gui.poll() is None:gui.terminate();gui.wait(timeout=10)
+            if gui is not None and gui.poll() is None:gui.terminate();gui.wait(timeout=10)
             if worker is None and (state/'connection.json').exists():worker=json.loads((state/'connection.json').read_text())
             if worker:
                 try:

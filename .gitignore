@@ -40,3 +40,6 @@ studio/
 *.sqlite3-wal
 *.sqlite3-shm
 worker.log
+
+# Installer output
+release/

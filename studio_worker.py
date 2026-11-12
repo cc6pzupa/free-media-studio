@@ -9,10 +9,11 @@ import threading
 from http.server import BaseHTTPRequestHandler
 from local_http import LocalHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit,parse_qs
 
 from studio_core import StudioCore, private_write, state_directory
 
-VERSION='0.8.0-dev'
+from app_entry import VERSION
 
 
 class ProcessLock:
@@ -68,13 +69,17 @@ def create_worker_server(core, token, port=0):
                 if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
+                if urlsplit(self.path).path=='/history':
+                    q=parse_qs(urlsplit(self.path).query)
+                    return self.send(200,core.store.history(q.get('media_type',['all'])[0],q.get('query',[''])[0],
+                        q.get('favorites',['0'])[0]=='1',int(q.get('limit',['24'])[0]),int(q.get('offset',['0'])[0])))
                 if self.path.startswith('/jobs/'):
                     pieces=self.path.split('/')
                     if len(pieces)==3:return self.send(200,core.store.get(pieces[2]))
                     if len(pieces)==4 and pieces[3]=='image':return self.send(200,core.store.image(pieces[2]),'image/png')
                     if len(pieces)==4 and pieces[3]=='video':return self.send(200,core.store.video(pieces[2]),'video/mp4')
                 return self.send(404,{'error':'接口不存在。'})
-            except KeyError:return self.send(404,{'error':'任务不存在。'})
+            except (KeyError,FileNotFoundError):return self.send(404,{'error':'任务或作品文件不存在。'})
             except ValueError:return self.send(409,{'error':'任务 ID 无效或图片尚未就绪，请先查询任务。'})
             except Exception:return self.send(500,{'error':'无法读取本机任务。'})
         def do_POST(self):
@@ -89,6 +94,8 @@ def create_worker_server(core, token, port=0):
                         core.configure(body['config'],remember=body.get('remember'),api_key=body.get('api_key'))
                     else:core.configure(body)
                     return self.send(200,core.status())
+                if self.path.startswith('/history/'):
+                    return self.send(200,core.store.edit_history(self.path[9:],body.get('action'),body.get('favorite')))
                 if self.path=='/jobs':
                     job=core.submit(body.get('prompt'),body.get('seed',42),body.get('steps'),body.get('request_id'),body.get('model_id'))
                     return self.send(202,job)
@@ -104,6 +111,7 @@ def create_worker_server(core, token, port=0):
                     threading.Thread(target=self.server.shutdown,daemon=True).start()
                     return
                 return self.send(404,{'error':'接口不存在。'})
+            except KeyError:return self.send(404,{'error':'作品不存在。'})
             except OSError:return self.send(500,{'error':'无法保存本机配置，请检查目录权限。'})
             except (ValueError,TypeError,AttributeError) as error:
                 # Validation messages are authored locally and contain no values.

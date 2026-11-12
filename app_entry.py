@@ -42,4 +42,9 @@ def main():
 if __name__=='__main__':
     import multiprocessing
     multiprocessing.freeze_support()
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise SystemExit(1)

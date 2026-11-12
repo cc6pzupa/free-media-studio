@@ -8,7 +8,9 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from urllib.request import Request,urlopen
+from urllib.request import Request,build_opener,ProxyHandler
+
+urlopen=build_opener(ProxyHandler({})).open
 
 
 def check(executable):
@@ -28,7 +30,7 @@ def check(executable):
                 tools=await client.list_tools()
                 assert len(tools.tools)==6
         try:
-            asyncio.run(mcp_check())
+            asyncio.run(asyncio.wait_for(mcp_check(),timeout=30))
             deadline=time.monotonic()+45
             while time.monotonic()<deadline:
                 try:
@@ -48,6 +50,10 @@ def check(executable):
             # Worker survives parent GUI exit, and accepts authenticated reads.
             with urlopen(Request(worker['url']+'/status',headers={'Authorization':'Bearer '+worker['token']}),timeout=5) as r:
                 assert json.load(r)['configured'] is False
+        except Exception:
+            for path in root.rglob('*.log'):
+                print(path.name+':\n'+path.read_text(encoding='utf-8',errors='replace'),flush=True)
+            raise
         finally:
             if gui.poll() is None:gui.terminate();gui.wait(timeout=10)
             if worker is None and (state/'connection.json').exists():worker=json.loads((state/'connection.json').read_text())

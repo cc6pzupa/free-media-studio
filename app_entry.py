@@ -16,6 +16,12 @@ def main():
             stream=os.fdopen(fd,'a',encoding='utf-8')
             if sys.stdout is None:sys.stdout=stream
             if sys.stderr is None:sys.stderr=stream
+        # Frozen Python does not apply PYTHONUTF8 like the normal interpreter.
+        # Redirected Windows streams may otherwise use cp1252 and fail on the
+        # Chinese startup/progress messages before the HTTP service stays up.
+        for stream in (sys.stdout,sys.stderr):
+            if callable(getattr(stream,'reconfigure',None)):
+                stream.reconfigure(encoding='utf-8',errors='backslashreplace')
     if '--version' in sys.argv:
         print('CC Media Studio '+VERSION);return 0
     if '--self-test' in sys.argv:

@@ -21,7 +21,7 @@ Generate images with your own Kaggle GPU quota. Start the launcher, enter your K
 
 Download Windows, macOS Intel / Apple Silicon or Linux deb/rpm packages from [Releases](https://github.com/cc6pzupa/free-media-studio/releases). Python is bundled. The local image/video gallery supports search, favorites, preview and download. [Installation and gallery guide](docs/installers.md).
 
-## Download and launch
+## Run from source
 
 Install **Python 3.11 or 3.12**, then [download the ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) and extract it. The source is public on GitHub; download the ZIP or clone the repository.
 

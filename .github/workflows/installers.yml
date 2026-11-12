@@ -77,7 +77,7 @@ jobs:
           mkdir -p release build/dmg
           architecture=arm64
           if [ '${{ matrix.target }}' = 'macos-intel' ]; then architecture=x86_64; fi
-          lipo -verify_arch "$architecture" 'dist/CC Media Studio.app/Contents/MacOS/cc-media-studio'
+          lipo 'dist/CC Media Studio.app/Contents/MacOS/cc-media-studio' -verify_arch "$architecture"
           productbuild --component 'dist/CC Media Studio.app' /Applications 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.pkg'
           pkgutil --payload-files 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.pkg' > build/pkg-contents.txt
           cp -R 'dist/CC Media Studio.app' build/dmg/

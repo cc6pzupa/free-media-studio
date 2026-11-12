@@ -10,7 +10,9 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler
 from local_http import LocalHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 from batch_backend import BatchBackend
+from app_entry import VERSION
 
 
 def validate(data):
@@ -89,7 +91,24 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if self.path=='/models':
                 from model_registry import model_catalog
                 return self.send(200,{'models':model_catalog()})
-            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':'0.8.0-dev'})
+            if self.path=='/health':return self.send(200,{'app':'qwen-studio','version':VERSION})
+            if self.path=='/gallery':
+                gallery=Path(__file__).with_name('gallery_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
+                return self.send(200,gallery.encode(),'text/html; charset=utf-8')
+            if urlsplit(self.path).path=='/gallery/items' or self.path.startswith('/gallery/media/'):
+                if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient()
+                try:
+                    if self.path.startswith('/gallery/media/'):
+                        job_id=self.path[15:];job=client.get_job(job_id)
+                        video=job.get('media_type')=='video'
+                        raw=client.get_video(job_id) if video else client.get_image(job_id)
+                        return self.send(200,raw,'video/mp4' if video else 'image/png')
+                    return self.send(200,client.history(urlsplit(self.path).query))
+                except ValueError:return self.send(400,{'error':{'message':'无效的画廊请求。'}})
+                except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
+                except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
+                finally:client.close()
             if self.path=='/video':
                 video_page=Path(__file__).with_name('video_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
                 return self.send(200,video_page.encode(),'text/html; charset=utf-8')
@@ -151,6 +170,19 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         def do_POST(self):
             nonlocal backend, saved_user, saved_dataset
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
+            if self.path.startswith('/gallery/items/'):
+                if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient()
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=1024:raise ValueError()
+                    body=json.loads(self.rfile.read(length))
+                    if not isinstance(body,dict):raise ValueError()
+                    return self.send(200,client.edit_history(self.path[15:],body))
+                except (ValueError,TypeError):return self.send(400,{'error':{'message':'无效的画廊操作。'}})
+                except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
+                except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
+                finally:client.close()
             if self.path in ('/video/jobs','/v1/videos/generations'):
                 if not (self.api_auth() if self.path.startswith('/v1/') else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
                 try:

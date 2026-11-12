@@ -160,6 +160,11 @@ class JobStore:
             config_hash TEXT NOT NULL, state TEXT NOT NULL, created REAL NOT NULL,
             updated REAL NOT NULL, progress TEXT NOT NULL, stats TEXT)''')
         self.db.commit()
+        columns={row['name'] for row in self.db.execute('PRAGMA table_info(jobs)')}
+        for name in ('favorite','hidden'):
+            if name not in columns:self.db.execute(f'ALTER TABLE jobs ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0')
+        self.db.execute('CREATE INDEX IF NOT EXISTS jobs_gallery ON jobs(hidden,state,created DESC,id DESC)')
+        self.db.commit()
 
     def recover(self):
         with self.lock:
@@ -177,12 +182,13 @@ class JobStore:
         with self.lock:
             previous = self.db.execute('SELECT * FROM jobs WHERE request_id=?',(request_id,)).fetchone()
             if previous:
+                if previous['hidden']:raise ValueError('该请求对应的作品已删除，请为新创作使用新的 request_id。')
                 if previous['params'] != encoded or previous['config_hash'] != config_hash:
                     raise ValueError('request_id 已用于不同参数或配置，请勿复用。')
                 return self.get(previous['id']), True
             now = time.time();job_id = secrets.token_hex(16)
             progress = json.dumps({'phase':'queued','message':'任务已进入本机队列。'},ensure_ascii=False)
-            self.db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,NULL)',
+            self.db.execute('INSERT INTO jobs (id,request_id,params,config_hash,state,created,updated,progress,stats) VALUES (?,?,?,?,?,?,?,?,NULL)',
                 (job_id,request_id,encoded,config_hash,'queued',now,now,progress))
             self.db.commit()
             return self.get(job_id), False
@@ -192,7 +198,7 @@ class JobStore:
             raise ValueError('任务 ID 格式不正确。')
         with self.lock:
             row = self.db.execute('SELECT * FROM jobs WHERE id=?',(job_id,)).fetchone()
-            if row is None:raise KeyError('任务不存在。')
+            if row is None or row['hidden']:raise KeyError('任务不存在。')
             position = self.db.execute("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running') AND rowid<=(SELECT rowid FROM jobs WHERE id=?)",(job_id,)).fetchone()[0]
             result = {'job_id':row['id'],'request_id':row['request_id'],'state':row['state'],
                 'created':row['created'],'updated':row['updated'],**json.loads(row['progress']),
@@ -246,6 +252,47 @@ class JobStore:
         job=self.get(job_id)
         if not job['video_ready']:raise ValueError('视频尚未就绪。')
         return (self.outputs/(job_id+'.mp4')).read_bytes()
+
+    def history(self,media_type='all',query='',favorites=False,limit=24,offset=0):
+        if media_type not in ('all','image','video') or type(favorites) is not bool:
+            raise ValueError('无效的画廊筛选。')
+        if not isinstance(query,str) or len(query)>4000 or type(limit) is not int or not 1<=limit<=100 or type(offset) is not int or not 0<=offset<=1000000:
+            raise ValueError('无效的画廊分页或搜索。')
+        where=["hidden=0","state='complete'"];values=[]
+        if media_type!='all':
+            where.append("COALESCE(json_extract(params,'$.media_type'),'image')=?");values.append(media_type)
+        if favorites:where.append('favorite=1')
+        if query:
+            where.append("instr(lower(json_extract(params,'$.prompt')),lower(?))>0");values.append(query)
+        with self.lock:
+            condition=' AND '.join(where)
+            total=self.db.execute('SELECT COUNT(*) FROM jobs WHERE '+condition,values).fetchone()[0]
+            rows=self.db.execute('SELECT * FROM jobs WHERE '+condition+' ORDER BY created DESC,id DESC LIMIT ? OFFSET ?',[*values,limit,offset]).fetchall()
+            items=[]
+            for row in rows:
+                params=json.loads(row['params']);kind=params.get('media_type','image')
+                path=self.outputs/(row['id']+('.mp4' if kind=='video' else '.png'))
+                items.append({'job_id':row['id'],'created':row['created'],'media_type':kind,
+                    'favorite':bool(row['favorite']),'params':params,'usage':json.loads(row['stats'] or '{}'),
+                    'available':path.is_file()})
+            return {'items':items,'total':total,'offset':offset,'limit':limit,
+                'next_offset':offset+len(items) if offset+len(items)<total else None}
+
+    def edit_history(self,job_id,action,favorite=None):
+        with self.lock:
+            job=self.get(job_id)
+            if job['state']!='complete':raise ValueError('只能修改已完成的作品。')
+            if action=='favorite' and type(favorite) is bool:
+                self.db.execute('UPDATE jobs SET favorite=? WHERE id=?',(int(favorite),job_id))
+            elif action=='delete':
+                # Keep the request identity as a tombstone: a transport retry must
+                # never regenerate a work the user deleted from their gallery.
+                path=self.outputs/(job_id+('.mp4' if job['media_type']=='video' else '.png'))
+                path.unlink(missing_ok=True)
+                self.db.execute('UPDATE jobs SET hidden=1 WHERE id=?',(job_id,))
+            else:raise ValueError('无效的画廊操作。')
+            self.db.commit()
+            return {'ok':True}
 
     def close(self):
         with self.lock:self.db.close()

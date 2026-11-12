@@ -67,9 +67,13 @@ class StudioClient:
             with os.fdopen(fd,'ab') as output:
                 options={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.DETACHED_PROCESS|subprocess.CREATE_BREAKAWAY_FROM_JOB} if os.name=='nt' else {'start_new_session':True}
                 environment=dict(os.environ,EASY_CONFIG_PATH=str(config_path()),PYTHONUTF8='1')
+                command=[sys.executable,str(Path(__file__).with_name('studio_worker.py'))]
+                if getattr(sys,'frozen',False):
+                    worker_exe=Path(sys.executable).with_name('cc-media-cli'+('.exe' if os.name=='nt' else ''))
+                    command=[str(worker_exe),'--worker']
+                    environment['PYINSTALLER_RESET_ENVIRONMENT']='1'
                 try:
-                    subprocess.Popen([sys.executable,str(Path(__file__).with_name('studio_worker.py')),
-                        '--state-dir',str(self.directory.resolve())],stdin=subprocess.DEVNULL,stdout=output,stderr=output,
+                    subprocess.Popen([*command,'--state-dir',str(self.directory.resolve())],stdin=subprocess.DEVNULL,stdout=output,stderr=output,
                         cwd=str(Path(__file__).resolve().parent),env=environment,close_fds=True,**options)
                 except OSError:
                     raise RuntimeError('无法启动独立后台。请先在终端运行 python studio_worker.py，再连接 MCP。 / Start python studio_worker.py in a terminal before connecting MCP.') from None
@@ -111,6 +115,13 @@ class StudioClient:
         return result
 
     def quota(self):return self._request('GET','/quota')
+
+    def history(self,query_string=''):
+        return self._request('GET','/history'+('?' + query_string if query_string else ''))
+
+    def edit_history(self,job_id,body):
+        self.get_job(job_id)
+        return self._request('POST','/history/'+job_id,body)
 
     def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
         self.status()

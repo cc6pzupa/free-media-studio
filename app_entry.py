@@ -11,8 +11,9 @@ def main():
         # Windowed bootloaders have no console; keep worker diagnostics usable.
         if sys.stdout is None or sys.stderr is None:
             folder=Path(os.environ.get('EASY_CONFIG_PATH',str(Path.home()/'.kaggle-qwen-client/settings.json'))).parent/'studio'
-            folder.mkdir(parents=True,exist_ok=True)
-            stream=(folder/'desktop.log').open('a',encoding='utf-8')
+            folder.mkdir(parents=True,exist_ok=True,mode=0o700)
+            fd=os.open(folder/'desktop.log',os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)
+            stream=os.fdopen(fd,'a',encoding='utf-8')
             if sys.stdout is None:sys.stdout=stream
             if sys.stderr is None:sys.stderr=stream
     if '--version' in sys.argv:
@@ -35,7 +36,9 @@ def main():
         from mcp_server import build_server
         return build_server().run(transport='stdio')
     else:
+        if os.environ.get('CC_MEDIA_DIAGNOSTICS')=='1':print('Desktop entry: importing GUI',flush=True)
         from desktop import main as run
+        if os.environ.get('CC_MEDIA_DIAGNOSTICS')=='1':print('Desktop entry: starting GUI',flush=True)
     return run()
 
 
@@ -44,6 +47,11 @@ if __name__=='__main__':
     multiprocessing.freeze_support()
     try:
         raise SystemExit(main())
+    except SystemExit as error:
+        if error.code:
+            import traceback
+            traceback.print_exc()
+        raise
     except Exception:
         import traceback
         traceback.print_exc()

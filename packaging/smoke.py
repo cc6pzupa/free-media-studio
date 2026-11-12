@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -17,10 +18,14 @@ def check(executable):
     executable=str(Path(executable).resolve())
     with tempfile.TemporaryDirectory() as folder:
         root=Path(folder);state=root/'studio'
-        env=dict(os.environ,EASY_CONFIG_PATH=str(root/'settings.json'),PYINSTALLER_RESET_ENVIRONMENT='1')
+        env=dict(os.environ,EASY_CONFIG_PATH=str(root/'settings.json'),PYINSTALLER_RESET_ENVIRONMENT='1',CC_MEDIA_DIAGNOSTICS='1')
         subprocess.run([executable,'--self-test'],env=env,check=True,timeout=60)
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1',0))
+            port=reservation.getsockname()[1]
+        address=f'http://127.0.0.1:{port}'
         # A GUI gallery read must start its own durable worker without a GPU.
-        gui=subprocess.Popen([executable,'--no-open','--port','18787'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        gui=subprocess.Popen([executable,'--no-open','--port',str(port)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         worker=None
         async def mcp_check():
             from mcp import Client
@@ -34,17 +39,17 @@ def check(executable):
             deadline=time.monotonic()+45
             while time.monotonic()<deadline:
                 try:
-                    with urlopen('http://127.0.0.1:18787/gallery',timeout=1) as r:page=r.read().decode()
+                    with urlopen(address+'/gallery',timeout=1) as r:page=r.read().decode()
                     break
                 except OSError:
-                    if gui.poll() is not None:raise RuntimeError('Frozen GUI exited early')
+                    if gui.poll() is not None:raise RuntimeError('Frozen GUI exited early: '+str(gui.returncode))
                     time.sleep(.2)
             else:raise TimeoutError('Frozen GUI did not start')
             nonce=re.search("const nonce='([^']+)'",page).group(1)
-            with urlopen(Request('http://127.0.0.1:18787/gallery/items',headers={'X-Local-Session':nonce}),timeout=30) as r:
+            with urlopen(Request(address+'/gallery/items',headers={'X-Local-Session':nonce}),timeout=30) as r:
                 assert json.load(r)['items']==[]
             for route in ('/','/video','/kaggle_video.ipynb'):
-                with urlopen('http://127.0.0.1:18787'+route,timeout=5) as r:assert r.status==200
+                with urlopen(address+route,timeout=5) as r:assert r.status==200
             worker=json.loads((state/'connection.json').read_text())
             gui.terminate();gui.wait(timeout=10)
             # Worker survives parent GUI exit, and accepts authenticated reads.

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CC Media Studio
+Comment=Create images and videos with your Kaggle GPU
+Exec=cc-media-studio
+Icon=cc-media-studio
+Terminal=false
+Categories=Graphics;Video;
+StartupNotify=true

@@ -17,7 +17,11 @@
 - 中文 / English 界面，显示下载进度、GPU 用量和空闲倒计时。
 - 支持 GUI、ComfyUI、Kaggle Notebook、本地 MCP 和 HTTP API。
 
-## 下载与启动
+## 安装包与历史画廊
+
+从 [Releases](https://github.com/cc6pzupa/free-media-studio/releases) 下载 Windows、macOS Intel / Apple Silicon 或 Linux deb/rpm 安装包，内含 Python 运行环境。图片与视频工作台提供历史画廊，支持搜索、收藏、预览和下载。[安装与画廊说明](docs/installers.md)
+
+## 源码安装与启动
 
 安装 **Python 3.11 或 3.12**，然后[下载 ZIP](https://github.com/cc6pzupa/free-media-studio/archive/refs/heads/main.zip) 并解压。源码已在 GitHub 公开，可直接下载 ZIP 或 clone 仓库。
 

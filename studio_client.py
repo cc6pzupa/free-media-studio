@@ -23,10 +23,25 @@ class StudioHTTPError(RuntimeError):
         super().__init__(message);self.status_code=status_code
 
 
+def spawn_worker(command,output,cwd,environment,allow_job_inheritance=False):
+    windows=os.name=='nt'
+    options={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.DETACHED_PROCESS|subprocess.CREATE_BREAKAWAY_FROM_JOB} if windows else {'start_new_session':True}
+    args=dict(stdin=subprocess.DEVNULL,stdout=output,stderr=output,cwd=cwd,env=environment,close_fds=True)
+    try:return subprocess.Popen(command,**args,**options)
+    except OSError as error:
+        # A desktop launched inside an enclosing Job may inherit that Job while
+        # still outliving its GUI process. MCP hosts can kill their whole Job on
+        # disconnect, so only GUI-owned clients explicitly permit this fallback.
+        if not (windows and allow_job_inheritance and getattr(error,'winerror',None)==5):raise
+        options['creationflags'] &= ~subprocess.CREATE_BREAKAWAY_FROM_JOB
+        return subprocess.Popen(command,**args,**options)
+
+
 class StudioClient:
-    def __init__(self,directory=None,autostart=True):
+    def __init__(self,directory=None,autostart=True,allow_job_inheritance=False):
         self.directory=Path(directory or state_directory())
         self.autostart=autostart
+        self.allow_job_inheritance=allow_job_inheritance
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
         self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False
@@ -65,12 +80,15 @@ class StudioClient:
             log_path=self.directory/'worker.log'
             fd=os.open(log_path,os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)
             with os.fdopen(fd,'ab') as output:
-                options={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.DETACHED_PROCESS|subprocess.CREATE_BREAKAWAY_FROM_JOB} if os.name=='nt' else {'start_new_session':True}
                 environment=dict(os.environ,EASY_CONFIG_PATH=str(config_path()),PYTHONUTF8='1')
+                command=[sys.executable,str(Path(__file__).with_name('studio_worker.py'))]
+                if getattr(sys,'frozen',False):
+                    worker_exe=Path(sys.executable).with_name('cc-media-cli'+('.exe' if os.name=='nt' else ''))
+                    command=[str(worker_exe),'--worker']
+                    environment['PYINSTALLER_RESET_ENVIRONMENT']='1'
                 try:
-                    subprocess.Popen([sys.executable,str(Path(__file__).with_name('studio_worker.py')),
-                        '--state-dir',str(self.directory.resolve())],stdin=subprocess.DEVNULL,stdout=output,stderr=output,
-                        cwd=str(Path(__file__).resolve().parent),env=environment,close_fds=True,**options)
+                    spawn_worker([*command,'--state-dir',str(self.directory.resolve())],output,
+                        str(Path(__file__).resolve().parent),environment,self.allow_job_inheritance)
                 except OSError:
                     raise RuntimeError('无法启动独立后台。请先在终端运行 python studio_worker.py，再连接 MCP。 / Start python studio_worker.py in a terminal before connecting MCP.') from None
             deadline=time.monotonic()+20
@@ -111,6 +129,13 @@ class StudioClient:
         return result
 
     def quota(self):return self._request('GET','/quota')
+
+    def history(self,query_string=''):
+        return self._request('GET','/history'+('?' + query_string if query_string else ''))
+
+    def edit_history(self,job_id,body):
+        self.get_job(job_id)
+        return self._request('POST','/history/'+job_id,body)
 
     def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
         self.status()

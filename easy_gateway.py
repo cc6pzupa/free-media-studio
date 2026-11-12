@@ -38,7 +38,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         if keep_alive_minutes is not None:data=dict(data,keep_alive_minutes=keep_alive_minutes)
         if acceleration is not None:data=dict(data,acceleration=acceleration)
         if shared_mode:
-            return SharedBackend(dict(data,mode=data.get('mode','batch')),activate=False)
+            return SharedBackend(dict(data,mode=data.get('mode','batch')),client=StudioClient(allow_job_inheritance=True),activate=False)
         user=data.get('user','').strip()
         dataset=data.get('dataset','').strip()
         mode=data.get('mode','batch')
@@ -62,7 +62,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
     def sync_shared_backend():
         nonlocal backend,saved_user,saved_dataset
         if not shared_mode or backend is not None:return
-        client=StudioClient(autostart=False)
+        client=StudioClient(autostart=False,allow_job_inheritance=True)
         try:
             status=client.status()
             if status['configured']:
@@ -97,7 +97,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 return self.send(200,gallery.encode(),'text/html; charset=utf-8')
             if urlsplit(self.path).path=='/gallery/items' or self.path.startswith('/gallery/media/'):
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
-                client=StudioClient()
+                client=StudioClient(allow_job_inheritance=True)
                 try:
                     if self.path.startswith('/gallery/media/'):
                         job_id=self.path[15:];job=client.get_job(job_id)
@@ -172,7 +172,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
             if self.path.startswith('/gallery/items/'):
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
-                client=StudioClient()
+                client=StudioClient(allow_job_inheritance=True)
                 try:
                     length=int(self.headers.get('Content-Length','0'))
                     if not 0<length<=1024:raise ValueError()
@@ -208,7 +208,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     if not isinstance(data,dict):raise ValueError('配置格式有误')
                     if keep_alive_minutes is not None and 'keep_alive_minutes' not in data:data['keep_alive_minutes']=keep_alive_minutes
                     if acceleration is not None and 'acceleration' not in data:data['acceleration']=acceleration
-                    candidate=SharedBackend(dict(data,mode=data.get('mode','batch')),activate=False) if shared_mode else make_backend(data)
+                    candidate=SharedBackend(dict(data,mode=data.get('mode','batch')),client=StudioClient(allow_job_inheritance=True),activate=False) if shared_mode else make_backend(data)
                     if not generation_lock.acquire(blocking=False):return self.send(409,{'error':{'message':'正在生成，请结束后再修改配置'}})
                     try:
                         if isinstance(candidate,SharedBackend):

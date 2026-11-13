@@ -18,6 +18,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import requests
+import importlib.util
+# Pillow and numpy exist on Kaggle and in ComfyUI, not in the local client.
+HAS_PIL=importlib.util.find_spec('PIL') is not None
+HAS_NUMPY=importlib.util.find_spec('numpy') is not None
 
 from easy_gateway import create_server
 from media_inputs import decode_image,digest,png_size
@@ -159,6 +163,7 @@ class QueueTests(unittest.TestCase):
 
 
 class RemoteCodeTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_PIL,'Pillow is only installed on the GPU kernel')
     def test_generation_cell_crops_inputs_and_passes_only_needed_options(self):
         from PIL import Image
         seen=[]
@@ -240,6 +245,7 @@ class RemoteCodeTests(unittest.TestCase):
         self.assertEqual((edit.unet,edit.text_encoder,edit.text_encoder_2),('u','e1','e2'))
         self.assertNotIn('width',call);self.assertEqual((call['image'],call['strength']),('I',0.5))
 
+    @unittest.skipUnless(HAS_PIL,'Pillow is only installed on the GPU kernel')
     def test_video_first_frame_and_image_pipeline_view(self):
         from PIL import Image
         built={}
@@ -308,6 +314,7 @@ if __name__=='__main__':unittest.main()
 
 
 class ComfyNodeTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_PIL and HAS_NUMPY,'ComfyUI supplies Pillow and numpy')
     def test_tensors_become_png_inputs_and_edit_node_forwards_options(self):
         """Load the custom-node package with a stub torch (ComfyUI supplies the real one)."""
         import importlib.util

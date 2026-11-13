@@ -18,6 +18,20 @@ else:
     from model_registry import DEFAULT_MODEL,model_profile,MODEL_SOURCES
 
 
+# A failed cell leaves its traceback in sys.last_* and IPython's traceback
+# formatter. Those frames still reference GPU tensors (or a whole model), so
+# later loads run out of memory. Drop them before freeing GPU memory.
+RELEASE_FAILURE_CODE = '''
+import sys as _cc_sys
+for _cc_name in ('last_type', 'last_value', 'last_traceback', 'last_exc'):
+    if getattr(_cc_sys, _cc_name, None) is not None: setattr(_cc_sys, _cc_name, None)
+try:
+    _cc_shell_tb = getattr(get_ipython(), 'InteractiveTB', None)
+    if _cc_shell_tb is not None and getattr(_cc_shell_tb, 'tb', None) is not None: _cc_shell_tb.tb = None
+except NameError: pass
+'''
+
+
 def model_switch_code(model_id):
     model_profile(model_id)
     return f"""
@@ -29,8 +43,9 @@ if _CC_PREVIOUS_MODEL != _CC_REQUESTED_MODEL:
     # Do not retain aliases to an old pipeline or its GPU modules during collection.
     if globals().get('_CC_VIDEO_PROCESS') is not None:globals()['_CC_VIDEO_PROCESS'].close()
     if globals().get('_CC_VIDEO_RUNTIME') is not None:globals()['_CC_VIDEO_RUNTIME'].close()
-    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_CC_VIDEO_RUNTIME','_CC_VIDEO_PROCESS','_value','_module','_decoded'):
+    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_CC_VIDEO_RUNTIME','_CC_VIDEO_PROCESS','_CC_TASK_PIPES','_value','_module','_decoded'):
         globals().pop(_cc_key,None)
+    exec(compile({RELEASE_FAILURE_CODE!r},'<cc-release-failure>','exec'),globals())
     import gc
     gc.collect()
     try:
@@ -174,7 +189,23 @@ def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, heig
         "_cc_extra = dict(args['extra'])\n"
         "if 'image' in args: _cc_extra['image'] = _cc_fit(args['image'], 'RGB')\n"
         "if 'mask' in args: _cc_extra['mask'] = _cc_fit(args['mask'], 'L')\n"
-        "im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=_cc_size[0], height=_cc_size[1], **_cc_extra)\n"
+        # Free any earlier failure first; then report a failure of this call
+        # without keeping its frames (and their GPU tensors) alive.
+        "if getattr(__import__('sys'), 'last_traceback', None) is not None:\n"
+        "    exec(compile(" + repr(RELEASE_FAILURE_CODE) + ", '<cc-release-failure>', 'exec'), globals())\n"
+        "    import gc, torch; gc.collect(); torch.cuda.empty_cache()\n"
+        "_cc_failure = None\n"
+        "try:\n"
+        "    im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=_cc_size[0], height=_cc_size[1], **_cc_extra)\n"
+        "except Exception as _cc_error:\n"
+        "    import traceback\n"
+        "    _cc_failure = type(_cc_error).__name__ + ': ' + str(_cc_error)[:1500] + ' | ' + ''.join(traceback.format_tb(_cc_error.__traceback__)[-3:])[-1500:]\n"
+        "    traceback.clear_frames(_cc_error.__traceback__)\n"
+        "    del _cc_error\n"
+        "if _cc_failure is not None:\n"
+        "    _cc_extra.clear()\n"
+        "    import gc, torch; gc.collect(); torch.cuda.empty_cache()\n"
+        "    raise RuntimeError(_cc_failure)\n"
         "_COMFY_QWEN_STATE['generations'] += 1\n"
         "stats = dict(stats, model_id=globals().get('_CC_MODEL_ID','qwen-image-2.1'), runtime_id=_COMFY_QWEN_STATE['runtime_id'], "
         "model_load_count=_COMFY_QWEN_STATE['load_count'], "

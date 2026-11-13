@@ -33,6 +33,38 @@ else:
 load_stats={'copy_seconds':round(_assets_ready-started,2),'loading_seconds':round(time.perf_counter()-_assets_ready,2)}
 
 
+def _cc_vae_boundary(vae,offload):
+    """Wrap VAE encode/decode for one call; returns a function that restores them.
+
+    Inputs are cast to the VAE's dtype: the Z-Image edit pipelines pass the image
+    in the prompt dtype (fp16) while this runtime keeps the VAE in fp32. With
+    `offload`, the VAE runs on GPU 1 for large sizes, because GPU 0 holds the
+    transformer and has no room for fp32 activations at 1024."""
+    names=('encode','decode')
+    originals={name:getattr(vae,name) for name in names}
+    home=next(vae.parameters()).device
+    def wrap(name):
+        original=originals[name]
+        def call(x,*args,**kwargs):
+            if not offload:return original(x.to(dtype=vae.dtype),*args,**kwargs)
+            vae.to('cuda:1')
+            try:output=original(x.to(device='cuda:1',dtype=vae.dtype),*args,**kwargs)
+            finally:
+                vae.to(home);torch.cuda.empty_cache()
+            if name=='decode':return output  # decoded pixels are post-processed on any device
+            # Latents feed the sampler on GPU 0: move the distribution back.
+            from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+            from diffusers.models.modeling_outputs import AutoencoderKLOutput
+            wrapped=hasattr(output,'latent_dist')
+            moved=DiagonalGaussianDistribution((output.latent_dist if wrapped else output[0]).parameters.to(home))
+            return AutoencoderKLOutput(latent_dist=moved) if wrapped else (moved,)
+        return call
+    for name in names:setattr(vae,name,wrap(name))
+    def restore():
+        for name in names:vae.__dict__.pop(name,None)
+    return restore
+
+
 def _cc_task_pipeline(task):
     """Image-to-image and inpainting pipelines share the loaded modules.
 
@@ -96,10 +128,16 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=None,task='text',im
     elif task=='inpaint':kwargs.update(image=image,mask_image=mask,strength=strength)
     if not (task=='img2img' and _CC_MODEL_ID=='sdxl-lightning'):kwargs.update(width=width,height=height)
     target.register_modules(**{name:None for name in encoders})
+    restore_vae=None
+    if _CC_MODEL_ID=='z-image-turbo' and (task!='text' or width*height>512*512):
+        # 512 text-to-image keeps the original single-GPU path unchanged.
+        restore_vae=_cc_vae_boundary(pipe.vae,offload=width*height>512*512)
     try:
         result=target(num_inference_steps=steps,
             generator=torch.Generator(device='cuda:0').manual_seed(seed),callback_on_step_end=record_step,**kwargs).images[0]
-    finally:target.register_modules(**encoders)
+    finally:
+        target.register_modules(**encoders)
+        if restore_vae:restore_vae()
     if final and not torch.isfinite(final[0]).all().item():raise RuntimeError('Sampling produced non-finite latents')
     if tuple(result.size)!=(width,height):result=result.resize((width,height))
     after=torch.cuda.Event(enable_timing=True);after.record(torch.cuda.current_stream(0));torch.cuda.synchronize(0)

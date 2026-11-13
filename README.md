@@ -6,7 +6,7 @@
 
 本分支提供 [视频功能预览](docs/video.md)：三档模型、MP4 播放与下载，以及 GUI、MCP、ComfyUI 和 Kaggle Notebook 入口。
 
-新增 [图片编辑、尺寸与批量预览](docs/editing.md)：图生图、涂抹局部编辑、图生视频、7 种尺寸、负面提示词，以及 GUI 批量生成与 ZIP 打包。
+0.10.0 新增 [图片编辑、尺寸与批量预览](docs/editing.md)（[更新记录](CHANGELOG.md)）：图生图、涂抹局部编辑、图生视频、7 种尺寸、负面提示词，以及 GUI 批量生成与 ZIP 打包。
 
 使用自己的 Kaggle GPU 额度生成图片。双击启动器，填写 Kaggle 用户名和 API Key，即可在本机界面创作；模型下载、加载和推理都在云端完成。
 

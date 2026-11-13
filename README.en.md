@@ -6,7 +6,7 @@
 
 This branch includes a [video preview](docs/video.md): three model tiers, MP4 playback/download, and GUI, MCP, ComfyUI and Kaggle notebook entry points.
 
-New: an [image editing, sizes and batches preview](docs/editing.md) with image-to-image, inpainting, image-to-video, seven sizes, negative prompts, and GUI batches with ZIP export.
+New in 0.10.0 ([changelog](CHANGELOG.md)): an [image editing, sizes and batches preview](docs/editing.md) with image-to-image, inpainting, image-to-video, seven sizes, negative prompts, and GUI batches with ZIP export.
 
 Generate images with your own Kaggle GPU quota. Start the launcher, enter your Kaggle username and API key, and create in a lightweight local interface. Model downloads, loading, and inference run in the cloud.
 

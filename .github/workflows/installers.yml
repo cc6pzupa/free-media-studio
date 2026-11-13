@@ -94,12 +94,12 @@ jobs:
           architecture=arm64
           if [ '${{ matrix.target }}' = 'macos-intel' ]; then architecture=x86_64; fi
           lipo 'dist/CC Media Studio.app/Contents/MacOS/cc-media-studio' -verify_arch "$architecture"
-          productbuild --component 'dist/CC Media Studio.app' /Applications 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.pkg'
-          pkgutil --payload-files 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.pkg' > build/pkg-contents.txt
+          productbuild --component 'dist/CC Media Studio.app' /Applications 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.pkg'
+          pkgutil --payload-files 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.pkg' > build/pkg-contents.txt
           cp -R 'dist/CC Media Studio.app' build/dmg/
           ln -s /Applications build/dmg/Applications
-          hdiutil create -volname 'CC Media Studio' -srcfolder build/dmg -ov -format UDZO 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.dmg'
-          hdiutil verify 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.dmg'
+          hdiutil create -volname 'CC Media Studio' -srcfolder build/dmg -ov -format UDZO 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.dmg'
+          hdiutil verify 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.dmg'
       - name: Linux deb and rpm installers
         if: runner.os == 'Linux'
         shell: bash

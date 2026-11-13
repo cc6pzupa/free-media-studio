@@ -56,6 +56,14 @@ try:
     import torch
     info['torch_allocated_gib']=[round(torch.cuda.memory_allocated(i)/2**30,2) for i in range(torch.cuda.device_count())]
 except Exception as error:info['torch']=repr(error)
+try:
+    import shutil
+    from pathlib import Path
+    info['kaggle_temp_free_gib']=round(shutil.disk_usage('/kaggle/temp').free/2**30,1)
+    roots=[Path('/kaggle/temp/cc-media-models'),Path('/kaggle/temp/cc-media-video')]
+    folders=[f for root in roots if root.is_dir() for f in root.iterdir()]+[Path('/kaggle/temp/qwen-image-assets')]
+    info['model_folders_gib']={str(f):round(sum(x.stat().st_size for x in f.rglob('*') if x.is_file())/2**30,1) for f in folders if f.is_dir()}
+except Exception as error:info['disk']=repr(error)
 try:info['nvidia_smi_used_mib']=subprocess.run(['nvidia-smi','--query-gpu=memory.used','--format=csv,noheader,nounits'],capture_output=True,text=True,timeout=30).stdout.split()
 except Exception as error:info['nvidia_smi']=repr(error)
 print('CC_PROBE:'+json.dumps(info),flush=True)
@@ -76,11 +84,11 @@ def probe(backend):
     finally:transport.close()
 
 
-def run(user,token,output,only=None,diagnose=True):
+def run(user,token,output,only=None,diagnose=True,source=None):
     from account_backend import AccountBackend
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     backend=AccountBackend(user,token,cache_dir=output/'sessions')
-    reports=[];source=None;last=[0.0]
+    reports=[];last=[0.0]
     def progress(name):
         def report(event):
             now=time.monotonic()
@@ -131,7 +139,9 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--output',default='gpu-check-results')
     parser.add_argument('--only',nargs='*',help='Run only these case names')
+    parser.add_argument('--source',type=Path,help='PNG used as reference image instead of the first text result')
     args=parser.parse_args()
-    reports=run(os.environ['KAGGLE_USERNAME'],os.environ.get('KAGGLE_API_TOKEN') or os.environ['KAGGLE_KEY'],args.output,args.only)
+    reports=run(os.environ['KAGGLE_USERNAME'],os.environ.get('KAGGLE_API_TOKEN') or os.environ['KAGGLE_KEY'],args.output,args.only,
+        source=args.source.read_bytes() if args.source else None)
     print('GPU_CHECK_FINISHED %d/%d passed'%(sum(r['ok'] for r in reports),len(reports)),flush=True)
     raise SystemExit(0 if all(r['ok'] for r in reports) else 1)

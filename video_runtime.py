@@ -169,6 +169,12 @@ class VideoRuntime:
             self.emit('decoding')
             return original_decode(*args,**kwargs)
         self.pipe.vae.decode=decode
+        original_encode=self.pipe.vae.encode
+        if first is not None and p['family']=='ltx':
+            # LTXImageToVideoPipeline passes the first frame in the prompt dtype
+            # (fp16) while this runtime keeps the VAE in fp32.
+            vae=self.pipe.vae
+            self.pipe.vae.encode=lambda x,*args,**kwargs:original_encode(x.to(dtype=vae.dtype),*args,**kwargs)
         try:
             if first is not None and strategy!='cfg_parallel':
                 # LTX context parallelism is text-to-video only; image-to-video
@@ -233,6 +239,7 @@ class VideoRuntime:
                 result=self.pipe(**kwargs)
         finally:
             self.pipe.vae.decode=original_decode
+            self.pipe.vae.__dict__.pop('encode',None)
             self.pipe.register_modules(text_encoder=self.encoder)
             if target is not self.pipe:target.register_modules(text_encoder=self.encoder)
         torch.cuda.synchronize();sampling_seconds=time.perf_counter()-sampling

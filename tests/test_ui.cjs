@@ -114,3 +114,47 @@ test('completed image shows actual dual strategy and model transfer timing',asyn
     assert.match(p.elements.get('resultMeta').textContent,/CFG 双卡并行/);
     assert.match(p.elements.get('status').textContent,/迁移 13/);
 });
+
+test('batch submits one task per prompt line and count with incrementing seeds',async()=>{
+    const calls=[];let serial=0;
+    const p=page(async(url,options)=>{
+        calls.push([url,options]);
+        if(url==='/configuration')return config(null);
+        if(url==='/jobs')return response({job_id:String(serial++).padStart(32,'0')});
+        return complete();
+    });
+    for(let i=0;i<5;i++)await tick();
+    p.elements.set('prompt',{value:'fox\n\n cat ',style:{}});
+    p.elements.set('promptList',{checked:true,style:{}});
+    p.elements.set('batchCount',{value:'2',style:{}});
+    p.elements.set('seed',{value:'10',style:{}});
+    p.elements.set('sizeChoice',{value:'768x512',style:{}});
+    await p.elements.get('generate').onclick();
+    for(let i=0;i<20;i++)await tick();
+    const posted=calls.filter(([url])=>url==='/jobs').map(c=>JSON.parse(c[1].body));
+    assert.deepEqual(posted.map(b=>[b.prompt,b.seed]),[['fox',10],['fox',11],['cat',12],['cat',13]]);
+    assert.ok(posted.every(b=>b.size==='768x512'&&/^gui-[a-z0-9]+-[a-z0-9]+-\d$/.test(b.request_id)));
+    assert.equal(new Set(posted.map(b=>b.request_id)).size,4);
+    assert.equal(calls.filter(([url])=>url.startsWith('/jobs/')).length,4);
+    assert.equal(p.storage.size,0);
+    assert.equal(p.elements.get('downloadZip').disabled,false);
+    assert.match(p.elements.get('batchSummary').textContent,/4 \/ 4/);
+});
+
+test('editing requires an uploaded image and switches away from Qwen',async()=>{
+    const calls=[];
+    const p=page(async(url,options)=>{calls.push(url);return url==='/configuration'?config(null):response({job_id:'x'})});
+    for(let i=0;i<5;i++)await tick();
+    p.elements.get('modelChoice').value='qwen-image-2.1';
+    p.elements.get('taskMode').value='inpaint';p.elements.get('taskMode').onchange();
+    assert.equal(p.elements.get('modelChoice').value,'z-image-turbo');
+    assert.equal(p.elements.get('strength').value,'0.9');
+    assert.equal(p.elements.get('negativeFields').style.display,'none');
+    p.elements.set('prompt',{value:'hat',style:{}});
+    await p.elements.get('generate').onclick();
+    assert.deepEqual(calls,['/configuration']);
+    assert.match(p.elements.get('status').textContent,/参考图/);
+    p.elements.get('modelChoice').value='qwen-image-2.1';p.elements.get('modelChoice').onchange();
+    assert.equal(p.elements.get('taskMode').value,'text');
+    assert.equal(p.elements.get('negativeFields').style.display,'block');
+});

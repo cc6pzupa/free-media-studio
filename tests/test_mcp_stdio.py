@@ -153,6 +153,26 @@ class MCPStdioTest(unittest.TestCase):
                         self.assertTrue(video.structured_content['path'].endswith('.mp4'))
                         self.assertNotIn('KGAT_fixture_secret',json.dumps(video.model_dump()))
                 asyncio.run(video_roundtrip())
+                async def edit_roundtrip():
+                    source=Path(config_path).parent/'source.png'
+                    from tests.fixtures.fake_worker import png
+                    source.write_bytes(png(16,16))
+                    async with Client(self.parameters(config_path)) as client:
+                        submitted=await client.call_tool('generate_image',{'prompt':'hat','request_id':'mcp-edit','model_id':'z-image-turbo',
+                            'size':'768x512','task':'img2img','strength':0.5,'image_path':str(source)})
+                        self.assertFalse(submitted.is_error,submitted)
+                        selected=submitted.structured_content['job_id']
+                        for _ in range(60):
+                            result=await client.call_tool('get_job',{'job_id':selected})
+                            if result.structured_content['state']=='complete':break
+                            await asyncio.sleep(.1)
+                        image=await client.call_tool('get_image',{'job_id':selected})
+                        self.assertEqual((image.structured_content['width'],image.structured_content['height']),(768,512))
+                        self.assertEqual(image.structured_content['usage']['task'],'img2img')
+                        missing=await client.call_tool('generate_image',{'prompt':'hat','request_id':'mcp-missing','model_id':'z-image-turbo',
+                            'task':'img2img','image_path':str(source)+'.absent'})
+                        self.assertTrue(missing.is_error)
+                asyncio.run(edit_roundtrip())
             finally:
                 if thread.is_alive():gui.shutdown();thread.join();gui.server_close()
                 stop_worker(service,process)

@@ -80,3 +80,21 @@ test('lost submission response survives refresh and resumes the same request',as
  assert.equal(next.elements.get('status').textContent,'Video ready');assert.match(next.elements.get('meta').textContent,/Model reused/);
  assert.doesNotMatch(next.elements.get('meta').textContent,/undefined/);
 });
+test('negative prompt is offered and sent only for CFG video models',async()=>{
+ const payloads=[];
+ const withCfg=[{...models[0],guidance:5},{...models[1],guidance:1,image_to_video:true}];
+ const p=page(async(url,options)=>{
+  if(url==='/video/models')return response({models:withCfg});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({job_id:'a'.repeat(32)})}
+  return response({state:'running',phase:'queued'});
+ });
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('negativeFields').hidden,false);
+ assert.match(p.elements.get('frameHint').textContent,/只支持文生视频/);
+ for(const [id,value] of [['prompt','wave'],['seed','1'],['frames','33'],['negative','blur']])p.elements.get(id).value=value;
+ await p.elements.get('generate').onclick();
+ assert.equal(payloads[0].negative_prompt,'blur');assert.equal(payloads[0].image,undefined);
+ p.elements.get('model').value='ltx-video-2b-distilled';p.elements.get('model').onchange();
+ assert.equal(p.elements.get('negativeFields').hidden,true);
+ assert.match(p.elements.get('frameHint').textContent,/居中裁剪为 768 × 448/);
+});

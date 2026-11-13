@@ -100,11 +100,13 @@ def make_backend(config):
     return BatchBackend(config['user'], config['dataset'], config['token'],acceleration=config['acceleration'])
 
 
-def validate_generation(prompt, seed, steps, model_id=None):
+def validate_generation(prompt, seed, steps, model_id=None, size=None, negative_prompt=None, task=None, strength=None, image=None, mask=None):
+    """Validate one image request. `image` and `mask` are passed through as
+    given (stored input digests in the queue, bytes on the backend)."""
     if __package__:
-        from .model_registry import model_profile,model_steps,DEFAULT_MODEL
+        from .model_registry import model_profile,model_steps,image_options,DEFAULT_MODEL
     else:
-        from model_registry import model_profile,model_steps,DEFAULT_MODEL
+        from model_registry import model_profile,model_steps,image_options,DEFAULT_MODEL
     model_id=model_profile(model_id)["id"];steps=model_steps(model_id,steps)
     if not isinstance(prompt,str) or not prompt.strip() or not 1 <= len(prompt) <= 4000:
         raise ValueError('提示词需要 1–4000 个字符。')
@@ -114,7 +116,14 @@ def validate_generation(prompt, seed, steps, model_id=None):
         raise ValueError('steps 需要为 1–50 的整数。')
     result={'prompt':prompt,'seed':seed,'steps':steps}
     if model_id!=DEFAULT_MODEL:result['model_id']=model_id
+    result.update(image_options(model_id,steps,size,negative_prompt,task,strength,bool(image),bool(mask)))
+    if result.get('task') in ('img2img','inpaint'):result['image']=image
+    if result.get('task')=='inpaint':result['mask']=mask
     return result
+
+
+def output_size(params):
+    return params.get('width',512),params.get('height',512)
 
 
 # Explicit allow-lists keep transport addresses, credentials and exception text
@@ -123,7 +132,8 @@ STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width'
     'steps','seed','peak_gpu_gib','runtime_id','model_load_count','model_reused',
     'generation_number','asset_source','cache_status','backend','model_id','denoising_seconds','decode_seconds',
     'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy','total_generation_seconds','migration_seconds','replica_load_seconds',
-    'dual_model_reused','acceleration_mode','acceleration_fallback','media_type','frames','fps','loading_seconds','cfg_pairs'}
+    'dual_model_reused','acceleration_mode','acceleration_fallback','media_type','frames','fps','loading_seconds','cfg_pairs',
+    'task','strength','image_to_video'}
 PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
@@ -150,6 +160,9 @@ class JobStore:
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.outputs = self.directory/'images'
         self.outputs.mkdir(exist_ok=True, mode=0o700)
+        # Uploaded reference images and masks, content-addressed by SHA-256.
+        self.inputs = self.directory/'inputs'
+        self.inputs.mkdir(exist_ok=True, mode=0o700)
         self.lock = threading.RLock()
         self.db = sqlite3.connect(self.directory/'jobs.sqlite3', check_same_thread=False)
         os.chmod(self.directory/'jobs.sqlite3', 0o600)
@@ -242,6 +255,27 @@ class JobStore:
                 (config_hash,) if config_hash else ()).fetchone()
             return json.loads(row[0]) if row else None
 
+    def save_input(self, raw):
+        from media_inputs import decode_image,digest
+        raw=decode_image(raw);name=digest(raw)
+        path=self.inputs/name
+        if not path.is_file():private_write(path,raw)
+        return name
+
+    def read_input(self, name):
+        from media_inputs import is_digest
+        if not is_digest(name):raise ValueError('输入图片引用无效。')
+        try:return (self.inputs/name).read_bytes()
+        except FileNotFoundError:raise ValueError('输入图片已不存在，请重新上传。') from None
+
+    def _release_inputs(self, params):
+        # Inputs are shared by content. Keep one while any visible job uses it.
+        from media_inputs import is_digest
+        for name in (params.get('image'),params.get('mask')):
+            if not is_digest(name):continue
+            used=self.db.execute("SELECT COUNT(*) FROM jobs WHERE hidden=0 AND instr(params,?)>0",(name,)).fetchone()[0]
+            if not used:(self.inputs/name).unlink(missing_ok=True)
+
     def image(self, job_id):
         job=self.get(job_id)
         if job['media_type']!='image':raise ValueError('该任务是视频，请使用视频接口。')
@@ -290,6 +324,8 @@ class JobStore:
                 path=self.outputs/(job_id+('.mp4' if job['media_type']=='video' else '.png'))
                 path.unlink(missing_ok=True)
                 self.db.execute('UPDATE jobs SET hidden=1 WHERE id=?',(job_id,))
+                row=self.db.execute('SELECT params FROM jobs WHERE id=?',(job_id,)).fetchone()
+                self._release_inputs(json.loads(row[0]))
             else:raise ValueError('无效的画廊操作。')
             self.db.commit()
             return {'ok':True}
@@ -369,10 +405,20 @@ class StudioCore:
                 'model_state':'released' if self.session_state=='released' else ('last_request_ready' if last_usage else 'not_checked'),
                 'message':'模型状态以最近一次生图为准；查询状态不会申请 GPU。'}
 
-    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
-        params=validate_generation(prompt,seed,steps,model_id)
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None,size=None,negative_prompt=None,task=None,strength=None,image=None,mask=None):
+        # Validate before storing any upload, then replace bytes with digests.
+        if __package__:
+            from .media_inputs import decode_image
+        else:
+            from media_inputs import decode_image
+        image=decode_image(image,'参考图') if image not in (None,'') else None
+        mask=decode_image(mask,'蒙版') if mask not in (None,'') else None
+        params=validate_generation(prompt,seed,steps,model_id,size,negative_prompt,task,strength,image,mask)
+        if 'image' in params:params['image']=self.store.save_input(image)
+        if 'mask' in params:params['mask']=self.store.save_input(mask)
+        extended=set(params)-{'prompt','seed','steps','model_id'}
         with self.lock:
-            if model_id not in (None,'qwen-image-2.1') and (self.config or {}).get('mode')!='account':raise ValueError('新增模型请使用自动账号模式。')
+            if (model_id not in (None,'qwen-image-2.1') or extended) and (self.config or {}).get('mode')!='account':raise ValueError('新增模型、尺寸、负面提示词与图片编辑请使用自动账号模式。')
             if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
             if not self.backend:raise ValueError('先在 GUI 保存账号配置，或设置 KAGGLE_USERNAME 与 KAGGLE_API_TOKEN。')
             job,reused=self.store.submit(params,self.fingerprint,request_id or secrets.token_hex(16))
@@ -385,9 +431,12 @@ class StudioCore:
             return None
         return max(0,math.ceil(minutes*60-(time.monotonic()-self.idle_since)))
 
-    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None):
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None):
         from video_registry import validate_video
-        params=dict(validate_video(prompt,seed,steps,model_id,frames),media_type='video')
+        from media_inputs import decode_image
+        image=decode_image(image,'首帧图片') if image not in (None,'') else None
+        params=dict(validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt),media_type='video')
+        if 'image' in params:params['image']=self.store.save_input(image)
         with self.lock:
             if not self.backend or (self.config or {}).get('mode')!='account':
                 raise ValueError('视频需要自动账号模式。')
@@ -461,6 +510,9 @@ class StudioCore:
             try:
                 params=json.loads(row['params'])
                 video=params.pop('media_type',None)=='video'
+                expected=output_size(params)
+                for name in ('image','mask'):
+                    if name in params:params[name]=self.store.read_input(params[name])
                 if video:
                     raw,stats=backend.generate_video_with_progress(**params,progress=lambda event:self._progress(job_id,event))
                 elif callable(getattr(backend,'generate_with_progress',None)):
@@ -468,7 +520,7 @@ class StudioCore:
                 else:
                     raw,stats=backend.generate(**params)
                 if video and (len(raw)<12 or raw[4:8]!=b'ftyp'):raise ValueError('Invalid MP4 result')
-                if not video and (not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)<24 or struct.unpack('>II',raw[16:24])!=(512,512)):
+                if not video and (not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)<24 or struct.unpack('>II',raw[16:24])!=expected):
                     raise ValueError('Invalid image result')
                 clean_stats={key:value for key,value in stats.items() if key in STAT_FIELDS}
                 private_write(self.store.outputs/(job_id+('.mp4' if video else '.png')),raw)

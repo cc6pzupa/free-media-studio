@@ -33,10 +33,38 @@ else:
 load_stats={'copy_seconds':round(_assets_ready-started,2),'loading_seconds':round(time.perf_counter()-_assets_ready,2)}
 
 
+def _cc_task_pipeline(task):
+    """Image-to-image and inpainting pipelines share the loaded modules.
+
+    No weights are loaded or copied: each pipeline only references the text
+    encoders, transformer/UNet, VAE and scheduler already on the GPUs."""
+    if task=='text':return pipe
+    cache=globals().setdefault('_CC_TASK_PIPES',{})
+    key=(task,id(pipe))
+    if key not in cache:
+        cache.clear()
+        if _CC_MODEL_ID=='z-image-turbo':
+            from diffusers import ZImageImg2ImgPipeline,ZImageInpaintPipeline
+            kind=ZImageImg2ImgPipeline if task=='img2img' else ZImageInpaintPipeline
+            cache[key]=kind(scheduler=pipe.scheduler,vae=pipe.vae,text_encoder=encoder,
+                tokenizer=pipe.tokenizer,transformer=pipe.transformer)
+        else:
+            from diffusers import StableDiffusionXLImg2ImgPipeline,StableDiffusionXLInpaintPipeline
+            kind=StableDiffusionXLImg2ImgPipeline if task=='img2img' else StableDiffusionXLInpaintPipeline
+            cache[key]=kind(vae=pipe.vae,text_encoder=pipe.text_encoder,text_encoder_2=pipe.text_encoder_2,
+                tokenizer=pipe.tokenizer,tokenizer_2=pipe.tokenizer_2,unet=pipe.unet,scheduler=pipe.scheduler,
+                add_watermarker=False)
+    return cache[key]
+
+
 @torch.inference_mode()
-def generate_image(prompt,seed=42,width=512,height=512,steps=None):
+def generate_image(prompt,seed=42,width=512,height=512,steps=None,task='text',image=None,mask=None,strength=None):
     steps=_CC_MODEL_PROFILE['default_steps'] if steps is None else steps
     if _CC_MODEL_ID=='sdxl-lightning' and steps!=4:raise ValueError('SDXL-Lightning requires 4 steps')
+    if task not in ('text','img2img','inpaint'):raise ValueError('Unknown image task')
+    if task!='text' and (image is None or strength is None or (task=='inpaint' and mask is None)):
+        raise ValueError('Image editing requires an image, strength and, for inpainting, a mask')
+    target=_cc_task_pipeline(task)
     for i in range(2):torch.cuda.reset_peak_memory_stats(i)
     started=time.perf_counter();encoding_seconds=0
     if _CC_MODEL_ID=='z-image-turbo':
@@ -50,10 +78,13 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=None):
     embeds=kwargs['prompt_embeds'] if isinstance(kwargs['prompt_embeds'],list) else [kwargs['prompt_embeds'],kwargs['pooled_prompt_embeds']]
     if any(not torch.isfinite(value).all().item() for value in embeds):raise RuntimeError('Text encoder produced non-finite embeddings')
     # Explicit denoising/decode timing; CUDA events avoid synchronizing every step.
-    timings=[]
+    timings=[];final=[]
     def record_step(pipeline,index,timestep,callback_kwargs):
-        if index==steps-1 and not torch.isfinite(callback_kwargs['latents']).all().item():
+        # Editing runs only the last `strength` share of the schedule, so the
+        # final index is not known in advance; keep the latest latents instead.
+        if task=='text' and index==steps-1 and not torch.isfinite(callback_kwargs['latents']).all().item():
             raise RuntimeError('Sampling produced non-finite latents')
+        if task!='text':final[:]=[callback_kwargs['latents']]
         event=torch.cuda.Event(enable_timing=True);event.record(torch.cuda.current_stream(0));timings.append(event)
         return callback_kwargs
     before=torch.cuda.Event(enable_timing=True);before.record(torch.cuda.current_stream(0))
@@ -61,11 +92,16 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=None):
     # chooses its execution device, then restore them for the next request.
     encoders={'text_encoder':encoder}
     if _CC_MODEL_ID=='sdxl-lightning':encoders['text_encoder_2']=pipe.text_encoder_2
-    pipe.register_modules(**{name:None for name in encoders})
+    if task=='img2img':kwargs.update(image=image,strength=strength)
+    elif task=='inpaint':kwargs.update(image=image,mask_image=mask,strength=strength)
+    if not (task=='img2img' and _CC_MODEL_ID=='sdxl-lightning'):kwargs.update(width=width,height=height)
+    target.register_modules(**{name:None for name in encoders})
     try:
-        result=pipe(width=width,height=height,num_inference_steps=steps,
+        result=target(num_inference_steps=steps,
             generator=torch.Generator(device='cuda:0').manual_seed(seed),callback_on_step_end=record_step,**kwargs).images[0]
-    finally:pipe.register_modules(**encoders)
+    finally:target.register_modules(**encoders)
+    if final and not torch.isfinite(final[0]).all().item():raise RuntimeError('Sampling produced non-finite latents')
+    if tuple(result.size)!=(width,height):result=result.resize((width,height))
     after=torch.cuda.Event(enable_timing=True);after.record(torch.cuda.current_stream(0));torch.cuda.synchronize(0)
     denoise=before.elapsed_time(timings[-1])/1000 if timings else None
     decode=timings[-1].elapsed_time(after)/1000 if timings else None
@@ -75,5 +111,6 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=None):
         'decode_seconds':round(decode,3) if decode is not None else None,
         'denoising_steps':len(timings),'milliseconds_per_step':round(denoise*1000/len(timings),2) if timings else None,
         'attention_backend':'sdpa','parallel_strategy':'encoder_split','acceleration_mode':globals().get('_CC_ACCELERATION','auto'),
-        'width':width,'height':height,'steps':steps,'seed':seed,
+        'width':width,'height':height,'steps':steps,'seed':seed,'task':task,
+        **({'strength':strength} if task!='text' else {}),
         'peak_gpu_gib':[round(torch.cuda.max_memory_allocated(i)/2**30,2) for i in range(2)]}

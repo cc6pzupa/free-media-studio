@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 
 from studio_core import StudioCore, private_write, state_directory
+from media_inputs import MAX_REQUEST_BYTES
 
 from app_entry import VERSION
 
@@ -66,7 +67,7 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if urlsplit(self.path).path=='/history':
@@ -86,7 +87,9 @@ def create_worker_server(core, token, port=0):
             if not self.authorized():return
             try:
                 length=int(self.headers.get('Content-Length','0'))
-                if not 0<length<=65536:raise ValueError('请求过大或为空。')
+                # Job submissions may carry a reference image and mask.
+                limit=MAX_REQUEST_BYTES if self.path in ('/jobs','/video/jobs') else 65536
+                if not 0<length<=limit:raise ValueError('请求过大或为空。')
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict):raise ValueError('请求必须为 JSON 对象。')
                 if self.path=='/configure':
@@ -97,11 +100,13 @@ def create_worker_server(core, token, port=0):
                 if self.path.startswith('/history/'):
                     return self.send(200,core.store.edit_history(self.path[9:],body.get('action'),body.get('favorite')))
                 if self.path=='/jobs':
-                    job=core.submit(body.get('prompt'),body.get('seed',42),body.get('steps'),body.get('request_id'),body.get('model_id'))
+                    job=core.submit(body.get('prompt'),body.get('seed',42),body.get('steps'),body.get('request_id'),body.get('model_id'),
+                        body.get('size'),body.get('negative_prompt'),body.get('task'),body.get('strength'),body.get('image'),body.get('mask'))
                     return self.send(202,job)
                 if self.path=='/video/jobs':
                     job=core.submit_video(body.get('prompt'),body.get('seed',42),body.get('steps'),
-                        body.get('request_id'),body.get('model_id','wan21-t2v-1.3b'),body.get('frames'))
+                        body.get('request_id'),body.get('model_id','wan21-t2v-1.3b'),body.get('frames'),
+                        body.get('image'),body.get('negative_prompt'))
                     return self.send(202,job)
                 if self.path=='/shutdown':
                     with core.lock:

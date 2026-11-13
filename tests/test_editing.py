@@ -254,7 +254,6 @@ class RemoteCodeTests(unittest.TestCase):
         self.assertEqual((edit.unet,edit.text_encoder,edit.text_encoder_2),('u','e1','e2'))
         self.assertNotIn('width',call);self.assertEqual((call['image'],call['strength']),('I',0.5))
 
-    @unittest.skipUnless(HAS_PIL,'Pillow is only installed on the GPU kernel')
     def test_vae_boundary_casts_inputs_and_offloads_large_sizes(self):
         source=Path('remote_models.py').read_text(encoding='utf-8')
         helper=source[source.index('def _cc_vae_boundary'):source.index('def _cc_task_pipeline')]
@@ -306,6 +305,7 @@ class RemoteCodeTests(unittest.TestCase):
             exec(generation_code('fox',1,9,'z-image-turbo'),scope)
         self.assertIsNone(getattr(sys,'last_traceback',None))
 
+    @unittest.skipUnless(HAS_PIL,'Pillow is only installed on the GPU kernel')
     def test_video_first_frame_and_image_pipeline_view(self):
         from PIL import Image
         built={}

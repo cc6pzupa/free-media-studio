@@ -32,6 +32,20 @@ except NameError: pass
 '''
 
 
+# Free cached GPU memory on every device. Measured on Kaggle: after Qwen's
+# dual-GPU CFG, cuBLAS workspaces pinned a 9.3 GB segment on GPU 1 that
+# empty_cache() alone could not return, so video models then ran out of memory.
+FREE_GPU_CODE = '''
+import torch as _cc_torch
+try: _cc_torch._C._cuda_clearCublasWorkspaces()
+except Exception: pass
+try:
+    for _cc_device in range(_cc_torch.cuda.device_count()):
+        with _cc_torch.cuda.device(_cc_device): _cc_torch.cuda.empty_cache()
+except Exception: _cc_torch.cuda.empty_cache()
+'''
+
+
 def model_switch_code(model_id):
     model_profile(model_id)
     return f"""
@@ -48,9 +62,7 @@ if _CC_PREVIOUS_MODEL != _CC_REQUESTED_MODEL:
     exec(compile({RELEASE_FAILURE_CODE!r},'<cc-release-failure>','exec'),globals())
     import gc
     gc.collect()
-    try:
-        import torch
-        torch.cuda.empty_cache()
+    try:exec(compile({FREE_GPU_CODE!r},'<cc-free-gpu>','exec'),globals())
     except ImportError:pass
 _CC_MODEL_ID = _CC_REQUESTED_MODEL
 _CC_MANAGED_MODEL = True
@@ -193,7 +205,7 @@ def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, heig
         # without keeping its frames (and their GPU tensors) alive.
         "if getattr(__import__('sys'), 'last_traceback', None) is not None:\n"
         "    exec(compile(" + repr(RELEASE_FAILURE_CODE) + ", '<cc-release-failure>', 'exec'), globals())\n"
-        "    import gc, torch; gc.collect(); torch.cuda.empty_cache()\n"
+        "    import gc; gc.collect(); exec(compile(" + repr(FREE_GPU_CODE) + ", '<cc-free-gpu>', 'exec'), globals())\n"
         "_cc_failure = None\n"
         "try:\n"
         "    im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=_cc_size[0], height=_cc_size[1], **_cc_extra)\n"
@@ -204,7 +216,7 @@ def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, heig
         "    del _cc_error\n"
         "if _cc_failure is not None:\n"
         "    _cc_extra.clear()\n"
-        "    import gc, torch; gc.collect(); torch.cuda.empty_cache()\n"
+        "    import gc; gc.collect(); exec(compile(" + repr(FREE_GPU_CODE) + ", '<cc-free-gpu>', 'exec'), globals())\n"
         "    raise RuntimeError(_cc_failure)\n"
         "_COMFY_QWEN_STATE['generations'] += 1\n"
         "stats = dict(stats, model_id=globals().get('_CC_MODEL_ID','qwen-image-2.1'), runtime_id=_COMFY_QWEN_STATE['runtime_id'], "

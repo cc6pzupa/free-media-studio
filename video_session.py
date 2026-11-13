@@ -4,7 +4,7 @@ import json
 import threading
 from pathlib import Path
 from session_runtime import JupyterTransport,ModelSession
-from session_backend import RELEASE_FAILURE_CODE
+from session_backend import RELEASE_FAILURE_CODE,FREE_GPU_CODE
 from video_registry import video_profile,validate_video
 
 VIDEO_FILES=('asset_manager.py','cache_manager.py','video_precision.py','video_registry.py','video_assets.py',
@@ -34,7 +34,7 @@ if globals().get('_CC_VIDEO_PROCESS') is None:
     # An earlier failed image cell can still pin the image model through its traceback.
     exec(compile({RELEASE_FAILURE_CODE!r},'<cc-release-failure>','exec'),globals())
     gc.collect()
-    if 'torch' in sys.modules:sys.modules['torch'].cuda.empty_cache()
+    if 'torch' in sys.modules:exec(compile({FREE_GPU_CODE!r},'<cc-free-gpu>','exec'),globals())
     for _name,_source in _cc_video_sources.items():
         (_cc_video_modules/_name).write_text(_source,encoding='utf-8')
     if str(_cc_video_modules) not in sys.path:sys.path.insert(0,str(_cc_video_modules))

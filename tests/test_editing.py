@@ -451,3 +451,17 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(scope['task'].value,'text')
         scope['negative'].value='blurry';scope['size'].value='512x512';scope['run'](None)
         self.assertEqual(seen[-1]['negative_prompt'],'blurry');self.assertNotIn('task',seen[-1])
+
+
+class FreeGpuTests(unittest.TestCase):
+    def test_cublas_workspaces_are_cleared_before_each_device_cache(self):
+        from session_backend import FREE_GPU_CODE
+        calls=[]
+        class Device:
+            def __init__(self,index):self.index=index
+            def __enter__(self):calls.append(('device',self.index))
+            def __exit__(self,*a):pass
+        cuda=types.SimpleNamespace(device_count=lambda:2,device=Device,empty_cache=lambda:calls.append('empty'))
+        torch=types.SimpleNamespace(cuda=cuda,_C=types.SimpleNamespace(_cuda_clearCublasWorkspaces=lambda:calls.append('cublas')))
+        with patch.dict(sys.modules,{'torch':torch}):exec(FREE_GPU_CODE,{})
+        self.assertEqual(calls,['cublas',('device',0),'empty',('device',1),'empty'])

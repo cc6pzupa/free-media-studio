@@ -2,7 +2,7 @@
 import inspect
 import json
 from pathlib import Path
-from session_backend import bootstrap_code, generation_code, RELEASE_FAILURE_CODE
+from session_backend import bootstrap_code, generation_code, RELEASE_FAILURE_CODE, FREE_GPU_CODE
 from model_registry import MODELS
 
 
@@ -14,7 +14,7 @@ from IPython.display import display
 from PIL import Image
 
 '''+Path(__file__).with_name('model_registry.py').read_text(encoding='utf-8')+'''
-_BOOTSTRAPS = '''+repr(bootstraps)+'\nRELEASE_FAILURE_CODE = '+repr(RELEASE_FAILURE_CODE)+'\n'+inspect.getsource(generation_code)+'''
+_BOOTSTRAPS = '''+repr(bootstraps)+'\nRELEASE_FAILURE_CODE = '+repr(RELEASE_FAILURE_CODE)+'\nFREE_GPU_CODE = '+repr(FREE_GPU_CODE)+'\n'+inspect.getsource(generation_code)+'''
 model = widgets.Dropdown(options=[(p['name'],key) for key,p in MODELS.items()],value=DEFAULT_MODEL,description='Model / 模型',layout=widgets.Layout(width='95%'))
 prompt = widgets.Textarea(value='A small orange fox beside a ceramic teacup, soft morning window light, natural photography', description='Prompt / 提示词', layout=widgets.Layout(width='95%', height='110px'))
 steps = widgets.IntSlider(value=20,min=1,max=50,description='Steps / 步数')

@@ -20,5 +20,5 @@ cli=EXE(pyz,a.scripts,[],exclude_binaries=True,name='cc-media-cli',debug=False,s
 coll=COLLECT(exe,cli,a.binaries,a.datas,strip=False,upx=False,name='cc-media-studio')
 if sys.platform=='darwin':
     app=BUNDLE(coll,name='CC Media Studio.app',bundle_identifier='studio.ccmedia.desktop',
-        info_plist={'CFBundleExecutable':'cc-media-studio','CFBundleShortVersionString':'0.9.0','CFBundleVersion':'0.9.0',
+        info_plist={'CFBundleExecutable':'cc-media-studio','CFBundleShortVersionString':'0.10.0','CFBundleVersion':'0.10.0',
                     'NSHighResolutionCapable':True,'NSRequiresAquaSystemAppearance':False})

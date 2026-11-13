@@ -47,7 +47,36 @@ CASES=[
 ]
 
 
-def run(user,token,output,only=None):
+PROBE='''
+import sys,json,subprocess,traceback
+info={}
+if getattr(sys,'last_traceback',None) is not None:
+    info['traceback']=''.join(traceback.format_exception(sys.last_type,sys.last_value,sys.last_traceback))[-6000:]
+try:
+    import torch
+    info['torch_allocated_gib']=[round(torch.cuda.memory_allocated(i)/2**30,2) for i in range(torch.cuda.device_count())]
+except Exception as error:info['torch']=repr(error)
+try:info['nvidia_smi_used_mib']=subprocess.run(['nvidia-smi','--query-gpu=memory.used','--format=csv,noheader,nounits'],capture_output=True,text=True,timeout=30).stdout.split()
+except Exception as error:info['nvidia_smi']=repr(error)
+print('CC_PROBE:'+json.dumps(info),flush=True)
+'''
+
+
+def probe(backend):
+    """Attach to the session's kernel and report the last traceback and GPU memory."""
+    from session_runtime import JupyterTransport
+    url=backend._read().get('jupyter_url')
+    if not url:return {'probe':'no session'}
+    transport=JupyterTransport(url)
+    try:
+        transport.start()
+        line=[l for l in transport.execute(PROBE,timeout=120).splitlines() if l.startswith('CC_PROBE:')]
+        return json.loads(line[0][9:]) if line else {'probe':'no output'}
+    except Exception as error:return {'probe_error':type(error).__name__+': '+str(error)[:500]}
+    finally:transport.close()
+
+
+def run(user,token,output,only=None,diagnose=True):
     from account_backend import AccountBackend
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     backend=AccountBackend(user,token,cache_dir=output/'sessions')
@@ -88,6 +117,7 @@ def run(user,token,output,only=None):
                 cause=error.__context__
                 reports.append(dict(case=name,ok=False,wall_seconds=round(time.monotonic()-started,1),error=type(error).__name__+': '+str(error),
                     **({'remote_error':(type(cause).__name__+': '+str(cause))[:2000]} if cause is not None else {})))
+                if diagnose:reports[-1]['probe']=probe(backend)
             print('GPU_CHECK_RESULT '+json.dumps(reports[-1],ensure_ascii=False),flush=True)
             (output/'report.json').write_text(json.dumps(reports,indent=2,ensure_ascii=False),encoding='utf-8')
     finally:

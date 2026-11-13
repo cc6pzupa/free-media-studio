@@ -116,6 +116,16 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if self.path=='/gallery':
                 gallery=Path(__file__).with_name('gallery_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
                 return self.send(200,gallery.encode(),'text/html; charset=utf-8')
+            if self.path.startswith('/gallery/inputs/'):
+                if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient(allow_job_inheritance=True)
+                try:
+                    from media_inputs import image_kind
+                    raw=client.get_input(self.path[16:])
+                    return self.send(200,raw,'image/'+(image_kind(raw) or 'png'))
+                except (ValueError,StudioHTTPError):return self.send(404,{'error':{'message':'输入图片不存在。'}})
+                except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
+                finally:client.close()
             if urlsplit(self.path).path=='/gallery/items' or self.path.startswith('/gallery/media/'):
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
                 client=StudioClient(allow_job_inheritance=True)
@@ -130,7 +140,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
                 except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
                 finally:client.close()
-            if self.path=='/video':
+            if urlsplit(self.path).path=='/video':
                 video_page=Path(__file__).with_name('video_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
                 return self.send(200,video_page.encode(),'text/html; charset=utf-8')
             if self.path=='/video/models':
@@ -171,7 +181,8 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                         if active_job_id and backend.client.get_job(active_job_id).get('media_type')=='video':active_job_id=None
                     except RuntimeError:pass
                 return self.send(200,{'configured':backend is not None,'user':saved_user,'dataset':saved_dataset,'mode':getattr(backend,'mode','batch'),'remembered':config_path.is_file(),'acceleration':getattr(backend,'acceleration',acceleration or 'auto'),'keep_alive_minutes':getattr(backend,'keep_alive_minutes',keep_alive_minutes if keep_alive_minutes is not None else 15),'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key if backend else '', 'active_job_id':active_job_id})
-            if self.path=='/':return self.send(200,page.encode(),'text/html; charset=utf-8')
+            # Query strings carry gallery hand-offs such as /?edit=<job_id>.
+            if urlsplit(self.path).path=='/':return self.send(200,page.encode(),'text/html; charset=utf-8')
             if self.path in ('/kaggle_standalone.ipynb','/kaggle_video.ipynb'):
                 notebook=Path(__file__).with_name(self.path[1:])
                 if notebook.is_file():return self.send(200,notebook.read_bytes(),'application/x-ipynb+json')

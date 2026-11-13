@@ -303,6 +303,14 @@ class HttpTests(unittest.TestCase):
                     self.assertTrue(names[0].startswith('001-seed1-'));self.assertEqual(png_size(z.read(names[1])),(576,1024))
                 self.assertEqual(requests.post(base+'/gallery/zip',headers=headers,json={'job_ids':['../x']},timeout=5).status_code,400)
                 self.assertEqual(requests.post(base+'/gallery/zip',headers=headers,json={'job_ids':[]},timeout=5).status_code,400)
+                # Gallery hand-offs: pages accept query strings, inputs are readable with the UI session.
+                self.assertIn('text/html',requests.get(base+'/?edit='+ids[0],timeout=5).headers['Content-Type'])
+                self.assertIn('text/html',requests.get(base+'/video?frame='+ids[0],timeout=5).headers['Content-Type'])
+                self.assertEqual(requests.get(base+'/gallery/inputs/'+digest(SOURCE),timeout=5).status_code,401)
+                stored=requests.get(base+'/gallery/inputs/'+digest(SOURCE),headers=headers,timeout=5)
+                self.assertEqual((stored.content,stored.headers['Content-Type']),(SOURCE,'image/png'))
+                self.assertEqual(requests.get(base+'/gallery/inputs/'+'0'*64,headers=headers,timeout=5).status_code,404)
+                self.assertEqual(requests.get(base+'/gallery/inputs/../settings.json',headers=headers,timeout=5).status_code,404)
                 video=requests.post(base+'/video/jobs',headers=headers,json={'prompt':'wave','model_id':'wan21-t2v-1.3b','image':image},timeout=5)
                 self.assertEqual(video.status_code,400);self.assertIn('图生视频',video.json()['error']['message'])
             finally:

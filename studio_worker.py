@@ -74,6 +74,10 @@ def create_worker_server(core, token, port=0):
                     q=parse_qs(urlsplit(self.path).query)
                     return self.send(200,core.store.history(q.get('media_type',['all'])[0],q.get('query',[''])[0],
                         q.get('favorites',['0'])[0]=='1',int(q.get('limit',['24'])[0]),int(q.get('offset',['0'])[0])))
+                if self.path.startswith('/inputs/'):
+                    from media_inputs import image_kind
+                    raw=core.store.read_input(self.path[8:])
+                    return self.send(200,raw,'image/'+image_kind(raw))
                 if self.path.startswith('/jobs/'):
                     pieces=self.path.split('/')
                     if len(pieces)==3:return self.send(200,core.store.get(pieces[2]))

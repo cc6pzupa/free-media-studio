@@ -38,14 +38,15 @@ function setFrame(data){frameData=data;$('framePreview').hidden=!data;$('clearFr
 $('firstFrame').onchange=()=>{
  const file=$('firstFrame').files&&$('firstFrame').files[0];if(!file)return;
  const reader=new FileReader();
- reader.onload=()=>{const picture=new Image();picture.onload=()=>{
-  // Keep the saved resume payload small: the GPU crops to the model size.
-  const scale=Math.min(1,1024/Math.max(picture.naturalWidth,picture.naturalHeight)),canvas=document.createElement('canvas');
-  canvas.width=Math.max(1,Math.round(picture.naturalWidth*scale));canvas.height=Math.max(1,Math.round(picture.naturalHeight*scale));
-  canvas.getContext('2d').drawImage(picture,0,0,canvas.width,canvas.height);setFrame(canvas.toDataURL('image/jpeg',0.9).split(',')[1]);
- };picture.src=reader.result};
+ reader.onload=()=>{const picture=new Image();picture.onload=()=>loadFrame(picture);picture.src=reader.result};
  reader.readAsDataURL(file);
 };
+function loadFrame(picture){
+ // Keep the saved resume payload small: the GPU crops to the model size.
+ const scale=Math.min(1,1024/Math.max(picture.naturalWidth,picture.naturalHeight)),canvas=document.createElement('canvas');
+ canvas.width=Math.max(1,Math.round(picture.naturalWidth*scale));canvas.height=Math.max(1,Math.round(picture.naturalHeight*scale));
+ canvas.getContext('2d').drawImage(picture,0,0,canvas.width,canvas.height);setFrame(canvas.toDataURL('image/jpeg',0.9).split(',')[1]);
+}
 $('clearFrame').onclick=()=>{setFrame(null);$('firstFrame').value=''};
 function remember(id){active=id;save(key,id);controls()}
 function rememberPending(payload){pending=payload;save(pendingKey,payload?JSON.stringify(payload):null);controls()}
@@ -101,7 +102,18 @@ $('model').onchange=selectModel;$('lang').onchange=translate;controls();
   $('model').value='wan21-t2v-1.3b';selectModel();
   const saved=readSaved(key);if(saved&&/^[a-f0-9]{32}$/.test(saved)){active=saved;rememberPending(null)}
   else{try{const candidate=JSON.parse(readSaved(pendingKey));if(candidate&&typeof candidate.prompt==='string'&&typeof candidate.request_id==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(candidate.request_id)&&models.some(p=>p.id===candidate.model_id))restorePending(candidate);else save(pendingKey,null)}catch{save(pendingKey,null)}}
-  translate();if(active)await poll();
+  translate();
+  // Opened from the gallery's "Use as video first frame".
+  const frame=typeof location!=='undefined'?new URLSearchParams(location.search).get('frame'):null;
+  if(frame&&/^[a-f0-9]{32}$/.test(frame)&&!active&&!pending){
+   try{
+    const blob=await(await request('/gallery/media/'+frame)).blob(),url=URL.createObjectURL(blob),picture=new Image();
+    picture.onload=()=>{loadFrame(picture);URL.revokeObjectURL(url)};picture.src=url;
+    if(!models.find(x=>x.id===$('model').value)?.image_to_video){$('model').value='wan22-ti2v-5b';selectModel()}
+    history.replaceState(null,'','/video');
+   }catch(error){$('status').textContent=error.message}
+  }
+  if(active)await poll();
  }catch(error){$('status').textContent=error.message;controls()}
 })();
 </script></body></html>

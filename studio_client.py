@@ -169,6 +169,12 @@ class StudioClient:
         self.get_job(job_id)
         return self._request('GET','/jobs/'+job_id+'/image',binary=True)
 
+    def get_input(self,name):
+        """An uploaded reference image or mask, addressed by its SHA-256."""
+        import re
+        if not isinstance(name,str) or not re.fullmatch(r'[a-f0-9]{64}',name):raise ValueError('输入图片引用无效。')
+        return self._request('GET','/inputs/'+name,binary=True)
+
     def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None):
         if __package__:
             from .video_registry import validate_video

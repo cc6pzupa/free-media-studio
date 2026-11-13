@@ -348,3 +348,38 @@ class ComfyNodeTests(unittest.TestCase):
             self.assertEqual(png_size(options['mask']),(4,6))
             self.assertEqual(result[0].shape,(1,6,4,3))
             self.assertIn('size',node.KaggleEasyImage.INPUT_TYPES()['optional'])
+
+
+@unittest.skipUnless(HAS_PIL and importlib.util.find_spec('ipywidgets') and importlib.util.find_spec('nbformat'),
+                     'The notebook widgets need ipywidgets, nbformat and Pillow')
+class NotebookTests(unittest.TestCase):
+    def test_standalone_notebook_edit_controls_reach_the_runtime(self):
+        import datetime
+        import nbformat
+        from PIL import Image
+        cell=nbformat.read(str(Path(__file__).resolve().parents[1]/'kaggle_standalone.ipynb'),as_version=4).cells[2].source
+        scope={'__name__':'notebook'}
+        with patch('IPython.display.display'):exec(cell,scope)
+        scope['_BOOTSTRAPS']={k:"_COMFY_QWEN_STATE={'runtime_id':'r','load_count':1,'loaded_this_request':True,'generations':0}\n_CC_MODEL_ID=%r\n"%k
+                              for k in scope['_BOOTSTRAPS']}
+        seen=[]
+        def generate_image(prompt,**kwargs):
+            seen.append(kwargs);return Image.new('RGB',(kwargs['width'],kwargs['height'])),{'model_reused':False,'model_load_count':1}
+        scope['generate_image']=generate_image
+        def upload(color):
+            buffer=io.BytesIO();Image.new('RGB',(300,200),color).save(buffer,format='PNG')
+            return ({'name':'x.png','type':'image/png','size':1,'last_modified':datetime.datetime.now(),'content':memoryview(buffer.getvalue())},)
+        scope['task'].value='inpaint'
+        self.assertEqual(scope['model'].value,'z-image-turbo')
+        scope['source_upload'].value=upload('red');scope['mask_upload'].value=upload('white')
+        scope['size'].value='1024x576';scope['negative'].value='ignored for Z-Image'
+        scope['run'](None)
+        call=seen[-1]
+        self.assertEqual((call['task'],call['strength'],call['width'],call['height']),('inpaint',0.9,1024,576))
+        self.assertEqual((call['image'].size,call['mask'].mode),((1024,576),'L'))
+        self.assertNotIn('negative_prompt',call)
+        self.assertIn('1024 × 576',scope['info'].value)
+        scope['model'].value='qwen-image-2.1'
+        self.assertEqual(scope['task'].value,'text')
+        scope['negative'].value='blurry';scope['size'].value='512x512';scope['run'](None)
+        self.assertEqual(seen[-1]['negative_prompt'],'blurry');self.assertNotIn('task',seen[-1])

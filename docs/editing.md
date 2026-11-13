@@ -61,7 +61,10 @@ generate_image(prompt="watercolor style", request_id="edit-001", model_id="z-ima
 - 新节点 **CC Media Image Edit (Preview)**：输入 `IMAGE`，局部编辑再接 `MASK`（1 / 白色为重绘区域），输出 `IMAGE`。
 - **CC Media Video (Preview)** 新增可选 `image` 首帧输入。
 
-Kaggle 独立 Notebook 暂未加入这些功能。
+## Kaggle Notebook
+
+- `kaggle_standalone.ipynb`：新增“方式”（文生图 / 图生图 / 局部编辑）、参考图与蒙版上传、重绘强度、尺寸和负面提示词（仅 Qwen）。Notebook 中蒙版需上传图片：白色为重绘区域。
+- `kaggle_video.ipynb`：LTX-Video 2B 与 Wan2.2 5B 可上传首帧；Wan 模型可填负面提示词。
 
 ## English
 
@@ -73,4 +76,4 @@ All features need automatic account mode and reuse the loaded models; no extra w
 - **Image to video** from a first frame: LTX-Video 2B and Wan2.2 5B.
 - **GUI batches**: 1–8 images per prompt, optional one prompt per line, incrementing seeds, up to 32 tasks; download results as a ZIP. The gallery can also export the current list (up to 100 works).
 - Qwen-Image 2.1 has no editing pipeline in diffusers. Instruction editing would need the separate ~20B Qwen-Image-Edit model, which must be validated on dual T4 first.
-- HTTP fields: `size`, `negative_prompt`, `task`, `strength`, `image`, `mask` (base64, at most 8 MB each). MCP adds the same fields and accepts local `image_path` / `mask_path`. ComfyUI adds **CC Media Image Edit (Preview)** plus optional `size`, `negative_prompt` and a first-frame `image` on the video node. The standalone Kaggle notebooks are unchanged.
+- HTTP fields: `size`, `negative_prompt`, `task`, `strength`, `image`, `mask` (base64, at most 8 MB each). MCP adds the same fields and accepts local `image_path` / `mask_path`. ComfyUI adds **CC Media Image Edit (Preview)** plus optional `size`, `negative_prompt` and a first-frame `image` on the video node. The standalone Kaggle notebooks add the same controls: upload a reference image, a mask image (white = repaint) or a video first frame.

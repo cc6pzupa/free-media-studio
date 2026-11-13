@@ -18,15 +18,41 @@ _BOOTSTRAPS = '''+repr(bootstraps)+'\n'+inspect.getsource(generation_code)+'''
 model = widgets.Dropdown(options=[(p['name'],key) for key,p in MODELS.items()],value=DEFAULT_MODEL,description='Model / 模型',layout=widgets.Layout(width='95%'))
 prompt = widgets.Textarea(value='A small orange fox beside a ceramic teacup, soft morning window light, natural photography', description='Prompt / 提示词', layout=widgets.Layout(width='95%', height='110px'))
 steps = widgets.IntSlider(value=20,min=1,max=50,description='Steps / 步数')
+size = widgets.Dropdown(options=list(SIZES),value=DEFAULT_SIZE,description='Size / 尺寸')
+negative = widgets.Textarea(value='',description='Negative / 负面',placeholder='Qwen only / 仅 Qwen：不希望出现的内容',layout=widgets.Layout(width='95%',height='60px'))
+task = widgets.Dropdown(options=[('Text to image / 文生图','text'),('Image to image / 图生图','img2img'),('Inpaint / 局部编辑','inpaint')],value='text',description='Mode / 方式')
+strength = widgets.FloatSlider(value=0.6,min=0.05,max=1.0,step=0.05,description='Strength / 强度')
+source_upload = widgets.FileUpload(accept='image/png,image/jpeg,image/webp',multiple=False,description='Image / 参考图')
+mask_upload = widgets.FileUpload(accept='image/png,image/jpeg,image/webp',multiple=False,description='Mask / 蒙版')
+edit_hint = widgets.HTML('<span style="color:#777">Z-Image Turbo / SDXL-Lightning。蒙版白色为重绘区域；输入按所选尺寸居中裁剪。 / White mask areas are repainted; inputs are center-cropped.</span>')
+edit_box = widgets.VBox([source_upload,mask_upload,strength,edit_hint])
+def uploaded(widget):
+    value=widget.value
+    if not value:return None
+    item=value[0] if isinstance(value,(tuple,list)) else next(iter(value.values()))
+    return bytes(item['content'])
+def refresh_controls(change=None):
+    profile=model_profile(model.value)
+    negative.layout.display='' if profile['negative_prompt'] else 'none'
+    edit_box.layout.display='none' if task.value=='text' else ''
+    mask_upload.layout.display='' if task.value=='inpaint' else 'none'
 def model_changed(change):
     profile=model_profile(model.value);steps.value=profile['default_steps'];steps.disabled=profile['fixed_steps'] is not None
+    if task.value not in profile['tasks']:task.value='text'
+    refresh_controls()
+def task_changed(change):
+    if task.value!='text' and task.value not in model_profile(model.value)['tasks']:model.value='z-image-turbo'
+    strength.value=0.9 if task.value=='inpaint' else 0.6
+    refresh_controls()
 model.observe(model_changed,names='value')
+task.observe(task_changed,names='value')
+refresh_controls()
 acceleration = widgets.Dropdown(options=[('Auto · 双卡优先','auto'),('Encoder/model split · 原分卡','split')],value='auto',description='Acceleration / 加速',layout=widgets.Layout(width='95%'))
 seed = widgets.IntText(value=42,description='Seed / 种子')
 button = widgets.Button(description='Generate / 生成',button_style='primary',icon='magic')
 progress = widgets.IntProgress(value=0,min=0,max=100,description='Setup / 准备',bar_style='info',layout=widgets.Layout(width='95%'))
 status = widgets.HTML('<span style="color:#777">第一次将从 Hugging Face 自动下载权重，无需 Dataset 或额外 Token。</span>')
-image_view = widgets.Image(format='png',layout=widgets.Layout(max_width='512px'))
+image_view = widgets.Image(format='png',layout=widgets.Layout(max_width='640px'))
 info = widgets.HTML()
 cache_user = widgets.Text(description='Kaggle user / 账号',placeholder='可选：填写后启用私有 Dataset 缓存')
 cache_token = widgets.Password(description='API Key',placeholder='可选：仅当前内核使用')
@@ -47,9 +73,15 @@ def run(_):
     if not prompt.value.strip():
         status.value='请填写提示词。 / Enter a prompt.'
         return
-    button.disabled=True;model.disabled=True;acceleration.disabled=True
+    button.disabled=True;model.disabled=True;acceleration.disabled=True;task.disabled=True
     started=time.perf_counter()
     try:
+        image=uploaded(source_upload) if task.value!='text' else None
+        mask=uploaded(mask_upload) if task.value=='inpaint' else None
+        # The negative field is hidden for models without CFG; ignore any leftover text.
+        negative_prompt=(negative.value or None) if model_profile(model.value)['negative_prompt'] else None
+        options=image_options(model.value,steps.value,size.value,negative_prompt,task.value,
+            strength.value if task.value!='text' else None,image is not None,mask is not None)
         globals()['_QWEN_PROGRESS_CALLBACK']=on_progress
         globals()['_CC_ACCELERATION']=acceleration.value
         capture=io.StringIO()
@@ -68,7 +100,9 @@ def run(_):
         status.value='模型已就绪，正在生成… / Model ready, generating…'
         progress.value=0
         capture=io.StringIO()
-        with contextlib.redirect_stdout(capture):exec(generation_code(prompt.value,seed.value,steps.value,model.value),globals())
+        width,height=parse_size(size.value)
+        with contextlib.redirect_stdout(capture):exec(generation_code(prompt.value,seed.value,steps.value,model.value,width,height,
+            options.get('negative_prompt'),options.get('task','text'),options.get('strength'),image,mask),globals())
         line=next(line for line in capture.getvalue().splitlines() if line.startswith('COMFY_RESULT:'))
         result=json.loads(line[len('COMFY_RESULT:'):])
         raw=base64.b64decode(result['png'])
@@ -77,14 +111,14 @@ def run(_):
         progress.value=100
         stats=result['stats']
         status.value='生成完成 · '+('已复用模型' if stats['model_reused'] else '首次准备完成，后续复用')
-        info.value='本次 %.1f 秒 · 模型加载 %d 次 · PNG 512 × 512' % (time.perf_counter()-started,stats['model_load_count'])+' · '+html.escape(stats.get('parallel_strategy',''))
+        info.value='本次 %.1f 秒 · 模型加载 %d 次 · PNG %d × %d' % (time.perf_counter()-started,stats['model_load_count'],width,height)+' · '+html.escape(stats.get('parallel_strategy',''))+(' · '+task.value if task.value!='text' else '')
         button.description='Generate / 生成'
     except Exception as error:
         status.value='<span style="color:#b94747">'+html.escape(str(error))+'</span>'
-    finally:button.disabled=False;model.disabled=False;acceleration.disabled=False
+    finally:button.disabled=False;model.disabled=False;acceleration.disabled=False;task.disabled=False
 
 button.on_click(run)
-display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">CC Media Studio · Kaggle</h2>'),model,prompt,steps,seed,acceleration,cache_box,button,progress,status,image_view,info]))
+display(widgets.VBox([widgets.HTML('<h2 style="color:#6258ee">CC Media Studio · Kaggle</h2>'),model,task,prompt,negative,edit_box,size,steps,seed,acceleration,cache_box,button,progress,status,image_view,info]))
 '''
     def cell(kind,source,name):
         data={'id':name,'cell_type':kind,'metadata':{},'source':source.splitlines(keepends=True)}

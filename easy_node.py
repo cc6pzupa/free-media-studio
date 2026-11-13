@@ -75,6 +75,9 @@ class KaggleEasyImage:
     def generate(self,prompt,seed,steps,model_id="qwen-image-2.1",use_model_defaults=True,size='512x512',negative_prompt=''):
         backend=shared_backend()
         steps=default_steps(model_id,steps,use_model_defaults)
+        from .model_registry import model_profile
+        # Only Qwen uses CFG; a negative prompt left in the widget is ignored for the others.
+        if not model_profile(model_id)['negative_prompt']:negative_prompt=''
         options={k:v for k,v in (('size',size),('negative_prompt',negative_prompt)) if v not in ('','512x512',None)}
         raw,stats=backend.generate(prompt,seed,steps,model_id=model_id,**options)
         return (png_tensor(raw),)

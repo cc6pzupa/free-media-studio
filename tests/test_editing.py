@@ -219,8 +219,16 @@ class RemoteCodeTests(unittest.TestCase):
         diffusers=types.ModuleType('diffusers')
         diffusers.ZImageImg2ImgPipeline=diffusers.ZImageInpaintPipeline=Pipe
         source=Path('remote_models.py').read_text(encoding='utf-8')
-        runtime=source[source.index('def _cc_task_pipeline'):]
-        base=Pipe(scheduler='s',vae='v',tokenizer='t',transformer='x')
+        runtime=source[source.index('def _cc_vae_boundary'):]
+        class VAE:
+            dtype='fp32'
+            def __init__(self):self.moves=[]
+            def parameters(self):return iter([types.SimpleNamespace(device='cuda:0')])
+            def to(self,device):self.moves.append(device);return self
+            def encode(self,x):return x
+            def decode(self,x):return x
+        vae=VAE();cuda.empty_cache=lambda:None
+        base=Pipe(scheduler='s',vae=vae,tokenizer='t',transformer='x')
         scope={'torch':torch,'time':time,'pipe':base,'encoder':'encoder','_CC_MODEL_ID':'z-image-turbo',
                '_CC_MODEL_PROFILE':{'default_steps':9}}
         with patch.dict(sys.modules,{'diffusers':diffusers}):
@@ -228,7 +236,8 @@ class RemoteCodeTests(unittest.TestCase):
             image,stats=scope['generate_image']('fox',seed=1,width=768,height=512,steps=9,task='inpaint',image='I',mask='M',strength=0.8)
         edit=built[-1]
         self.assertIsNot(edit,base)
-        self.assertEqual((edit.transformer,edit.vae,edit.text_encoder),('x','v','encoder'))
+        self.assertEqual((edit.transformer,edit.vae,edit.text_encoder),('x',vae,'encoder'))
+        self.assertNotIn('encode',vars(vae))  # per-call VAE wrappers are removed afterwards
         call=edit.calls[0]
         self.assertEqual((call['image'],call['mask_image'],call['strength'],call['width']),('I','M',0.8,768))
         self.assertEqual((stats['task'],stats['strength']),('inpaint',0.8))
@@ -246,6 +255,57 @@ class RemoteCodeTests(unittest.TestCase):
         self.assertNotIn('width',call);self.assertEqual((call['image'],call['strength']),('I',0.5))
 
     @unittest.skipUnless(HAS_PIL,'Pillow is only installed on the GPU kernel')
+    def test_vae_boundary_casts_inputs_and_offloads_large_sizes(self):
+        source=Path('remote_models.py').read_text(encoding='utf-8')
+        helper=source[source.index('def _cc_vae_boundary'):source.index('def _cc_task_pipeline')]
+        class Tensor:
+            def __init__(self,device='cuda:0',dtype='fp16'):self.device,self.dtype=device,dtype
+            def to(self,device=None,dtype=None):return Tensor(device or self.device,dtype or self.dtype)
+        class VAE:
+            dtype='fp32'
+            def __init__(self):self.device='cuda:0';self.calls=[]
+            def parameters(self):return iter([types.SimpleNamespace(device='cuda:0')])
+            def to(self,device):self.device=device;return self
+            def encode(self,x):
+                self.calls.append(('encode',x.device,x.dtype,self.device))
+                return types.SimpleNamespace(latent_dist=types.SimpleNamespace(parameters=Tensor('cuda:1','fp32')))
+            def decode(self,x,return_dict=False):self.calls.append(('decode',x.device,x.dtype,self.device));return (x,)
+        distribution=types.ModuleType('vae');outputs=types.ModuleType('outputs')
+        distribution.DiagonalGaussianDistribution=lambda parameters:types.SimpleNamespace(parameters=parameters)
+        outputs.AutoencoderKLOutput=lambda latent_dist:types.SimpleNamespace(latent_dist=latent_dist)
+        scope={'torch':types.SimpleNamespace(cuda=types.SimpleNamespace(empty_cache=lambda:None))}
+        exec(helper,scope)
+        with patch.dict(sys.modules,{'diffusers.models.autoencoders.vae':distribution,'diffusers.models.modeling_outputs':outputs}):
+            vae=VAE();restore=scope['_cc_vae_boundary'](vae,offload=False)
+            vae.encode(Tensor());restore()
+            self.assertEqual(vae.calls,[('encode','cuda:0','fp32','cuda:0')]);self.assertNotIn('encode',vars(vae))
+            vae=VAE();restore=scope['_cc_vae_boundary'](vae,offload=True)
+            latents=vae.encode(Tensor()).latent_dist.parameters
+            vae.decode(Tensor());restore()
+        self.assertEqual(vae.calls,[('encode','cuda:1','fp32','cuda:1'),('decode','cuda:1','fp32','cuda:1')])
+        self.assertEqual((latents.device,vae.device),('cuda:0','cuda:0'))
+
+    def test_failed_generation_releases_frames_and_reports_the_cause(self):
+        import gc
+        scope={'_COMFY_QWEN_STATE':{'runtime_id':'r','load_count':1,'loaded_this_request':False,'generations':0},'_CC_MODEL_ID':'z-image-turbo'}
+        held=[]
+        class Big:pass
+        def generate_image(prompt,**kwargs):
+            tensor=Big();held.append(__import__('weakref').ref(tensor))
+            raise MemoryError('CUDA out of memory')
+        scope['generate_image']=generate_image
+        torch=types.SimpleNamespace(cuda=types.SimpleNamespace(empty_cache=lambda:None))
+        with patch.dict(sys.modules,{'torch':torch}),self.assertRaises(RuntimeError) as caught:
+            exec(generation_code('fox',1,9,'z-image-turbo'),scope)
+        gc.collect()
+        self.assertIn('MemoryError: CUDA out of memory',str(caught.exception))
+        self.assertIsNone(held[0]())  # the failed call's locals are not kept alive
+        sys.last_traceback=caught.exception.__traceback__
+        with patch.dict(sys.modules,{'torch':torch}),contextlib.redirect_stdout(io.StringIO()):
+            scope['generate_image']=lambda prompt,**k:(types.SimpleNamespace(save=lambda b,format:b.write(b'png')),{})
+            exec(generation_code('fox',1,9,'z-image-turbo'),scope)
+        self.assertIsNone(getattr(sys,'last_traceback',None))
+
     def test_video_first_frame_and_image_pipeline_view(self):
         from PIL import Image
         built={}

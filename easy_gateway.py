@@ -13,18 +13,39 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from batch_backend import BatchBackend
 from app_entry import VERSION
+from media_inputs import MAX_REQUEST_BYTES
+
+
+OPTION_FIELDS=('size','negative_prompt','task','strength','image','mask')
+ZIP_LIMIT=100
 
 
 def validate(data):
     if not isinstance(data,dict):raise ValueError('请求必须是 JSON 对象')
-    from model_registry import model_profile,model_steps
+    from model_registry import model_profile,model_steps,image_options
     profile=model_profile(data.get('model_id'))
     prompt=data.get('prompt','');seed=data.get('seed',42);steps=model_steps(profile['id'],data.get('steps'))
     if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=4000:raise ValueError('请输入 1–4000 字的提示词')
     if type(seed) is not int or not 0<=seed<=2147483647:raise ValueError('seed 应为 0–2147483647 的整数')
     if type(steps) is not int or not 1<=steps<=50:raise ValueError('steps 应为 1–50 的整数')
-    if data.get('size','512x512')!='512x512' or data.get('n',1)!=1 or data.get('response_format','b64_json')!='b64_json':raise ValueError('当前只支持单张 512×512、b64_json 返回')
+    if data.get('n',1)!=1 or data.get('response_format','b64_json')!='b64_json':raise ValueError('每次请求生成 1 张，b64_json 返回；批量请提交多个任务')
+    image_options(profile['id'],steps,data.get('size'),data.get('negative_prompt'),data.get('task'),data.get('strength'),
+        data.get('image') not in (None,''),data.get('mask') not in (None,''))
     return prompt,seed,steps
+
+
+def options(data):
+    """Optional size/editing fields, forwarded only when present."""
+    return {key:data[key] for key in OPTION_FIELDS if data.get(key) not in (None,'')}
+
+
+def zip_archive(entries):
+    """Store already-compressed PNG/MP4 files without recompressing them."""
+    import io,zipfile
+    buffer=io.BytesIO()
+    with zipfile.ZipFile(buffer,'w',zipfile.ZIP_STORED) as archive:
+        for name,raw in entries:archive.writestr(name,raw)
+    return buffer.getvalue()
 
 
 def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=None, acceleration=None):
@@ -183,26 +204,52 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
                 except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
                 finally:client.close()
+            if self.path=='/gallery/zip':
+                if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient(allow_job_inheritance=True)
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=16384:raise ValueError()
+                    body=json.loads(self.rfile.read(length))
+                    ids=body.get('job_ids') if isinstance(body,dict) else None
+                    if not isinstance(ids,list) or not 1<=len(ids)<=ZIP_LIMIT or len(set(ids))!=len(ids):raise ValueError()
+                    entries=[]
+                    for index,job_id in enumerate(ids,1):
+                        job=client.get_job(job_id)
+                        if job['state']!='complete':raise ValueError()
+                        video=job.get('media_type')=='video'
+                        seed=(job.get('usage') or {}).get('seed')
+                        name=f'{index:03d}-'+(f'seed{seed}-' if isinstance(seed,int) else '')+job_id[:8]+('.mp4' if video else '.png')
+                        entries.append((name,client.get_video(job_id) if video else client.get_image(job_id)))
+                    return self.send(200,zip_archive(entries),'application/zip')
+                except (ValueError,TypeError,AttributeError):return self.send(400,{'error':{'message':'请选择 1–100 个已完成的作品。'}})
+                except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
+                except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
+                finally:client.close()
             if self.path in ('/video/jobs','/v1/videos/generations'):
                 if not (self.api_auth() if self.path.startswith('/v1/') else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
                 try:
                     length=int(self.headers.get('Content-Length','0'))
-                    if not 0<length<=32768:raise ValueError('请求过大或为空')
+                    if not 0<length<=MAX_REQUEST_BYTES:raise ValueError('请求过大或为空')
                     data=json.loads(self.rfile.read(length))
                     if not isinstance(data,dict):raise ValueError('请求必须为对象')
                     sync_shared_backend()
                     if not isinstance(backend,SharedBackend):raise ValueError('先在主界面配置自动账号模式。')
                     job=backend.client.submit_video(data.get('prompt'),data.get('seed',42),data.get('steps'),
-                        data.get('request_id'),data.get('model_id','wan21-t2v-1.3b'),data.get('frames'))
+                        data.get('request_id'),data.get('model_id','wan21-t2v-1.3b'),data.get('frames'),
+                        data.get('image'),data.get('negative_prompt'))
                     return self.send(202,job)
-                except (ValueError,TypeError,AttributeError):return self.send(400,{'error':{'message':'检查视频模型、提示词、种子、步数与帧数。'}})
+                except ValueError as error:
+                    # Validation messages are authored locally and contain no request values.
+                    return self.send(400,{'error':{'message':str(error) or '检查视频模型、提示词、种子、步数、帧数与首帧图片。'}})
+                except (TypeError,AttributeError):return self.send(400,{'error':{'message':'检查视频模型、提示词、种子、步数、帧数与首帧图片。'}})
                 except RuntimeError as error:return self.send(409,{'error':{'message':str(error)}})
             is_config=self.path=='/configure';is_job=self.path=='/jobs';is_api=self.path=='/v1/images/generations'
             if not (is_config or is_job or is_api):return self.send(404,{'error':{'message':'地址不存在'}})
             if not (self.api_auth() if is_api else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
             try:
                 length=int(self.headers.get('Content-Length','0'))
-                if not 0<length<=32768:raise ValueError('请求过大或为空')
+                if not 0<length<=(32768 if is_config else MAX_REQUEST_BYTES):raise ValueError('请求过大或为空')
                 data=json.loads(self.rfile.read(length))
                 if is_config:
                     if not isinstance(data,dict):raise ValueError('配置格式有误')
@@ -234,14 +281,19 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     finally:generation_lock.release()
                     return self.send(200,{'ok':True,'endpoint':f'http://127.0.0.1:{self.server.server_port}/v1/images/generations','api_key':api_key})
                 prompt,seed,steps=validate(data)
+                extra_options=options(data)
             except OSError:return self.send(500,{'error':{'message':'无法保存本机配置。请检查文件权限，或取消记住配置。'}})
             except RuntimeError as error:return self.send(409,{'error':{'message':str(error)}})
-            except (ValueError,TypeError,AttributeError):return self.send(400,{'error':{'message':'检查用户名、Dataset，以及所选模式的连接地址或 Token；提示词不能为空，steps 为 1–50。'}})
+            except ValueError as error:
+                # Option validation messages are authored locally and contain no values.
+                message='' if is_config else str(error)
+                return self.send(400,{'error':{'message':message or '检查用户名、Dataset，以及所选模式的连接地址或 Token；提示词不能为空，steps 为 1–50。'}})
+            except (TypeError,AttributeError):return self.send(400,{'error':{'message':'检查用户名、Dataset，以及所选模式的连接地址或 Token；提示词不能为空，steps 为 1–50。'}})
             sync_shared_backend()
             if backend is None:return self.send(409,{'error':{'message':'请先完成页面上方的首次配置'}})
             if is_job and isinstance(backend,SharedBackend):
                 try:
-                    job=backend.submit(prompt,seed,steps,data.get('request_id'),data.get('model_id'))
+                    job=backend.submit(prompt,seed,steps,data.get('request_id'),data.get('model_id'),**extra_options)
                     return self.send(202,{'job_id':job['job_id']})
                 except (RuntimeError,ValueError) as error:return self.send(409,{'error':{'message':str(error)}})
             # Only accept a second task after the first finishes. No silent resubmission.
@@ -252,6 +304,8 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     generate_with_progress=getattr(current,'generate_with_progress',None)
                     extra={'model_id':data['model_id']} if isinstance(current,SharedBackend) and data.get('model_id') else {}
                     if data.get('model_id') not in (None,'qwen-image-2.1') and not isinstance(current,SharedBackend):raise ValueError('新增模型请使用自动账号模式。')
+                    if extra_options and not isinstance(current,SharedBackend):raise ValueError('尺寸、负面提示词与图片编辑请使用自动账号模式。')
+                    extra.update(extra_options)
                     if progress is not None and callable(generate_with_progress):
                         image,stats=generate_with_progress(prompt,seed,steps,progress=progress,**extra)
                     else:

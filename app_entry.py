@@ -32,7 +32,7 @@ def main():
         for name in ('easy_ui.html','video_ui.html','gallery_ui.html','template.ipynb','kaggle_standalone.ipynb','kaggle_video.ipynb',*VIDEO_FILES):
             assert (root/name).is_file(),name
         for model in VIDEO_MODELS:ast.parse(video_bootstrap_code(model,install=False))
-        import account_backend,session_backend,batch_backend,websocket,requests,kaggle
+        import account_backend,session_backend,batch_backend,media_inputs,websocket,requests,kaggle
         print('CC Media Studio bundle check passed');return 0
     if '--worker' in sys.argv:
         sys.argv.remove('--worker')

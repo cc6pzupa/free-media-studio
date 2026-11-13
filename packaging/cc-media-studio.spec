@@ -8,7 +8,7 @@ root=Path(SPECPATH).parent
 datas=[(str(p),'.') for pattern in ('*.py','*.html','*.ipynb','requirements*.txt') for p in root.glob(pattern)]
 datas += [(str(root/name),'.') for name in ('LICENSE','NOTICE','COMMERCIAL.md')]
 hidden=['studio_worker','studio_core','studio_client','account_backend','session_backend','batch_backend',
-        'video_session','video_registry','model_registry','easy_gateway','desktop','mcp_server']
+        'video_session','video_registry','model_registry','media_inputs','easy_gateway','desktop','mcp_server']
 hidden+=collect_submodules('mcp', filter=lambda name: not name.startswith('mcp.cli'))
 if sys.platform in ('win32','darwin'):hidden+=collect_submodules('webview')
 a=Analysis([str(root/'app_entry.py')],pathex=[str(root)],binaries=[],datas=datas,hiddenimports=hidden,

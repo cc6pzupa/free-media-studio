@@ -73,12 +73,47 @@ class VideoRuntime:
             local_files_only=True,**kwargs)
 
     @torch.inference_mode()
-    def generate(self,prompt,seed=42,steps=None,frames=None,output=None):
+    def first_frame(self,image):
+        """Decode the base64 first frame and center-crop it to the model size."""
+        import base64,io
+        from PIL import Image,ImageOps
+        picture=ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(image))))
+        return ImageOps.fit(picture.convert('RGB'),(self.profile['width'],self.profile['height']),
+            method=Image.Resampling.LANCZOS)
+
+    def image_pipeline(self):
+        """An image-to-video view of the loaded modules; no weights are copied."""
+        p=self.profile;pipe=self.pipe
+        if p['family']=='ltx':
+            from diffusers import LTXImageToVideoPipeline
+            return LTXImageToVideoPipeline(scheduler=pipe.scheduler,vae=pipe.vae,text_encoder=pipe.text_encoder,
+                tokenizer=pipe.tokenizer,transformer=pipe.transformer)
+        from diffusers import WanImageToVideoPipeline
+        # Wan2.2 TI2V conditions on the first latent frame through expanded
+        # timesteps; it has no CLIP image encoder.
+        return WanImageToVideoPipeline(tokenizer=pipe.tokenizer,text_encoder=pipe.text_encoder,vae=pipe.vae,
+            scheduler=pipe.scheduler,transformer=pipe.transformer,expand_timesteps=True)
+
+    def restore_ltx_transformer(self):
+        """Stop context-parallel workers and load the single-GPU transformer."""
+        import torch
+        from diffusers import LTXVideoTransformer3DModel
+        from video_context import context_transformer_folder
+        from video_precision import move_video_encoder
+        self.context.close();self.context=None
+        self.pipe.register_modules(transformer=LTXVideoTransformer3DModel.from_pretrained(
+            context_transformer_folder(self.folder,self.profile),torch_dtype=torch.float16,
+            device_map={'':0},local_files_only=True))
+        move_video_encoder(self.encoder,'cpu');torch.cuda.empty_cache()
+
+    @torch.inference_mode()
+    def generate(self,prompt,seed=42,steps=None,frames=None,output=None,image=None,negative_prompt=None):
         import torch
         from video_registry import validate_video
         from video_precision import move_video_encoder
         from video_parallel import WanParallelCFG
-        p=self.profile;params=validate_video(prompt,seed,steps,p['id'],frames)
+        p=self.profile;params=validate_video(prompt,seed,steps,p['id'],frames,image,negative_prompt)
+        first=self.first_frame(image) if image is not None else None
         if self.pipe is None:self.prepare()
         for i in range(2):torch.cuda.reset_peak_memory_stats(i)
         start=time.perf_counter();self.emit('encoding')
@@ -86,7 +121,7 @@ class VideoRuntime:
         if p['family']=='wan22' and self.replica is not None:
             move_video_encoder(self.replica,'cpu');torch.cuda.empty_cache()
         move_video_encoder(self.encoder,'cuda:1')
-        encoded=self.pipe.encode_prompt(prompt=prompt,negative_prompt='',
+        encoded=self.pipe.encode_prompt(prompt=prompt,negative_prompt=negative_prompt or '',
             do_classifier_free_guidance=p['guidance']>1,device=torch.device('cuda:1'))
         if p['family']=='ltx':positive,mask,negative,negative_mask=encoded
         else:positive,negative=encoded[:2]
@@ -121,8 +156,13 @@ class VideoRuntime:
             callback_on_step_end=progress,output_type='np')
         if p['family']=='ltx':kwargs.update(decode_timestep=.05,decode_noise_scale=.025,frame_rate=p['fps'],
             prompt_attention_mask=mask.to('cuda:0'),negative_prompt_attention_mask=negative_mask)
-        # Wan2.2 hybrid generation accepts no input image for text-to-video.
-        self.pipe.register_modules(text_encoder=None)
+        # Image-to-video uses the same modules through an image pipeline view.
+        target=self.pipe
+        if first is not None:
+            kwargs['image']=first
+            if p['family']=='ltx' and self.context is not None:self.restore_ltx_transformer()
+            target=self.image_pipeline()
+        self.pipe.register_modules(text_encoder=None);target.register_modules(text_encoder=None)
         sampling=time.perf_counter();fallback=None;cfg_pairs=0
         original_decode=self.pipe.vae.decode
         def decode(*args,**kwargs):
@@ -130,7 +170,11 @@ class VideoRuntime:
             return original_decode(*args,**kwargs)
         self.pipe.vae.decode=decode
         try:
-            if p['family']=='ltx' and self.acceleration=='auto' and not self.disabled:
+            if first is not None and strategy!='cfg_parallel':
+                # LTX context parallelism is text-to-video only; image-to-video
+                # runs the single-GPU path with the encoder already moved aside.
+                result=target(**kwargs)
+            elif p['family']=='ltx' and self.acceleration=='auto' and not self.disabled:
                 from video_context import LTXContextRunner
                 if self.context is None:
                     runner=None;original=self.pipe.transformer
@@ -168,7 +212,7 @@ class VideoRuntime:
                 try:
                     router=WanParallelCFG(self.pipe.transformer,self.replica,negative)
                     try:
-                        with router:result=self.pipe(**kwargs)
+                        with router:result=target(**kwargs)
                         cfg_pairs=router.calls
                     finally:del router
                 except RuntimeError as error:
@@ -177,7 +221,7 @@ class VideoRuntime:
                 if fallback:
                     gc.collect();torch.cuda.empty_cache();strategy='encoder_split'
                     kwargs['generator']=torch.Generator(device='cuda:0').manual_seed(seed)
-                    result=self.pipe(**kwargs)
+                    result=target(**kwargs)
             else:
                 if self.context is not None:
                     self.context.close();self.context=None
@@ -190,6 +234,7 @@ class VideoRuntime:
         finally:
             self.pipe.vae.decode=original_decode
             self.pipe.register_modules(text_encoder=self.encoder)
+            if target is not self.pipe:target.register_modules(text_encoder=self.encoder)
         torch.cuda.synchronize();sampling_seconds=time.perf_counter()-sampling
         import numpy as np
         video=np.asarray(result.frames[0])
@@ -210,7 +255,7 @@ class VideoRuntime:
             model_reused=self.calls>1,model_load_count=1,generation_number=self.calls,
             parallel_strategy=strategy,acceleration_mode=self.acceleration,cfg_pairs=cfg_pairs,
             replica_load_seconds=round(replica_seconds,3),dual_model_reused=(replica_reused if strategy=='cfg_parallel' else context_reused if strategy=='context_parallel' else False),
-            acceleration_fallback=fallback,peak_gpu_gib=[round(v,3) for v in peaks])
+            acceleration_fallback=fallback,peak_gpu_gib=[round(v,3) for v in peaks],image_to_video=first is not None)
 
     def decode_context_latents(self,latents,frames,generator):
         import torch

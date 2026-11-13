@@ -24,7 +24,9 @@ macOS / Linux 使用 `python3 launch.py`。启动器自动创建客户端环境�
 | 平衡 | Wan2.1 T2V 1.3B | 30 |
 | 质量 | Wan2.2 TI2V 5B | 30 |
 
-帧数可选 9–81，按 8 递增。默认先生成短片；更多帧会占用更多显存和时间。当前界面提供文生视频。
+帧数可选 9–81，按 8 递增。默认先生成短片；更多帧会占用更多显存和时间。
+
+**图生视频（预览）**：上传首帧图片即可。LTX-Video 2B 与 Wan2.2 5B 支持，首帧居中裁剪为模型尺寸；Wan2.1 1.3B 仅文生视频。LTX 图生视频使用单卡路径，不走双卡序列并行。Wan 模型可填写负面提示词。详见 [图片编辑说明](editing.md)。
 
 图片和视频共用本机后台、账号及串行队列。切换任务类型会释放当前模型；连续使用同一活跃视频模型会复用已加载实例。默认空闲保活 15 分钟，沿用 GUI 的设置。
 
@@ -44,9 +46,11 @@ Content-Type: application/json
 
 ## MCP 与 ComfyUI
 
-MCP 新增 `generate_video` 和 `get_video`，与图片共用 `get_job` 查询进度。`get_video` 返回本机 MP4 文件路径、URI 和耗时信息。
+请求体可加 `image`（首帧 base64）和 `negative_prompt`（仅 Wan）。
 
-ComfyUI 添加 **CC Media Video (Preview)** 节点，输出 `mp4_path` 字符串，可接支持视频路径输入的加载节点。
+MCP 新增 `generate_video` 和 `get_video`，与图片共用 `get_job` 查询进度；`generate_video` 接受 `image_path` / `image_base64` 首帧。`get_video` 返回本机 MP4 文件路径、URI 和耗时信息。
+
+ComfyUI 添加 **CC Media Video (Preview)** 节点，输出 `mp4_path` 字符串，可接支持视频路径输入的加载节点；可选 `image` 输入作为首帧。
 
 ## Kaggle Notebook
 
@@ -56,7 +60,7 @@ ComfyUI 添加 **CC Media Video (Preview)** 节点，输出 `mp4_path` 字符串
 
 The video preview is included on main. Save your automatic account configuration in the main GUI, then open `/video`. Choose the efficient LTX 2B distilled model, balanced Wan2.1 1.3B or quality Wan2.2 5B. First use downloads weights; repeated requests reuse the active model. Image and video tasks share the serial worker queue and idle-retention setting.
 
-The HTTP API queues tasks at `POST /v1/videos/generations`, reports progress at `GET /v1/videos/jobs/<job_id>`, and serves completed MP4 files at `GET /v1/videos/jobs/<job_id>/content`. Authenticate with the local API key. MCP provides `generate_video` and `get_video`; the ComfyUI preview node returns an MP4 path. A standalone Kaggle video notebook is included. If a submission response is lost, use Resume submission to retry the saved request with its original ID, even after refresh. Temporary backend outages preserve the active job. See the [illustrated guide and actual sample](guide.html#video-en).
+The HTTP API queues tasks at `POST /v1/videos/generations`, reports progress at `GET /v1/videos/jobs/<job_id>`, and serves completed MP4 files at `GET /v1/videos/jobs/<job_id>/content`. Authenticate with the local API key. Optional `image` (base64 first frame, LTX-Video 2B and Wan2.2 5B) enables image-to-video; `negative_prompt` applies to Wan. MCP provides `generate_video` and `get_video`; the ComfyUI preview node returns an MP4 path. A standalone Kaggle video notebook is included. If a submission response is lost, use Resume submission to retry the saved request with its original ID, even after refresh. Temporary backend outages preserve the active job. See the [illustrated guide and actual sample](guide.html#video-en).
 
 视频 GPU 依赖在 Kaggle 的独立 Python 环境中运行。Notebook 重连复用存活的视频进程，切回图片模型时释放视频进程。
 

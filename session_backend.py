@@ -144,14 +144,37 @@ print('COMFY_SESSION_READY:' + json.dumps({{'runtime_id': _COMFY_QWEN_STATE['run
 '''
 
 
-def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL):
+def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, height=512, negative_prompt=None,
+                    task='text', strength=None, image=None, mask=None):
+    """Remote call for one image. Inputs travel as base64 inside the cell and are
+    center-cropped to the requested size on the kernel, never on the client."""
     model_profile(model_id)
-    args = repr(json.dumps({'prompt': prompt, 'seed': seed, 'steps': steps}, ensure_ascii=False))
+    payload = {'prompt': prompt, 'seed': seed, 'steps': steps}
+    # Only non-default options are sent, so an older live runtime keeps working
+    # for plain 512x512 text-to-image requests.
+    extra = {}
+    if (width, height) != (512, 512): payload.update(width=width, height=height)
+    if negative_prompt: extra['negative_prompt'] = negative_prompt
+    if task != 'text':
+        if image is None: raise ValueError('Missing input image')
+        extra.update(task=task, strength=strength)
+        payload['image'] = base64.b64encode(image).decode('ascii')
+        if mask is not None: payload['mask'] = base64.b64encode(mask).decode('ascii')
+    payload['extra'] = extra
+    args = repr(json.dumps(payload, ensure_ascii=False))
     return (
         'import json, io, base64\n' + \
         'assert globals().get("_CC_MODEL_ID","qwen-image-2.1") == '+repr(model_id)+', "Active model changed; reconnect before generating."\n' + \
         'args = json.loads(' + args + ')\n'
-        "im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=512, height=512)\n"
+        "_cc_size = (args.get('width', 512), args.get('height', 512))\n"
+        "def _cc_fit(data, mode):\n"
+        "    from PIL import Image, ImageOps\n"
+        "    picture = ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(data))))\n"
+        "    return ImageOps.fit(picture.convert(mode), _cc_size, method=Image.Resampling.LANCZOS)\n"
+        "_cc_extra = dict(args['extra'])\n"
+        "if 'image' in args: _cc_extra['image'] = _cc_fit(args['image'], 'RGB')\n"
+        "if 'mask' in args: _cc_extra['mask'] = _cc_fit(args['mask'], 'L')\n"
+        "im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=_cc_size[0], height=_cc_size[1], **_cc_extra)\n"
         "_COMFY_QWEN_STATE['generations'] += 1\n"
         "stats = dict(stats, model_id=globals().get('_CC_MODEL_ID','qwen-image-2.1'), runtime_id=_COMFY_QWEN_STATE['runtime_id'], "
         "model_load_count=_COMFY_QWEN_STATE['load_count'], "
@@ -214,17 +237,17 @@ class SessionBackend:
                     if line.startswith(prefix): self.progress({'phase':'generating' if prefix=='COMFY_SESSION_READY:' else 'loading','message':message})
         if len(self.progress_buffer)>2*1024*1024: self.progress_buffer=''
 
-    def generate(self, prompt, seed=42, steps=20):
-        return self.generate_with_progress(prompt, seed, steps)
+    def generate(self, prompt, seed=42, steps=20, **options):
+        return self.generate_with_progress(prompt, seed, steps, **options)
 
-    def generate_with_progress(self, prompt, seed=42, steps=20, progress=None):
+    def generate_with_progress(self, prompt, seed=42, steps=20, progress=None, **options):
         with self.lock:
             started = time.monotonic()
             self.progress = progress
             if progress:
                 progress({'phase':'generating' if self.session.transport is not None else 'session', 'message':'正在复用已加载的模型生图。' if self.session.transport is not None else '正在检查远端模型，首次使用将自动准备。'})
             try:
-                output = self.session.execute(generation_code(prompt, seed, steps, self.model_id), timeout=7200)
+                output = self.session.execute(generation_code(prompt, seed, steps, self.model_id, **options), timeout=7200)
                 matches = [line[len('COMFY_RESULT:'):] for line in output.splitlines()
                            if line.startswith('COMFY_RESULT:')]
                 if len(matches) != 1:

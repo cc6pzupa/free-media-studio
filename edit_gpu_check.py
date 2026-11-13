@@ -83,7 +83,11 @@ def run(user,token,output,only=None):
                     **{k:v for k,v in stats.items() if k!='png'}))
             except Exception as error:
                 traceback.print_exc()
-                reports.append(dict(case=name,ok=False,wall_seconds=round(time.monotonic()-started,1),error=type(error).__name__+': '+str(error)))
+                # Backends hide transport errors (they may contain connection URLs); the
+                # remote exception name and message are still chained as __context__.
+                cause=error.__context__
+                reports.append(dict(case=name,ok=False,wall_seconds=round(time.monotonic()-started,1),error=type(error).__name__+': '+str(error),
+                    **({'remote_error':(type(cause).__name__+': '+str(cause))[:2000]} if cause is not None else {})))
             print('GPU_CHECK_RESULT '+json.dumps(reports[-1],ensure_ascii=False),flush=True)
             (output/'report.json').write_text(json.dumps(reports,indent=2,ensure_ascii=False),encoding='utf-8')
     finally:

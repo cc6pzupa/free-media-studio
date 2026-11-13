@@ -1,8 +1,8 @@
 # 图片编辑、尺寸与批量（预览） / Image editing, sizes and batches (preview)
 
-> 预览功能：代码与本地测试已完成，尚未在 Kaggle 双 T4 上实测速度和显存。大尺寸或首次使用编辑流程时，请留意进度与 Notebook 日志。
+> 预览功能：已在 Kaggle 双 T4 上实测通过（见下方实测表）。首次使用会下载对应模型。
 >
-> Preview: implemented and covered by local tests, but speed and memory have not yet been measured on Kaggle dual T4.
+> Preview: verified on Kaggle dual T4 (see the measurements below). First use downloads the model.
 
 需要 **自动账号模式**（默认模式）。图生图、局部编辑和图生视频复用已加载的模型，不额外下载权重。
 
@@ -20,6 +20,25 @@
 Qwen-Image 2.1 暂不支持图生图和局部编辑：diffusers 没有它的编辑流程。指令式编辑需要另一个约 20B 的 Qwen-Image-Edit 模型，要先验证它在双 T4 上的显存，才能加入。
 
 参考图、蒙版和首帧会在云端按目标尺寸**居中裁剪**。步数 × 重绘强度至少为 1，例如 SDXL-Lightning 的 4 步需要强度不低于 0.25。
+
+## Kaggle 双 T4 实测（2026-11-13）
+
+由 `edit_gpu_check.py` 经 GUI 相同的自动账号路径完成。耗时为模型就绪后的云端生成时间；首次下载与加载另计。
+
+| 用例 | 生成耗时 | 峰值显存 GPU0 / GPU1 |
+| --- | --- | --- |
+| Z-Image 文生图 512 | 15.3 秒 | 12.6 / 4.4 GB |
+| Z-Image 图生图 512（强度 0.6） | 6.6 秒 | 12.6 / 4.4 GB |
+| Z-Image 局部编辑 512（强度 0.9） | 9.7 秒 | 12.6 / 4.4 GB |
+| Z-Image 文生图 1024 | 38.3 秒 | 12.3 / 7.4 GB |
+| SDXL-Lightning 文生图 1024 | 6.9 秒 | 8.2 / 1.5 GB |
+| SDXL-Lightning 图生图 768×512 | 2.8 秒 | 6.3 / 1.5 GB |
+| SDXL-Lightning 局部编辑 512 | 2.6 秒 | 6.0 / 1.5 GB |
+| Qwen-Image 2.1 文生图 1024 + 负面提示词（CFG 双卡并行） | 121 秒 | 11.6 / 9.5 GB |
+| LTX-Video 2B 图生视频 33 帧 | 12.5 秒 | 9.3 / 7.4 GB |
+| Wan2.2 5B 图生视频 33 帧（CFG 双卡并行） | 210 秒 | 9.4 / 9.1 GB |
+
+已知限制：SDXL-Lightning 4 步局部编辑覆盖面部时细节较粗；LTX 图生视频使用单卡路径。Z-Image 大于 512×512 时，VAE 编解码在 GPU 1 执行以避免显存不足。
 
 ## GUI
 
@@ -67,6 +86,22 @@ generate_image(prompt="watercolor style", request_id="edit-001", model_id="z-ima
 - `kaggle_video.ipynb`：LTX-Video 2B 与 Wan2.2 5B 可上传首帧；Wan 模型可填负面提示词。
 
 ## English
+
+## Measured on Kaggle dual T4 (2026-11-13)
+
+Run with `edit_gpu_check.py` through the same automatic-account path as the GUI. Times are cloud generation after the model is loaded; first downloads and loading are extra.
+
+| Case | Generation | Peak GPU0 / GPU1 |
+| --- | --- | --- |
+| Z-Image text 512 / img2img / inpaint | 15.3 / 6.6 / 9.7 s | 12.6 / 4.4 GB |
+| Z-Image text 1024 | 38.3 s | 12.3 / 7.4 GB |
+| SDXL-Lightning text 1024 / img2img 768×512 / inpaint | 6.9 / 2.8 / 2.6 s | ≤ 8.2 / 1.5 GB |
+| Qwen-Image 2.1 1024 + negative prompt (dual-GPU CFG) | 121 s | 11.6 / 9.5 GB |
+| LTX-Video 2B image-to-video, 33 frames | 12.5 s | 9.3 / 7.4 GB |
+| Wan2.2 5B image-to-video, 33 frames (dual-GPU CFG) | 210 s | 9.4 / 9.1 GB |
+
+Known limits: 4-step SDXL-Lightning inpainting over faces is coarse; LTX image-to-video uses the single-GPU path. Above 512×512, Z-Image runs its VAE on GPU 1 to stay within memory.
+
 
 All features need automatic account mode and reuse the loaded models; no extra weights are downloaded.
 

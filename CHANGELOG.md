@@ -2,8 +2,8 @@
 
 ## 0.10.0（预览 / preview）
 
-> 新功能已通过本地测试（Python、GUI、Notebook 与浏览器端到端），尚未在 Kaggle 双 T4 上实测速度和显存。
-> New features pass local tests (Python, GUI, notebooks and browser end-to-end) but have not yet been measured on Kaggle dual T4.
+> 新功能已在 Kaggle 双 T4 上实测通过，测量结果见 [图片编辑说明](docs/editing.md)。
+> New features are verified on Kaggle dual T4; see the measurements in [docs/editing.md](docs/editing.md).
 
 ### 新增
 
@@ -14,6 +14,11 @@
 - **GUI 批量**：每个提示词 1–8 张、每行一个提示词、种子递增，最多 32 个任务；批量结果和画廊列表可打包 ZIP。
 - **画廊**：显示作品使用的参考图与蒙版；“继续编辑”和“作为视频首帧”直接带入工作台。
 - **全部入口**：HTTP API、MCP（支持本机图片路径）、ComfyUI（新增 CC Media Image Edit 节点，视频节点支持首帧）、两个 Kaggle Notebook。
+
+### 修复（Kaggle 实测发现）
+
+- 失败的生成不再在内核中保留显存；切换图片或视频模型时清理 cuBLAS 工作区（Qwen 双卡后曾占用 GPU 1 约 9.3 GB，导致视频模型显存不足）。
+- 修正 Z-Image 编辑与 LTX 图生视频的 VAE 精度不一致；Z-Image 1024 的 VAE 编解码改在 GPU 1。
 
 ### 变化
 
@@ -29,6 +34,11 @@
 - GUI batches (1–8 per prompt, one prompt per line, incrementing seeds, up to 32 tasks) and ZIP export from batches and the gallery.
 - Gallery shows reference images and masks, with Edit further and Use as video first frame.
 - Available in the HTTP API, MCP (local image paths), ComfyUI (CC Media Image Edit node, video first frame) and both Kaggle notebooks.
+
+### Fixed (found on Kaggle)
+
+- Failed generations no longer keep GPU memory in the kernel; model and video switches clear cuBLAS workspaces (after Qwen's dual-GPU CFG they pinned about 9.3 GB on GPU 1, so video models ran out of memory).
+- VAE dtype mismatches in Z-Image editing and LTX image-to-video; Z-Image at 1024 runs its VAE on GPU 1.
 
 ### Changed
 

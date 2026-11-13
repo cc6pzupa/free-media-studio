@@ -165,8 +165,12 @@ class VideoRuntime:
         self.pipe.register_modules(text_encoder=None);target.register_modules(text_encoder=None)
         sampling=time.perf_counter();fallback=None;cfg_pairs=0
         original_decode=self.pipe.vae.decode
+        vae_dtype=self.pipe.vae.dtype
         def decode(*args,**kwargs):
             self.emit('decoding')
+            # LTXImageToVideoPipeline decodes fp16 latents and an fp16 decode
+            # timestep with the fp32 VAE (its text-to-video pipeline casts them).
+            args=[a.to(dtype=vae_dtype) if torch.is_tensor(a) and a.is_floating_point() else a for a in args]
             return original_decode(*args,**kwargs)
         self.pipe.vae.decode=decode
         original_encode=self.pipe.vae.encode

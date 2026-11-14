@@ -127,6 +127,80 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  android:
+    if: github.event_name != 'pull_request' || github.head_ref != 'feature/installers-gallery'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      # Chaquopy installs the app's Python packages with a matching build Python.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Test the Android entry and download bridge
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest tests.test_android_entry -v
+          node --test tests/test_android_bridge.cjs
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::notice::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with a temporary debug key."
+          fi
+      - name: Build APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Collect APK
+        shell: bash
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release.apk release/CC-Media-Studio-0.10.0-android.apk
+          (cd release && sha256sum CC-Media-Studio-0.10.0-android.apk > SHA256SUMS-android.txt)
+          ls -l release
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Smoke test on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash android/smoke.sh release/CC-Media-Studio-0.10.0-android.apk android-smoke
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-smoke
+          path: android-smoke/*
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-android
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
+
   preview-release:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/feature/installers-gallery'
@@ -149,7 +223,7 @@ jobs:
           gh release create "$tag" release/* --target "$GITHUB_SHA" --prerelease --title 'CC Media Studio 0.9.0 preview' --notes 'Windows x64 setup, separate macOS Intel and Apple Silicon dmg/pkg, and Linux x86_64 deb/rpm. Includes a local image/video gallery with search, favorites, playback and download. Python is bundled. Windows/macOS packages are unsigned; Apple notarization and trusted publisher signing are not configured.'
 
   release:
-    needs: build
+    needs: [build, android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

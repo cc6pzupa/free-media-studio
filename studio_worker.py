@@ -131,7 +131,7 @@ def create_worker_server(core, token, port=0):
     return LocalHTTPServer(('127.0.0.1',port),Handler)
 
 
-def serve(directory=None,backend_factory=None,keep_alive_minutes=None):
+def serve(directory=None,backend_factory=None,keep_alive_minutes=None,on_ready=None):
     directory=Path(directory or state_directory())
     lock=ProcessLock(directory/'worker.lock')
     if not lock.acquire():return
@@ -145,6 +145,7 @@ def serve(directory=None,backend_factory=None,keep_alive_minutes=None):
         private_write(info_path,json.dumps({'url':f'http://127.0.0.1:{server.server_port}',
             'token':token,'pid':os.getpid(),'protocol':1}).encode('utf-8'))
         core.start()
+        if on_ready:on_ready(core,server)
         try:server.serve_forever()
         except KeyboardInterrupt:pass
     finally:

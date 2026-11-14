@@ -18,6 +18,11 @@ else:
     from studio_core import config_path,load_config,normalize_config,state_directory
 
 
+# Set by hosts that run the worker inside their own process (Android has no
+# separate Python executable to spawn). Called instead of spawn_worker.
+worker_starter=None
+
+
 class StudioHTTPError(RuntimeError):
     def __init__(self,status_code,message):
         super().__init__(message);self.status_code=status_code
@@ -79,6 +84,10 @@ class StudioClient:
         with self.connect_lock:
             if self._probe(self._read_connection()):return
             if not self.autostart:raise RuntimeError('本机后台未运行。')
+            if worker_starter is not None:
+                worker_starter()
+                if self._probe(self._read_connection()):return
+                raise RuntimeError('本机后台未能启动。')
             self.directory.mkdir(parents=True,exist_ok=True,mode=0o700)
             log_path=self.directory/'worker.log'
             fd=os.open(log_path,os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)

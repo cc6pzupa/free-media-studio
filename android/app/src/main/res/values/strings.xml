@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">CC Media Studio</string>
+    <string name="channel_name">Studio service</string>
+    <string name="running">Running. Exit here to release the Kaggle session.</string>
+    <string name="releasing">Releasing the Kaggle session…</string>
+    <string name="exit">Exit</string>
+    <string name="starting">Starting CC Media Studio…</string>
+    <string name="start_failed">Could not start: %1$s</string>
+    <string name="saved">Saved to Downloads/%1$s</string>
+    <string name="save_failed">Could not save the file: %1$s</string>
+</resources>

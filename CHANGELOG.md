@@ -7,6 +7,8 @@
 
 ### 新增
 
+- **安卓应用（预览）**：Android 10+ 64 位 APK，内置同一套本机程序与界面；保存的文件写入 下载/CC Media Studio，通知栏“退出”会先释放 Kaggle 会话。详见 [安卓说明](docs/android.md)。
+
 - **图生图与局部编辑**：Z-Image Turbo 与 SDXL-Lightning 支持参考图重绘（强度 0.05–1）和涂抹局部编辑；复用已加载模型，不额外下载权重。
 - **图生视频**：LTX-Video 2B 与 Wan2.2 5B 可上传首帧。
 - **更多尺寸**：512×512、768×768、1024×1024、768×512、512×768、1024×576、576×1024。
@@ -42,6 +44,8 @@
 - Kaggle Notebook 根据当前运行时重新生成。
 
 ### Added
+
+- **Android app (preview):** a 64-bit Android 10+ APK running the same local client and pages; saved files go to Downloads/CC Media Studio, and Exit in the notification releases the Kaggle session first. See [docs/android.md](docs/android.md).
 
 - Image-to-image and inpainting on Z-Image Turbo and SDXL-Lightning, reusing the loaded models.
 - Image-to-video from a first frame on LTX-Video 2B and Wan2.2 5B.

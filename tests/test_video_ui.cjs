@@ -114,3 +114,13 @@ test('a queued video can be cancelled and is then released',async()=>{
  assert.equal(p.elements.get('cancelVideo').hidden,true);assert.equal(p.storage.size,0);
  assert.match(p.elements.get('status').textContent,/已取消/);
 });
+test('model hint shows the measured first-use time and follows the language',async()=>{
+ const withFirstUse=[{...models[0],first_use:{minutes:'19',download_gb:32}},{...models[1],first_use:null}];
+ const p=page(async url=>url==='/video/models'?response({models:withFirstUse}):response({state:'queued'}));
+ for(let i=0;i<6;i++)await tick();
+ assert.match(p.elements.get('modelHint').textContent,/首次使用约 19 分钟，下载约 32 GB/);
+ p.elements.get('lang').value='en';p.elements.get('lang').onchange();
+ assert.match(p.elements.get('modelHint').textContent,/First use about 19 min, ~32 GB/);
+ p.elements.get('model').value='ltx-video-2b-distilled';p.elements.get('model').onchange();
+ assert.match(p.elements.get('modelHint').textContent,/not yet measured/);
+});

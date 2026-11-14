@@ -363,6 +363,12 @@ class HttpTests(unittest.TestCase):
                     self.assertTrue(names[0].startswith('001-seed1-'));self.assertEqual(png_size(z.read(names[1])),(576,1024))
                 self.assertEqual(requests.post(base+'/gallery/zip',headers=headers,json={'job_ids':['../x']},timeout=5).status_code,400)
                 self.assertEqual(requests.post(base+'/gallery/zip',headers=headers,json={'job_ids':[]},timeout=5).status_code,400)
+                # First-use estimates are injected from the model catalog.
+                from model_registry import MODELS
+                html=requests.get(base+'/',timeout=5).text
+                self.assertNotIn('__FIRST_USE__',html)
+                injected=json.loads(re.search(r"const firstUse=typeof (\{.*?\})==='object'",html).group(1))
+                self.assertEqual(injected,{k:v['first_use'] for k,v in MODELS.items()})
                 # Gallery hand-offs: pages accept query strings, inputs are readable with the UI session.
                 self.assertIn('text/html',requests.get(base+'/?edit='+ids[0],timeout=5).headers['Content-Type'])
                 self.assertIn('text/html',requests.get(base+'/video?frame='+ids[0],timeout=5).headers['Content-Type'])
@@ -447,6 +453,17 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual((call['image'].size,call['mask'].mode),((1024,576),'L'))
         self.assertNotIn('negative_prompt',call)
         self.assertIn('1024 × 576',scope['info'].value)
+        self.assertEqual(call['feather'],8)
+        # Default shape mask: a centred ellipse on the source, cropped like the image.
+        self.assertEqual(scope['mask_mode'].value,'shape')
+        self.assertEqual(call['mask'].getpixel((512,288)),255);self.assertEqual(call['mask'].getpixel((5,5)),0)
+        self.assertTrue(bytes(scope['mask_preview'].value).startswith(b'\x89PNG'))
+        scope['mask_shape'].value='rectangle';scope['mask_x'].value=10;scope['mask_w'].value=10;scope['run'](None)
+        moved=seen[-1]['mask']
+        self.assertEqual(moved.getpixel((512,288)),0);self.assertEqual(moved.getpixel((int(1024*0.1),288)),255)
+        # Uploaded masks are still accepted.
+        scope['mask_mode'].value='upload';scope['run'](None)
+        self.assertEqual(seen[-1]['mask'].getpixel((512,288)),255);self.assertEqual(seen[-1]['mask'].getpixel((5,5)),255)
         scope['model'].value='qwen-image-2.1'
         self.assertEqual(scope['task'].value,'text')
         scope['negative'].value='blurry';scope['size'].value='512x512';scope['run'](None)
@@ -504,6 +521,14 @@ class DiskBudgetTests(unittest.TestCase):
         self.assertEqual(list((self.video/'_shared').iterdir()),[])
         # Bytes already in the target folder are not counted as new.
         self.assertEqual(self.module.release_model_disk(self.video/'wan22-ti2v-5b',100_000,budget=150_000),[])
+
+    def test_copy_of_a_folder_counts_as_new_space(self):
+        self.write(self.images/'z-image-turbo','w',200_000,300)
+        self.write(self.qwen,'transformer-q4.gguf',300_000,100)
+        # A download into the Qwen folder that already holds its files needs no room...
+        self.assertEqual(self.module.release_model_disk(self.qwen,300_000,budget=600_000),[])
+        # ...but a private-cache copy of that folder does.
+        self.assertEqual(self.module.release_model_disk(self.qwen,300_000,budget=600_000,count_existing=False),['z-image-turbo'])
 
     def test_exception_chain_and_receipt_check(self):
         try:

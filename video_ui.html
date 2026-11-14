@@ -17,7 +17,7 @@ function controls(){
 function translate(){
  const lang=$('lang').value;document.documentElement.lang=lang==='zh'?'zh-CN':'en';
  for(const [id,value]of Object.entries(text[lang]))$(id).textContent=value;
- showOptions();
+ showOptions();showHint();
  if(lastJob){showProgress(lastJob);showMeta(lastJob)}
  else if(pending)$('status').textContent=english()?'Resume the previous submission with its original request ID.':'点击“恢复上次提交”，使用原提交编号取得任务。';
  else if(!active)$('status').textContent=english()?'Ready':'准备就绪';
@@ -28,7 +28,13 @@ async function request(path,body){
  if(!r.ok){let data;try{data=await r.json()}catch{}const error=Error(data?.error?.message||'Request failed');error.status=r.status;throw error}
  return r;
 }
-function selectModel(){const p=models.find(x=>x.id===$('model').value);if(!p)return;$('steps').value=p.default_steps;$('modelHint').textContent=`${p.width} × ${p.height} · ${p.fps} FPS · ${p.tier}`;showOptions();controls()}
+function firstUseText(p){
+ const f=p.first_use;if(!f)return english()?' · First use downloads and loads the model (not yet measured).':' · 首次使用需下载并加载模型（尚未实测耗时）。';
+ return english()?` · First use about ${f.minutes} min${f.download_gb?`, ~${f.download_gb} GB download`:''} (measured on dual T4); reused within the session.`
+  :` · 首次使用约 ${f.minutes} 分钟${f.download_gb?`，下载约 ${f.download_gb} GB`:''}（双 T4 实测）；会话内直接复用。`;
+}
+function showHint(){const p=models.find(x=>x.id===$('model').value);if(p)$('modelHint').textContent=`${p.width} × ${p.height} · ${p.fps} FPS · ${p.tier}`+firstUseText(p)}
+function selectModel(){const p=models.find(x=>x.id===$('model').value);if(!p)return;$('steps').value=p.default_steps;showHint();showOptions();controls()}
 function showOptions(){
  const p=models.find(x=>x.id===$('model').value)||{};
  $('negativeFields').hidden=!(p.guidance>1);

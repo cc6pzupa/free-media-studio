@@ -92,7 +92,10 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 saved_user=status['user'];saved_dataset=status['dataset']
             else:client.close()
         except RuntimeError:client.close()
-    page=Path(__file__).with_name('easy_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
+    from model_registry import MODELS as _MODELS
+    # First-use estimates come from the model catalog, the single source.
+    first_use=json.dumps({key:profile.get('first_use') for key,profile in _MODELS.items()},ensure_ascii=False)
+    page=Path(__file__).with_name('easy_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce).replace('__FIRST_USE__',first_use)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):pass

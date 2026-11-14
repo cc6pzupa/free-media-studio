@@ -84,14 +84,16 @@ def _disk_bytes(paths):
     return total
 
 
-def release_model_disk(keep, needed_bytes, budget=DISK_BUDGET_BYTES, notify=None):
+def release_model_disk(keep, needed_bytes, budget=DISK_BUDGET_BYTES, notify=None, count_existing=True):
     """Remove least recently used model folders until `needed_bytes` fits.
 
     `keep` is the folder about to be used; it is never removed. Video files
     shared through hardlinks in `_shared` are released once no model links them."""
     keep = Path(keep).resolve()
-    # Files already in the target folder (a resumed or cached download) are not new.
-    needed_bytes = max(0, needed_bytes - (_disk_bytes([keep]) if keep.is_dir() else 0))
+    # Files already in the target folder (a resumed or cached download) are not
+    # new. A copy of the folder (count_existing=False) is entirely new space.
+    if count_existing:
+        needed_bytes = max(0, needed_bytes - (_disk_bytes([keep]) if keep.is_dir() else 0))
     shared = [Path(root)/'_shared' for root in MODEL_ROOTS if (Path(root)/'_shared').is_dir()]
     used = _disk_bytes([*_model_folders(), *shared])
     candidates = sorted((f for f in _model_folders() if f.resolve() != keep), key=lambda f: f.stat().st_mtime)

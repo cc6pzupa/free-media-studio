@@ -517,3 +517,23 @@ class DiskBudgetTests(unittest.TestCase):
         path.with_name('model.gguf.verified.json').write_text(json.dumps({'size':7,'sha256':hashlib.sha256(b'weights').hexdigest()}))
         self.assertTrue(self.module.file_matches_receipt(path))
         path.write_bytes(b'weightz');self.assertFalse(self.module.file_matches_receipt(path))
+
+
+class GgufReadyTests(unittest.TestCase):
+    def test_late_gguf_install_is_seen_by_an_already_imported_diffusers(self):
+        from session_backend import GGUF_READY_CODE
+        import_utils=types.ModuleType('diffusers.utils.import_utils')
+        import_utils._gguf_available=False;import_utils._gguf_version='N/A'
+        import_utils.is_gguf_available=lambda:import_utils._gguf_available
+        import_utils._is_package_available=lambda name:(True,'0.17.1')
+        quantizer=types.ModuleType('diffusers.quantizers.gguf.gguf_quantizer')
+        modules={'diffusers':types.ModuleType('diffusers'),'diffusers.utils':types.ModuleType('diffusers.utils'),
+                 'diffusers.utils.import_utils':import_utils,'diffusers.quantizers.gguf.gguf_quantizer':quantizer}
+        modules['diffusers.utils'].import_utils=import_utils
+        reloaded=[]
+        with patch.dict(sys.modules,modules),patch('importlib.reload',side_effect=lambda m:reloaded.append(m.__name__) or m):
+            exec(GGUF_READY_CODE,{})
+            self.assertTrue(import_utils.is_gguf_available())
+            self.assertEqual(reloaded,['diffusers.quantizers.gguf.gguf_quantizer'])
+            exec(GGUF_READY_CODE,{})  # nothing to do once available
+        self.assertEqual(len(reloaded),1)

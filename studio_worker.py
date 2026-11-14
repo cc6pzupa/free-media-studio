@@ -67,7 +67,7 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if urlsplit(self.path).path=='/history':
@@ -101,11 +101,13 @@ def create_worker_server(core, token, port=0):
                         core.configure(body['config'],remember=body.get('remember'),api_key=body.get('api_key'))
                     else:core.configure(body)
                     return self.send(200,core.status())
+                if self.path.startswith('/jobs/') and self.path.endswith('/cancel'):
+                    return self.send(200,core.store.cancel(self.path[6:-7]))
                 if self.path.startswith('/history/'):
                     return self.send(200,core.store.edit_history(self.path[9:],body.get('action'),body.get('favorite')))
                 if self.path=='/jobs':
                     job=core.submit(body.get('prompt'),body.get('seed',42),body.get('steps'),body.get('request_id'),body.get('model_id'),
-                        body.get('size'),body.get('negative_prompt'),body.get('task'),body.get('strength'),body.get('image'),body.get('mask'))
+                        body.get('size'),body.get('negative_prompt'),body.get('task'),body.get('strength'),body.get('image'),body.get('mask'),body.get('feather'))
                     return self.send(202,job)
                 if self.path=='/video/jobs':
                     job=core.submit_video(body.get('prompt'),body.get('seed',42),body.get('steps'),

@@ -90,7 +90,17 @@ def _cc_task_pipeline(task):
 
 
 @torch.inference_mode()
-def generate_image(prompt,seed=42,width=512,height=512,steps=None,task='text',image=None,mask=None,strength=None):
+def _cc_feather(result,image,mask,feather):
+    """Blend the repainted result into the original through a blurred mask.
+
+    The inpaint pipelines binarize the mask, so a soft edge is applied
+    afterwards; pixels outside the mask keep the original exactly."""
+    from PIL import Image,ImageFilter
+    soft=mask.convert('L').resize(result.size).filter(ImageFilter.GaussianBlur(feather))
+    return Image.composite(result.convert('RGB'),image.convert('RGB').resize(result.size),soft)
+
+
+def generate_image(prompt,seed=42,width=512,height=512,steps=None,task='text',image=None,mask=None,strength=None,feather=0):
     steps=_CC_MODEL_PROFILE['default_steps'] if steps is None else steps
     if _CC_MODEL_ID=='sdxl-lightning' and steps!=4:raise ValueError('SDXL-Lightning requires 4 steps')
     if task not in ('text','img2img','inpaint'):raise ValueError('Unknown image task')
@@ -140,6 +150,7 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=None,task='text',im
         if restore_vae:restore_vae()
     if final and not torch.isfinite(final[0]).all().item():raise RuntimeError('Sampling produced non-finite latents')
     if tuple(result.size)!=(width,height):result=result.resize((width,height))
+    if task=='inpaint' and feather:result=_cc_feather(result,image,mask,feather)
     after=torch.cuda.Event(enable_timing=True);after.record(torch.cuda.current_stream(0));torch.cuda.synchronize(0)
     denoise=before.elapsed_time(timings[-1])/1000 if timings else None
     decode=timings[-1].elapsed_time(after)/1000 if timings else None
@@ -151,4 +162,5 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=None,task='text',im
         'attention_backend':'sdpa','parallel_strategy':'encoder_split','acceleration_mode':globals().get('_CC_ACCELERATION','auto'),
         'width':width,'height':height,'steps':steps,'seed':seed,'task':task,
         **({'strength':strength} if task!='text' else {}),
+        **({'feather':feather} if task=='inpaint' and feather else {}),
         'peak_gpu_gib':[round(torch.cuda.max_memory_allocated(i)/2**30,2) for i in range(2)]}

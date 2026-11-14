@@ -93,6 +93,7 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 | `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`model_id`、`steps`（省略时采用模型默认步数）、`size`、`negative_prompt`、`task`、`strength`、`image_path` / `image_base64`、`mask_path` / `mask_base64` | 立即返回任务 ID，不等待首次下载或生图 |
 | `get_job` | `job_id` | `queued/running/complete/error/interrupted`、真实阶段、下载字节与百分比、复用信息 |
 | `get_image` | 已完成的 `job_id` | MCP `image/png` 内容，以及图片尺寸和耗时等元数据 |
+| `cancel_job` | 排队中的 `job_id` | 取消尚未开始的图片或视频任务；已在执行的任务返回 `cancelled: false` |
 | `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps` | 立即返回视频任务 ID |
 | `get_video` | 已完成的视频 `job_id` | 本机 MP4 路径、文件 URI、文件大小与耗时 |
 

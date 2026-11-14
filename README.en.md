@@ -158,6 +158,7 @@ Register `mcp_server.py` in an AI client supporting local stdio MCP. It uses cre
 | `generate_image` | Submit generation and return a job ID |
 | `get_job` | Read progress |
 | `get_image` | Retrieve the completed PNG |
+| `cancel_job` | Cancel a task that has not started |
 
 See the [MCP setup guide](docs/mcp.en.md) for platform configurations and examples.
 

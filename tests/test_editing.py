@@ -537,3 +537,111 @@ class GgufReadyTests(unittest.TestCase):
             self.assertEqual(reloaded,['diffusers.quantizers.gguf.gguf_quantizer'])
             exec(GGUF_READY_CODE,{})  # nothing to do once available
         self.assertEqual(len(reloaded),1)
+
+
+class CancelAndFailureTests(unittest.TestCase):
+    def setUp(self):
+        self.folder=tempfile.TemporaryDirectory();Backend.calls=[]
+        with patch('studio_core.load_config',return_value=None):
+            self.core=StudioCore(Path(self.folder.name),backend_factory=Backend)
+        self.core.configure({'mode':'account','user':'owner','token':'fixture'})  # worker thread not started
+
+    def tearDown(self):self.core.close();self.folder.cleanup()
+
+    def test_only_queued_jobs_are_cancelled_and_never_run(self):
+        first=self.core.submit('a',1,None,'c1','z-image-turbo')
+        second=self.core.submit('b',2,None,'c2','z-image-turbo')
+        claimed=self.core.store.claim()  # first is now running
+        self.assertEqual(claimed['id'],first['job_id'])
+        running=self.core.store.cancel(first['job_id'])
+        self.assertFalse(running['cancelled']);self.assertEqual(running['state'],'running')
+        cancelled=self.core.store.cancel(second['job_id'])
+        self.assertTrue(cancelled['cancelled']);self.assertEqual(cancelled['state'],'cancelled')
+        self.assertIn('未在 Kaggle 上执行',cancelled['message'])
+        self.assertIsNone(self.core.store.claim())  # the worker never picks it up
+        self.assertEqual(self.core.store.pending(),1)
+        self.assertFalse(self.core.store.cancel(second['job_id'])['cancelled'])  # idempotent
+        # Retrying the same request returns the cancelled job instead of generating.
+        self.assertEqual(self.core.submit('b',2,None,'c2','z-image-turbo')['state'],'cancelled')
+        with self.assertRaises(ValueError):self.core.store.cancel('../x')
+
+    def test_failures_are_classified_without_exposing_raw_errors(self):
+        from studio_core import failure_reason,FAILURE_MESSAGES
+        from session_runtime import RemoteError
+        def hidden(remote):
+            try:
+                try:raise RemoteError(remote)
+                except RemoteError:raise RuntimeError('常驻生图失败。') from None
+            except RuntimeError as error:return error
+        cases={'OutOfMemoryError: CUDA out of memory. Tried to allocate 5.50 GiB':'out_of_memory',
+               "OSError: [Errno 30] Read-only file system: '/kaggle/temp/x.partial'":'disk',
+               'RuntimeError: Q4 transformer failed to load twice: OSError: Unable to load weights':'model_files',
+               'RuntimeError: Invalid or blank video':'invalid_result',
+               'KeyError: something else https://kkb-production.jupyter-proxy.kaggle.net/k/1/secret/proxy':'unknown'}
+        for remote,reason in cases.items():
+            self.assertEqual(failure_reason(hidden(remote)),reason,remote)
+        self.assertEqual(failure_reason(TimeoutError('Remote execution timed out')),'timeout')
+        self.assertTrue(all('没有自动重发' in message for message in FAILURE_MESSAGES.values()))
+        self.assertFalse(any('http' in message or 'kaggle.net' in message for message in FAILURE_MESSAGES.values()))
+
+    def test_worker_records_reason_for_a_failed_job(self):
+        class Failing(Backend):
+            def generate_with_progress(self,*a,**k):
+                try:raise RuntimeError('OutOfMemoryError: CUDA out of memory')
+                except RuntimeError:raise RuntimeError('常驻生图失败。') from None
+        with patch('studio_core.load_config',return_value=None):
+            core=StudioCore(Path(self.folder.name)/'other',backend_factory=Failing)
+        core.configure({'mode':'account','user':'owner','token':'fixture'});core.start()
+        try:
+            job=wait(core,core.submit('a',1,None,'oom','z-image-turbo')['job_id'])
+            self.assertEqual((job['state'],job['reason']),('error','out_of_memory'))
+            self.assertIn('显存不足',job['message']);self.assertNotIn('CUDA',job['message'])
+        finally:core.close()
+
+    def test_feather_is_validated_for_inpaint_only(self):
+        self.assertEqual(image_options('z-image-turbo',9,None,None,'inpaint',None,True,True,12)['feather'],12)
+        self.assertNotIn('feather',image_options('z-image-turbo',9,None,None,'inpaint',None,True,True,0))
+        for feather in (65,-1,1.5,True):
+            with self.assertRaises(ValueError):image_options('z-image-turbo',9,None,None,'inpaint',None,True,True,feather)
+        with self.assertRaises(ValueError):image_options('z-image-turbo',9,None,None,'img2img',None,True,False,8)
+
+    @unittest.skipUnless(HAS_PIL,'Pillow is only installed on the GPU kernel')
+    def test_feathered_inpaint_keeps_unmasked_pixels(self):
+        from PIL import Image
+        source=Path('remote_models.py').read_text(encoding='utf-8')
+        scope={};exec(source[source.index('def _cc_feather'):source.index('def generate_image')],scope)
+        original=Image.new('RGB',(64,64),(0,0,255));repainted=Image.new('RGB',(64,64),(255,0,0))
+        mask=Image.new('L',(64,64),0);mask.paste(255,(16,16,48,48))
+        out=scope['_cc_feather'](repainted,original,mask,4)
+        self.assertEqual(out.getpixel((0,0)),(0,0,255))      # outside: original exactly
+        self.assertEqual(out.getpixel((32,32)),(255,0,0))    # inside: repainted
+        edge=out.getpixel((16,32))
+        self.assertTrue(0<edge[0]<255 and 0<edge[2]<255)     # soft transition at the edge
+
+
+class CancelHttpTests(unittest.TestCase):
+    def test_gui_and_api_cancel_queued_jobs(self):
+        with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{'EASY_CONFIG_PATH':str(Path(d)/'settings.json')}):
+            with patch('studio_core.load_config',return_value=None):core=StudioCore(Path(d)/'studio',backend_factory=Backend)
+            core.configure({'mode':'account','user':'owner','token':'fixture'})  # no consumer: jobs stay queued
+            worker=create_worker_server(core,'x'*32)
+            private_write(Path(d)/'studio/connection.json',json.dumps({'url':f'http://127.0.0.1:{worker.server_port}','token':'x'*32,'protocol':1}).encode())
+            worker_thread=threading.Thread(target=worker.serve_forever);worker_thread.start()
+            gui=create_server(0);thread=threading.Thread(target=gui.serve_forever);thread.start()
+            base=f'http://127.0.0.1:{gui.server_port}'
+            try:
+                nonce=re.search("const nonce='([^']+)'",requests.get(base+'/',timeout=5).text).group(1)
+                headers={'X-Local-Session':nonce}
+                image=core.submit('a',1,None,'h1','z-image-turbo')['job_id']
+                video=core.submit_video('b',1,None,'h2','wan21-t2v-1.3b')['job_id']
+                self.assertEqual(requests.post(base+'/jobs/'+image+'/cancel',timeout=5).status_code,401)
+                r=requests.post(base+'/jobs/'+image+'/cancel',headers=headers,timeout=5)
+                self.assertEqual((r.status_code,r.json()['cancelled'],r.json()['state']),(200,True,'cancelled'))
+                api_key=requests.get(base+'/configuration',headers=headers,timeout=5).json()['api_key']
+                r=requests.post(base+'/v1/videos/jobs/'+video+'/cancel',headers={'Authorization':'Bearer '+api_key},timeout=5)
+                self.assertTrue(r.json()['cancelled'])
+                self.assertEqual(requests.post(base+'/jobs/'+'0'*32+'/cancel',headers=headers,timeout=5).status_code,404)
+                self.assertEqual(core.store.pending(),0)
+            finally:
+                gui.shutdown();thread.join();gui.server_close()
+                worker.shutdown();worker_thread.join();worker.server_close();core.close()

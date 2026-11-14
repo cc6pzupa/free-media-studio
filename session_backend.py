@@ -189,7 +189,7 @@ print('COMFY_SESSION_READY:' + json.dumps({{'runtime_id': _COMFY_QWEN_STATE['run
 
 
 def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, height=512, negative_prompt=None,
-                    task='text', strength=None, image=None, mask=None):
+                    task='text', strength=None, image=None, mask=None, feather=None):
     """Remote call for one image. Inputs travel as base64 inside the cell and are
     center-cropped to the requested size on the kernel, never on the client."""
     model_profile(model_id)
@@ -202,6 +202,7 @@ def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, heig
     if task != 'text':
         if image is None: raise ValueError('Missing input image')
         extra.update(task=task, strength=strength)
+        if feather: extra['feather'] = feather
         payload['image'] = base64.b64encode(image).decode('ascii')
         if mask is not None: payload['mask'] = base64.b64encode(mask).decode('ascii')
     payload['extra'] = extra

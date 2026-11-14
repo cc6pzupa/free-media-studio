@@ -15,6 +15,11 @@
 - **画廊**：显示作品使用的参考图与蒙版；“继续编辑”和“作为视频首帧”直接带入工作台。
 - **全部入口**：HTTP API、MCP（支持本机图片路径）、ComfyUI（新增 CC Media Image Edit 节点，视频节点支持首帧）、两个 Kaggle Notebook。
 
+- **取消排队任务**：GUI（单个任务与批量剩余任务）、视频页、HTTP API 与 MCP `cancel_job`；已在执行的任务不会被中断。
+- **失败原因**：显存不足、模型文件、磁盘、Kaggle 会话、超时、结果无效等分类提示与建议，不显示原始错误内容。
+- **随机种子** 按钮（图片与视频）。
+- **蒙版工具**：橡皮擦、撤销（最多 20 步）、边缘羽化（`feather`，涂抹区域以外与原图一致）。
+
 ### 修复（Kaggle 实测发现）
 
 - 失败的生成不再在内核中保留显存；切换图片或视频模型时清理 cuBLAS 工作区（Qwen 双卡后曾占用 GPU 1 约 9.3 GB，导致视频模型显存不足）。
@@ -36,6 +41,11 @@
 - GUI batches (1–8 per prompt, one prompt per line, incrementing seeds, up to 32 tasks) and ZIP export from batches and the gallery.
 - Gallery shows reference images and masks, with Edit further and Use as video first frame.
 - Available in the HTTP API, MCP (local image paths), ComfyUI (CC Media Image Edit node, video first frame) and both Kaggle notebooks.
+
+- Cancel queued tasks from the GUI (single task or the rest of a batch), the video page, the HTTP API and the MCP `cancel_job` tool; running tasks are never interrupted.
+- Failures show a category and suggestion (GPU memory, model files, disk, Kaggle session, timeout, invalid result) without raw error text.
+- Random seed button for images and video.
+- Mask eraser, undo (up to 20 steps) and edge feathering (`feather`; pixels outside the mask match the original).
 
 ### Fixed (found on Kaggle)
 

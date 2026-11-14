@@ -1,6 +1,7 @@
 """Local setup form and fixed image API. No Jupyter URL is needed."""
 import base64
 import hmac
+import re
 import json
 import os
 import secrets
@@ -16,7 +17,7 @@ from app_entry import VERSION
 from media_inputs import MAX_REQUEST_BYTES
 
 
-OPTION_FIELDS=('size','negative_prompt','task','strength','image','mask')
+OPTION_FIELDS=('size','negative_prompt','task','strength','image','mask','feather')
 ZIP_LIMIT=100
 
 
@@ -30,7 +31,7 @@ def validate(data):
     if type(steps) is not int or not 1<=steps<=50:raise ValueError('steps 应为 1–50 的整数')
     if data.get('n',1)!=1 or data.get('response_format','b64_json')!='b64_json':raise ValueError('每次请求生成 1 张，b64_json 返回；批量请提交多个任务')
     image_options(profile['id'],steps,data.get('size'),data.get('negative_prompt'),data.get('task'),data.get('strength'),
-        data.get('image') not in (None,''),data.get('mask') not in (None,''))
+        data.get('image') not in (None,''),data.get('mask') not in (None,''),data.get('feather'))
     return prompt,seed,steps
 
 
@@ -214,6 +215,18 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                 except (ValueError,TypeError):return self.send(400,{'error':{'message':'无效的画廊操作。'}})
                 except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
                 except RuntimeError:return self.send(503,{'error':{'message':'历史后台暂不可用，请重试。'}})
+                finally:client.close()
+            cancel=re.fullmatch(r'/(v1/videos/|video/)?jobs/([a-f0-9]{32})/cancel',self.path)
+            if cancel:
+                if not (self.api_auth() if self.path.startswith('/v1/') else self.ui_auth()):return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient(allow_job_inheritance=True)
+                try:
+                    job=client.cancel_job(cancel.group(2))
+                    if job['state']=='interrupted':job['state']='error'
+                    return self.send(200,job)
+                except ValueError:return self.send(404,{'error':{'message':'任务不存在。'}})
+                except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
+                except RuntimeError as error:return self.send(503,{'error':{'message':str(error)}})
                 finally:client.close()
             if self.path=='/gallery/zip':
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})

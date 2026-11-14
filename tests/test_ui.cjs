@@ -158,3 +158,33 @@ test('editing requires an uploaded image and switches away from Qwen',async()=>{
     assert.equal(p.elements.get('taskMode').value,'text');
     assert.equal(p.elements.get('negativeFields').style.display,'block');
 });
+
+test('random seed and cancelling a batch skip the queued tasks',async()=>{
+    const calls=[];let serial=0;const cancelled=new Set();
+    const p=page(async(url,options)=>{
+        calls.push([url,options]);
+        if(url==='/configuration')return config(null);
+        if(url==='/jobs')return response({job_id:String(serial++).padStart(32,'0')});
+        if(url.endsWith('/cancel')){const id=url.split('/')[2];const ok=id!=='0'.repeat(32);if(ok)cancelled.add(id);return response({cancelled:ok,state:ok?'cancelled':'running'})}
+        const id=url.split('/')[2];
+        if(cancelled.has(id))return response({state:'cancelled',message:'任务已取消，未在 Kaggle 上执行。'});
+        if(id==='0'.repeat(32)&&!cancelled.size)return response({state:'running',phase:'generating'});
+        return complete();
+    });
+    for(let i=0;i<5;i++)await tick();
+    p.elements.get('randomSeed').onclick();
+    const seed=Number(p.elements.get('seed').value);
+    assert.ok(Number.isInteger(seed)&&seed>=0&&seed<2147483648);
+    p.elements.set('prompt',{value:'fox',style:{}});
+    p.elements.set('batchCount',{value:'3',style:{}});
+    const run=p.elements.get('generate').onclick();
+    for(let i=0;i<10;i++)await tick();
+    assert.equal(p.elements.get('cancelQueued').style.display,'inline-flex');
+    await p.elements.get('cancelQueued').onclick();
+    assert.match(p.elements.get('status').textContent,/已取消 2 个/);
+    await run;for(let i=0;i<20;i++)await tick();
+    const posted=calls.filter(([url])=>url==='/jobs').map(c=>JSON.parse(c[1].body).seed);
+    assert.deepEqual(posted,[seed,seed+1,seed+2]);
+    assert.match(p.elements.get('status').textContent,/已取消 2 张/);
+    assert.equal(p.elements.get('cancelQueued').style.display,'none');
+});

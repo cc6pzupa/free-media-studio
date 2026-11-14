@@ -42,7 +42,11 @@ Qwen-Image 2.1 暂不支持图生图和局部编辑：diffusers 没有它的编�
 
 ## GUI
 
-- **创作方式** 选择“图生图”或“局部编辑”，上传 PNG / JPEG / WebP。局部编辑直接在图片上涂抹，“清除涂抹”可重来。选择 Qwen 时会自动切换到 Z-Image Turbo。
+- **创作方式** 选择“图生图”或“局部编辑”，上传 PNG / JPEG / WebP。局部编辑直接在图片上涂抹：可切换 **橡皮擦**、**撤销**（最多 20 步）或“清除涂抹”。选择 Qwen 时会自动切换到 Z-Image Turbo。
+- **边缘羽化**（局部编辑，默认 8 px）：重绘区域与原图柔和过渡，涂抹区域以外的像素与原图完全一致。设为 0 则不羽化。
+- 种子旁的 **随机** 按钮生成新种子；批量时从该种子开始递增。
+- 生成进度下方的 **取消排队中的任务** 会取消尚未开始的任务（批量中剩余的任务也一并取消）。已在 Kaggle 上执行的任务不会被中断。
+- 失败时会显示原因与建议，例如显存不足时提示改小尺寸；所有失败的任务都不会自动重发。
 - **画面尺寸** 与 **每个提示词张数** 在步数下方。勾选“每行一个提示词”后，每一行提交为独立任务。
 - 批量完成后，点击 **打包下载 ZIP**。历史画廊也可把当前列表（最多 100 件）打包下载。
 - 视频页可上传 **首帧图片**，并为 Wan 模型填写负面提示词。
@@ -59,7 +63,7 @@ Content-Type: application/json
 ```
 
 - `task`：`text`（默认）、`img2img`、`inpaint`。`image` / `mask` 为 base64，也接受 `data:image/...;base64,` 前缀。单张不超过 8 MB。
-- 蒙版白色为重绘区域，黑色保留。
+- 蒙版白色为重绘区域，黑色保留。`feather`（0–64 像素，仅 inpaint）让重绘区域与原图柔和过渡。
 - 返回尺寸与 `size` 一致；`usage` 包含 `task`、`strength`、`width`、`height`。
 - 每次请求仍生成 1 张（`n=1`）；批量请提交多个请求。
 
@@ -67,7 +71,7 @@ Content-Type: application/json
 
 ## MCP
 
-`generate_image` 新增 `size`、`negative_prompt`、`task`、`strength`、`image_path` / `image_base64`、`mask_path` / `mask_base64`。`generate_video` 新增 `image_path` / `image_base64` 与 `negative_prompt`。本机文件路径适合 AI 客户端直接引用图片。
+`cancel_job(job_id)` 取消尚未开始的图片或视频任务（已在执行的任务返回 `cancelled: false`，继续完成）。`generate_image` 新增 `size`、`negative_prompt`、`task`、`strength`、`feather`、`image_path` / `image_base64`、`mask_path` / `mask_base64`。`generate_video` 新增 `image_path` / `image_base64` 与 `negative_prompt`。本机文件路径适合 AI 客户端直接引用图片。
 
 ```text
 generate_image(prompt="watercolor style", request_id="edit-001", model_id="z-image-turbo",
@@ -79,6 +83,14 @@ generate_image(prompt="watercolor style", request_id="edit-001", model_id="z-ima
 - **CC Media Image** 新增可选的 `size` 与 `negative_prompt`。
 - 新节点 **CC Media Image Edit (Preview)**：输入 `IMAGE`，局部编辑再接 `MASK`（1 / 白色为重绘区域），输出 `IMAGE`。
 - **CC Media Video (Preview)** 新增可选 `image` 首帧输入。
+
+## 取消任务（HTTP）
+
+```http
+POST /v1/videos/jobs/<job_id>/cancel      # 本机 API Key
+```
+
+GUI 使用 `POST /jobs/<job_id>/cancel` 与 `POST /video/jobs/<job_id>/cancel`。只有排队中的任务会被取消，返回的任务中 `cancelled` 表示是否成功。
 
 ## Kaggle Notebook
 
@@ -105,7 +117,9 @@ Known limits: 4-step SDXL-Lightning inpainting over faces is coarse; LTX image-t
 
 All features need automatic account mode and reuse the loaded models; no extra weights are downloaded.
 
-- **Image to image** and **inpainting** run on Z-Image Turbo and SDXL-Lightning. Strength is 0.05–1 (defaults 0.6 and 0.9); steps × strength must be at least 1. Inputs are center-cropped to the selected size. In masks, white is repainted.
+- **Image to image** and **inpainting** run on Z-Image Turbo and SDXL-Lightning. Strength is 0.05–1 (defaults 0.6 and 0.9); steps × strength must be at least 1. Inputs are center-cropped to the selected size. In masks, white is repainted; the GUI brush has an eraser and undo. `feather` (0–64 px, inpaint only; GUI default 8) blends the repainted area into the original, leaving pixels outside the mask unchanged.
+- **Cancel** queued tasks from the GUI, `POST /v1/videos/jobs/<job_id>/cancel` or the MCP `cancel_job` tool. Running tasks are never interrupted.
+- **Random seed** button in the GUI and video page. Failures show a reason and a suggestion (for example, use a smaller size when out of GPU memory); failed tasks are never resubmitted automatically.
 - **Sizes**: 512×512 (default), 768×768, 1024×1024, 768×512, 512×768, 1024×576, 576×1024.
 - **Negative prompts**: Qwen-Image 2.1 and the Wan video models (the others run without CFG).
 - **Image to video** from a first frame: LTX-Video 2B and Wan2.2 5B.

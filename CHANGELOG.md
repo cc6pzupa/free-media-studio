@@ -19,6 +19,8 @@
 
 - 失败的生成不再在内核中保留显存；切换图片或视频模型时清理 cuBLAS 工作区（Qwen 双卡后曾占用 GPU 1 约 9.3 GB，导致视频模型显存不足）。
 - 修正 Z-Image 编辑与 LTX 图生视频的 VAE 精度不一致；Z-Image 1024 的 VAE 编解码改在 GPU 1。
+- 修正先用 Z-Image / SDXL 再切换 Qwen 时偶发的权重加载失败：diffusers 在首次导入时记录 gguf 是否可用，之后安装的 gguf 不会被识别。现在 gguf 随图片依赖一起提前安装，并在加载 Qwen 前刷新该检查。
+- 下载模型前按最近使用顺序清理未使用的旧模型文件，单个会话的模型文件保持在 80 GB 以内。
 
 ### 变化
 
@@ -39,6 +41,8 @@
 
 - Failed generations no longer keep GPU memory in the kernel; model and video switches clear cuBLAS workspaces (after Qwen's dual-GPU CFG they pinned about 9.3 GB on GPU 1, so video models ran out of memory).
 - VAE dtype mismatches in Z-Image editing and LTX image-to-video; Z-Image at 1024 runs its VAE on GPU 1.
+- Intermittent Qwen load failure after Z-Image or SDXL: diffusers records whether gguf exists when first imported, so a later gguf install went unseen. gguf is now installed with the image dependencies, and the check is refreshed before loading Qwen.
+- Before a download, least recently used model folders that are not in use are removed to keep a session's models within 80 GB.
 
 ### Changed
 

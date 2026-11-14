@@ -28,7 +28,7 @@ On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe
 | Tool | Inputs | Output |
 | --- | --- | --- |
 | `studio_status` | None | Configuration, queue, previous model usage, GPU quota, idle retention, countdown |
-| `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `model_id`, `steps` (model default when omitted), `size`, `negative_prompt`, `task`, `strength`, `image_path` / `image_base64`, `mask_path` / `mask_base64` | Immediate durable `job_id` |
+| `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `model_id`, `steps` (model default when omitted), `size`, `negative_prompt`, `task`, `strength`, `feather` (inpaint edge feathering, 0–64), `image_path` / `image_base64`, `mask_path` / `mask_base64` | Immediate durable `job_id` |
 | `get_job` | `job_id` | State, real progress, downloaded bytes, model reuse |
 | `get_image` | Completed `job_id` | PNG image content and usage metadata |
 | `cancel_job` | Queued `job_id` | Cancels an image or video task that has not started; a running task returns `cancelled: false` |

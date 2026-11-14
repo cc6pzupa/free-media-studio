@@ -62,7 +62,7 @@ Qwen-Image 2.1 暂不支持图生图和局部编辑：diffusers 没有它的编�
 - 历史画廊的 **选择** 模式：点选作品（最多 100 件）后可 **打包所选** 或 **删除所选**。
 - **画面尺寸** 与 **每个提示词张数** 在步数下方。勾选“每行一个提示词”后，每一行提交为独立任务。
 - 批量完成后，点击 **打包下载 ZIP**。历史画廊也可把当前列表（最多 100 件）打包下载。
-- 视频页可上传 **首帧图片**，并为 Wan 模型填写负面提示词。
+- 视频页可上传 **首帧图片**（LTX 还可上传 **尾帧**，生成从首帧过渡到尾帧的视频），选择 **画面尺寸**（横向、竖向、方形），并为 Wan 模型填写负面提示词。
 
 ## HTTP API
 
@@ -80,11 +80,11 @@ Content-Type: application/json
 - 返回尺寸与 `size` 一致；`usage` 包含 `task`、`strength`、`width`、`height`。
 - `n`（1–8）一次生成多张，种子依次递增；`data` 按顺序返回每张图片，`usages` 列出每张的耗时信息（`usage` 为第一张）。图片依次生成，请求会等待全部完成。
 
-视频：`POST /v1/videos/generations` 增加可选的 `image`（首帧 base64）和 `negative_prompt`。
+视频：`POST /v1/videos/generations` 增加可选的 `image`（首帧 base64）、`negative_prompt`（仅 Wan）、`size`（如 `448x768`）和 `last_image`（尾帧 base64，仅 LTX，需同时提供首帧）。
 
 ## MCP
 
-`cancel_job(job_id)` 取消尚未开始的图片或视频任务（已在执行的任务返回 `cancelled: false`，继续完成）。`generate_image` 新增 `size`、`negative_prompt`、`task`、`strength`、`feather`、`image_path` / `image_base64`、`mask_path` / `mask_base64`。`generate_video` 新增 `image_path` / `image_base64` 与 `negative_prompt`。本机文件路径适合 AI 客户端直接引用图片。
+`cancel_job(job_id)` 取消尚未开始的图片或视频任务（已在执行的任务返回 `cancelled: false`，继续完成）。`generate_image` 新增 `size`、`negative_prompt`、`task`、`strength`、`feather`、`image_path` / `image_base64`、`mask_path` / `mask_base64`。`generate_video` 新增 `image_path` / `image_base64`、`last_image_path` / `last_image_base64`（仅 LTX）、`size` 与 `negative_prompt`。本机文件路径适合 AI 客户端直接引用图片。
 
 ```text
 generate_image(prompt="watercolor style", request_id="edit-001", model_id="z-image-turbo",
@@ -94,8 +94,8 @@ generate_image(prompt="watercolor style", request_id="edit-001", model_id="z-ima
 ## ComfyUI
 
 - **CC Media Image** 新增可选的 `size` 与 `negative_prompt`。
-- 新节点 **CC Media Image Edit (Preview)**：输入 `IMAGE`，局部编辑再接 `MASK`（1 / 白色为重绘区域），输出 `IMAGE`。
-- **CC Media Video (Preview)** 新增可选 `image` 首帧输入。
+- 新节点 **CC Media Image Edit (Preview)**：输入 `IMAGE`，局部编辑再接 `MASK`（1 / 白色为重绘区域），输出 `IMAGE`；可设 `feather` 边缘羽化。
+- **CC Media Video (Preview)** 新增可选 `image` 首帧、`last_image` 尾帧（仅 LTX）与 `size`。
 
 ## 取消任务（HTTP）
 
@@ -108,7 +108,7 @@ GUI 使用 `POST /jobs/<job_id>/cancel` 与 `POST /video/jobs/<job_id>/cancel`�
 ## Kaggle Notebook
 
 - `kaggle_standalone.ipynb`：新增“方式”（文生图 / 图生图 / 局部编辑）、参考图上传、重绘强度、边缘羽化、尺寸和负面提示词（仅 Qwen）。局部编辑的蒙版可用 **形状**（椭圆或矩形，用滑块设置位置和大小，并在原图上预览重绘区域），也可上传蒙版图片（白色为重绘区域）。
-- `kaggle_video.ipynb`：LTX-Video 2B 与 Wan2.2 5B 可上传首帧；Wan 模型可填负面提示词。
+- `kaggle_video.ipynb`：LTX-Video 2B 与 Wan2.2 5B 可上传首帧，LTX 可再上传尾帧；可选视频尺寸；Wan 模型可填负面提示词。
 
 ## English
 
@@ -139,7 +139,7 @@ All features need automatic account mode and reuse the loaded models; no extra w
 - **Random seed** button in the GUI and video page. Failures show a reason and a suggestion (for example, use a smaller size when out of GPU memory); failed tasks are never resubmitted automatically.
 - **Sizes**: 512×512 (default), 768×768, 1024×1024, 768×512, 512×768, 1024×576, 576×1024.
 - **Negative prompts**: Qwen-Image 2.1 and the Wan video models (the others run without CFG).
-- **Image to video** from a first frame: LTX-Video 2B and Wan2.2 5B.
+- **Image to video** from a first frame: LTX-Video 2B and Wan2.2 5B. LTX also takes a last frame and generates a transition between the two. Each video model offers landscape (default), portrait and square sizes.
 - **GUI batches**: 1–8 images per prompt, optional one prompt per line, incrementing seeds, up to 32 tasks; download results as a ZIP. The gallery can also export the current list (up to 100 works).
 - Qwen-Image 2.1 has no editing pipeline in diffusers. Instruction editing would need the separate ~20B Qwen-Image-Edit model, which must be validated on dual T4 first.
-- HTTP fields: `size`, `negative_prompt`, `task`, `strength`, `image`, `mask` (base64, at most 8 MB each). MCP adds the same fields and accepts local `image_path` / `mask_path`. ComfyUI adds **CC Media Image Edit (Preview)** plus optional `size`, `negative_prompt` and a first-frame `image` on the video node. The standalone Kaggle notebooks add the same controls: upload a reference image or a video first frame; for inpainting, build an ellipse or rectangle mask with sliders and a live preview, or upload a mask image (white = repaint). The GUI shows each model's measured first-use time, and the gallery's Select mode downloads or deletes chosen works (up to 100).
+- HTTP fields: `size`, `negative_prompt`, `task`, `strength`, `image`, `mask` (base64, at most 8 MB each). The video API adds `image`, `negative_prompt`, `size` and `last_image` (LTX). MCP adds the same fields and accepts local `image_path` / `mask_path` / `last_image_path`. ComfyUI adds **CC Media Image Edit (Preview)** plus optional `size` and `negative_prompt`; the video node takes `size`, a first-frame `image` and an LTX `last_image`. The standalone Kaggle notebooks add the same controls: upload a reference image or a video first frame; for inpainting, build an ellipse or rectangle mask with sliders and a live preview, or upload a mask image (white = repaint). The GUI shows each model's measured first-use time, and the gallery's Select mode downloads or deletes chosen works (up to 100).

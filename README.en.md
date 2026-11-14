@@ -101,7 +101,7 @@ The GUI supports batches (preview): 1–8 images per prompt, one prompt per line
 
 ## Image editing (preview)
 
-Z-Image Turbo and SDXL-Lightning support **image-to-image** (reference image + strength) and **inpainting** (paint over the image; white areas are redrawn). LTX-Video 2B and Wan2.2 5B support **image-to-video** from a first frame. Qwen-Image 2.1 and the Wan models accept negative prompts. These features are verified on Kaggle dual T4; for example, Z-Image image-to-image at 512 takes about 6.6 s and Wan2.2 image-to-video (33 frames) about 210 s. See the [editing guide](docs/editing.md).
+Z-Image Turbo and SDXL-Lightning support **image-to-image** (reference image + strength) and **inpainting** (paint over the image; white areas are redrawn). LTX-Video 2B and Wan2.2 5B support **image-to-video** from a first frame (LTX also takes a last frame for a transition), with landscape, portrait or square video. Inpainting has an eraser, undo and edge feathering. Qwen-Image 2.1 and the Wan models accept negative prompts. Queued tasks can be cancelled, and failures show a reason and a suggestion. These features are verified on Kaggle dual T4; for example, Z-Image image-to-image at 512 takes about 6.6 s and Wan2.2 image-to-video (33 frames) about 210 s. See the [editing guide](docs/editing.md).
 
 ## GPU usage and idle retention
 

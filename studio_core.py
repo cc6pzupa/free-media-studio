@@ -133,7 +133,7 @@ STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width'
     'generation_number','asset_source','cache_status','backend','model_id','denoising_seconds','decode_seconds',
     'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy','total_generation_seconds','migration_seconds','replica_load_seconds',
     'dual_model_reused','acceleration_mode','acceleration_fallback','media_type','frames','fps','loading_seconds','cfg_pairs',
-    'task','strength','image_to_video','feather'}
+    'task','strength','image_to_video','feather','last_frame'}
 PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file','reason'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
@@ -320,7 +320,7 @@ class JobStore:
     def _release_inputs(self, params):
         # Inputs are shared by content. Keep one while any visible job uses it.
         from media_inputs import is_digest
-        for name in (params.get('image'),params.get('mask')):
+        for name in (params.get('image'),params.get('mask'),params.get('last_image')):
             if not is_digest(name):continue
             used=self.db.execute("SELECT COUNT(*) FROM jobs WHERE hidden=0 AND instr(params,?)>0",(name,)).fetchone()[0]
             if not used:(self.inputs/name).unlink(missing_ok=True)
@@ -480,12 +480,14 @@ class StudioCore:
             return None
         return max(0,math.ceil(minutes*60-(time.monotonic()-self.idle_since)))
 
-    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None):
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
         from video_registry import validate_video
         from media_inputs import decode_image
         image=decode_image(image,'首帧图片') if image not in (None,'') else None
-        params=dict(validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt),media_type='video')
+        last_image=decode_image(last_image,'尾帧图片') if last_image not in (None,'') else None
+        params=dict(validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image),media_type='video')
         if 'image' in params:params['image']=self.store.save_input(image)
+        if 'last_image' in params:params['last_image']=self.store.save_input(last_image)
         with self.lock:
             if not self.backend or (self.config or {}).get('mode')!='account':
                 raise ValueError('视频需要自动账号模式。')
@@ -560,7 +562,7 @@ class StudioCore:
                 params=json.loads(row['params'])
                 video=params.pop('media_type',None)=='video'
                 expected=output_size(params)
-                for name in ('image','mask'):
+                for name in ('image','mask','last_image'):
                     if name in params:params[name]=self.store.read_input(params[name])
                 if video:
                     raw,stats=backend.generate_video_with_progress(**params,progress=lambda event:self._progress(job_id,event))

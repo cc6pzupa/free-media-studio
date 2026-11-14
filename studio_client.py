@@ -44,7 +44,7 @@ class StudioClient:
         self.allow_job_inheritance=allow_job_inheritance
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False;self.video_options_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -69,6 +69,7 @@ class StudioClient:
                 self.video_supported=result.get('video') is True
                 self.editing_supported=result.get('editing') is True
                 self.cancel_supported=result.get('cancel') is True
+                self.video_options_supported=result.get('video_options') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -183,7 +184,7 @@ class StudioClient:
         if not isinstance(name,str) or not re.fullmatch(r'[a-f0-9]{64}',name):raise ValueError('输入图片引用无效。')
         return self._request('GET','/inputs/'+name,binary=True)
 
-    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None):
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
         if __package__:
             from .video_registry import validate_video
             from .media_inputs import decode_image,encode
@@ -191,9 +192,12 @@ class StudioClient:
             from video_registry import validate_video
             from media_inputs import decode_image,encode
         if image not in (None,''):image=encode(decode_image(image,'首帧图片'))
-        params=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt)
+        if last_image not in (None,''):last_image=encode(decode_image(last_image,'尾帧图片'))
+        params=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image)
         self.status()
         if not self.video_supported:raise RuntimeError('请重启本机后台以启用视频 / Restart the worker to enable video.')
+        if ('size' in params or 'last_image' in params) and not self.video_options_supported:
+            raise RuntimeError('请重启本机后台以启用视频尺寸与尾帧 / Restart the worker to enable video sizes and last frames.')
         if ('image' in params or 'negative_prompt' in params) and not self.editing_supported:
             raise RuntimeError('请重启本机后台以启用图生视频 / Restart the worker to enable image-to-video.')
         return self._request('POST','/video/jobs',dict(params,request_id=request_id or secrets.token_hex(16)))

@@ -23,6 +23,10 @@ class VideoScheduleTest(unittest.TestCase):
         self.assertEqual(scheduler.actual['device'],'cuda:1')
         self.assertFalse(scheduler.config['use_dynamic_shifting']);self.assertEqual(scheduler.config['shift'],1)
         with self.assertRaises(ValueError):scheduler.set_timesteps(sigmas=[1,.5])
+        # Explicit timesteps (keyframe pipeline) are accepted only as the trained schedule.
+        scheduler.set_timesteps(timesteps=[1000*s for s in trained],device='cuda:0')
+        self.assertEqual(scheduler.actual['sigmas'],trained)
+        with self.assertRaises(ValueError):scheduler.set_timesteps(timesteps=[1000*(1-i/8) for i in range(8)])
 
 
 if __name__=='__main__':unittest.main()

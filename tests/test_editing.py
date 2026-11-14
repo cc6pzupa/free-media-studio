@@ -363,6 +363,16 @@ class HttpTests(unittest.TestCase):
                     self.assertTrue(names[0].startswith('001-seed1-'));self.assertEqual(png_size(z.read(names[1])),(576,1024))
                 self.assertEqual(requests.post(base+'/gallery/zip',headers=headers,json={'job_ids':['../x']},timeout=5).status_code,400)
                 self.assertEqual(requests.post(base+'/gallery/zip',headers=headers,json={'job_ids':[]},timeout=5).status_code,400)
+                # The image API returns n images with incrementing seeds.
+                api_key=requests.get(base+'/configuration',headers=headers,timeout=5).json()['api_key']
+                api={'Authorization':'Bearer '+api_key}
+                r=requests.post(base+'/v1/images/generations',headers=api,json={'prompt':'fox','model_id':'z-image-turbo','seed':42,'n':3,'size':'768x512'},timeout=30)
+                self.assertEqual(r.status_code,200,r.text);body=r.json()
+                self.assertEqual(len(body['data']),3);self.assertEqual([u['seed'] for u in body['usages']],[42,43,44])
+                self.assertEqual(body['usage']['seed'],42)
+                self.assertEqual(png_size(base64.b64decode(body['data'][2]['b64_json'])),(768,512))
+                for count in (0,9,True):
+                    self.assertEqual(requests.post(base+'/v1/images/generations',headers=api,json={'prompt':'fox','n':count},timeout=5).status_code,400)
                 # First-use estimates are injected from the model catalog.
                 from model_registry import MODELS
                 html=requests.get(base+'/',timeout=5).text

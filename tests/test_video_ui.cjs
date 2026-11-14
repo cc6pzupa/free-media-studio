@@ -124,3 +124,28 @@ test('model hint shows the measured first-use time and follows the language',asy
  p.elements.get('model').value='ltx-video-2b-distilled';p.elements.get('model').onchange();
  assert.match(p.elements.get('modelHint').textContent,/not yet measured/);
 });
+test('video size is sent only when not the default and a last frame needs a first frame',async()=>{
+ const payloads=[];
+ const sized=[{...models[0],sizes:['832x480','480x832','624x624']},{...models[1],sizes:['768x448','448x768','512x512'],last_frame:true,image_to_video:true}];
+ const p=page(async(url,options)=>{
+  if(url==='/video/models')return response({models:sized});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({job_id:'f'.repeat(32)})}
+  return response({state:'queued'});
+ });
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('videoSize').value,'832x480');
+ assert.equal(p.elements.get('lastFields').hidden,true);
+ for(const [id,value] of [['prompt','wave'],['seed','1'],['frames','33']])p.elements.get(id).value=value;
+ p.elements.get('videoSize').value='480x832';
+ await p.elements.get('generate').onclick();
+ assert.equal(payloads[0].size,'480x832');
+ const resumed=page(async(url,options)=>{
+  if(url==='/video/models')return response({models:sized});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({job_id:'e'.repeat(32)})}
+  return response({state:'queued'});
+ },new Map([['cc.media.video.pending.v1',JSON.stringify({prompt:'kf',model_id:'ltx-video-2b-distilled',steps:8,seed:1,frames:33,size:'512x512',image:'AAAA',last_image:'BBBB',request_id:'resume-1'})]]));
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(resumed.elements.get('lastFields').hidden,false);
+ await resumed.elements.get('generate').onclick();
+ assert.deepEqual([payloads[1].size,payloads[1].image,payloads[1].last_image],['512x512','AAAA','BBBB']);
+});

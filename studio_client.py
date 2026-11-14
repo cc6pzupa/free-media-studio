@@ -44,7 +44,7 @@ class StudioClient:
         self.allow_job_inheritance=allow_job_inheritance
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False;self.video_options_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -67,6 +67,9 @@ class StudioClient:
                 self.model_selection_supported=result.get('model_selection') is True
                 self.acceleration_supported=result.get('dual_cfg') is True
                 self.video_supported=result.get('video') is True
+                self.editing_supported=result.get('editing') is True
+                self.cancel_supported=result.get('cancel') is True
+                self.video_options_supported=result.get('video_options') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -103,8 +106,9 @@ class StudioClient:
             raise RuntimeError('请先停止旧后台并重启客户端以启用双卡加速。 / Restart the old worker to enable dual-GPU acceleration.')
         for attempt in range(2):
             try:
+                # Uploads of reference images need longer than a status read.
                 response=self.http.request(method,self.url+path,json=body,
-                    headers={'Authorization':'Bearer '+self.token},timeout=(2,15))
+                    headers={'Authorization':'Bearer '+self.token},timeout=(2,60 if path in ('/jobs','/video/jobs') else 15))
             except requests.RequestException:
                 if attempt==0 and self.autostart:
                     self.ensure(force=True);continue
@@ -137,13 +141,25 @@ class StudioClient:
         self.get_job(job_id)
         return self._request('POST','/history/'+job_id,body)
 
-    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None,size=None,negative_prompt=None,task=None,strength=None,image=None,mask=None,feather=None):
+        if __package__:
+            from .media_inputs import decode_image,encode
+        else:
+            from media_inputs import decode_image,encode
+        # Defaults are not sent, so plain requests still work with an older worker.
+        options={key:value for key,value in (('size',size),('negative_prompt',negative_prompt),('task',task),('strength',strength))
+                 if value not in (None,'','512x512','text')}
+        if feather not in (None,0):options['feather']=feather
+        if image not in (None,''):options['image']=encode(decode_image(image,'参考图'))
+        if mask not in (None,''):options['mask']=encode(decode_image(mask,'蒙版'))
         self.status()
         if model_id not in (None,'qwen-image-2.1') and not self.model_selection_supported:
             raise RuntimeError('请先停止旧后台并重启客户端，再使用新增模型。 / Restart the old worker to select new models.')
+        if options and not self.editing_supported:
+            raise RuntimeError('请先停止旧后台并重启客户端，再使用尺寸、负面提示词或图片编辑。 / Restart the old worker to enable editing.')
         # A retried POST in _request uses this exact same ID and payload.
         return self._request('POST','/jobs',{'prompt':prompt,'seed':seed,'steps':steps,
-            'request_id':request_id or secrets.token_hex(16),'model_id':model_id})
+            'request_id':request_id or secrets.token_hex(16),'model_id':model_id,**options})
 
     def get_job(self,job_id):
         # Validate before assembling a URL; never accept traversal/query fragments.
@@ -152,18 +168,38 @@ class StudioClient:
             raise ValueError('任务 ID 格式不正确。')
         return self._request('GET','/jobs/'+job_id)
 
+    def cancel_job(self,job_id):
+        """Cancel a queued job. Returns the job with cancelled=False if it already started."""
+        self.get_job(job_id)
+        if not self.cancel_supported:raise RuntimeError('请重启本机后台以启用取消任务。 / Restart the worker to enable cancelling.')
+        return self._request('POST','/jobs/'+job_id+'/cancel',{})
+
     def get_image(self,job_id):
         self.get_job(job_id)
         return self._request('GET','/jobs/'+job_id+'/image',binary=True)
 
-    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None):
+    def get_input(self,name):
+        """An uploaded reference image or mask, addressed by its SHA-256."""
+        import re
+        if not isinstance(name,str) or not re.fullmatch(r'[a-f0-9]{64}',name):raise ValueError('输入图片引用无效。')
+        return self._request('GET','/inputs/'+name,binary=True)
+
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
         if __package__:
             from .video_registry import validate_video
+            from .media_inputs import decode_image,encode
         else:
             from video_registry import validate_video
-        params=validate_video(prompt,seed,steps,model_id,frames)
+            from media_inputs import decode_image,encode
+        if image not in (None,''):image=encode(decode_image(image,'首帧图片'))
+        if last_image not in (None,''):last_image=encode(decode_image(last_image,'尾帧图片'))
+        params=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image)
         self.status()
         if not self.video_supported:raise RuntimeError('请重启本机后台以启用视频 / Restart the worker to enable video.')
+        if ('size' in params or 'last_image' in params) and not self.video_options_supported:
+            raise RuntimeError('请重启本机后台以启用视频尺寸与尾帧 / Restart the worker to enable video sizes and last frames.')
+        if ('image' in params or 'negative_prompt' in params) and not self.editing_supported:
+            raise RuntimeError('请重启本机后台以启用图生视频 / Restart the worker to enable image-to-video.')
         return self._request('POST','/video/jobs',dict(params,request_id=request_id or secrets.token_hex(16)))
 
     def get_video(self,job_id):
@@ -178,7 +214,7 @@ class StudioClient:
             if progress and job!=previous:progress(job)
             previous=job
             if job['state']=='complete':return (self.get_video(job_id) if job.get('media_type')=='video' else self.get_image(job_id)),job['usage']
-            if job['state'] in ('error','interrupted'):raise RuntimeError(job['message'])
+            if job['state'] in ('error','interrupted','cancelled'):raise RuntimeError(job['message'])
             time.sleep(.5)
         raise TimeoutError('等待超时；任务未取消，请使用原任务 ID 继续查询。')
 
@@ -212,12 +248,12 @@ class SharedBackend:
         result.client.autostart=True
         return result
 
-    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None,**options):
         if self.config:
             config={k:v for k,v in self.config.items() if k!='keep_alive_minutes'}
             self.client._request('POST','/configure',config)
-        return self.client.submit(prompt,seed,steps,request_id,model_id)
-    def generate(self,prompt,seed=42,steps=None,model_id=None):return self.generate_with_progress(prompt,seed,steps,model_id=model_id)
-    def generate_with_progress(self,prompt,seed=42,steps=None,progress=None,model_id=None):
-        return self.client.wait(self.submit(prompt,seed,steps,model_id=model_id)['job_id'],progress)
+        return self.client.submit(prompt,seed,steps,request_id,model_id,**options)
+    def generate(self,prompt,seed=42,steps=None,model_id=None,**options):return self.generate_with_progress(prompt,seed,steps,model_id=model_id,**options)
+    def generate_with_progress(self,prompt,seed=42,steps=None,progress=None,model_id=None,**options):
+        return self.client.wait(self.submit(prompt,seed,steps,model_id=model_id,**options)['job_id'],progress)
     def close(self):self.client.close()

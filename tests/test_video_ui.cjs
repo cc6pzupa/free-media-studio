@@ -80,3 +80,72 @@ test('lost submission response survives refresh and resumes the same request',as
  assert.equal(next.elements.get('status').textContent,'Video ready');assert.match(next.elements.get('meta').textContent,/Model reused/);
  assert.doesNotMatch(next.elements.get('meta').textContent,/undefined/);
 });
+test('negative prompt is offered and sent only for CFG video models',async()=>{
+ const payloads=[];
+ const withCfg=[{...models[0],guidance:5},{...models[1],guidance:1,image_to_video:true}];
+ const p=page(async(url,options)=>{
+  if(url==='/video/models')return response({models:withCfg});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({job_id:'a'.repeat(32)})}
+  return response({state:'running',phase:'queued'});
+ });
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('negativeFields').hidden,false);
+ assert.match(p.elements.get('frameHint').textContent,/只支持文生视频/);
+ for(const [id,value] of [['prompt','wave'],['seed','1'],['frames','33'],['negative','blur']])p.elements.get(id).value=value;
+ await p.elements.get('generate').onclick();
+ assert.equal(payloads[0].negative_prompt,'blur');assert.equal(payloads[0].image,undefined);
+ p.elements.get('model').value='ltx-video-2b-distilled';p.elements.get('model').onchange();
+ assert.equal(p.elements.get('negativeFields').hidden,true);
+ assert.match(p.elements.get('frameHint').textContent,/居中裁剪为 768 × 448/);
+});
+test('a queued video can be cancelled and is then released',async()=>{
+ const calls=[],id='a'.repeat(32);let state='queued';
+ const p=page(async(url,options)=>{calls.push([url,options]);
+  if(url==='/video/models')return response({models});
+  if(url.endsWith('/cancel')){state='cancelled';return response({cancelled:true,state})}
+  return response({state,phase:state,message:'任务已取消，未在 Kaggle 上执行。'});
+ },id);
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('cancelVideo').hidden,false);
+ p.elements.get('randomSeed').onclick();assert.ok(Number(p.elements.get('seed').value)>=0);
+ await p.elements.get('cancelVideo').onclick();
+ for(let i=0;i<4;i++)await tick();
+ assert.ok(calls.some(([url,options])=>url==='/video/jobs/'+id+'/cancel'&&options.method==='POST'));
+ assert.equal(p.elements.get('cancelVideo').hidden,true);assert.equal(p.storage.size,0);
+ assert.match(p.elements.get('status').textContent,/已取消/);
+});
+test('model hint shows the measured first-use time and follows the language',async()=>{
+ const withFirstUse=[{...models[0],first_use:{minutes:'19',download_gb:32}},{...models[1],first_use:null}];
+ const p=page(async url=>url==='/video/models'?response({models:withFirstUse}):response({state:'queued'}));
+ for(let i=0;i<6;i++)await tick();
+ assert.match(p.elements.get('modelHint').textContent,/首次使用约 19 分钟，下载约 32 GB/);
+ p.elements.get('lang').value='en';p.elements.get('lang').onchange();
+ assert.match(p.elements.get('modelHint').textContent,/First use about 19 min, ~32 GB/);
+ p.elements.get('model').value='ltx-video-2b-distilled';p.elements.get('model').onchange();
+ assert.match(p.elements.get('modelHint').textContent,/not yet measured/);
+});
+test('video size is sent only when not the default and a last frame needs a first frame',async()=>{
+ const payloads=[];
+ const sized=[{...models[0],sizes:['832x480','480x832','624x624']},{...models[1],sizes:['768x448','448x768','512x512'],last_frame:true,image_to_video:true}];
+ const p=page(async(url,options)=>{
+  if(url==='/video/models')return response({models:sized});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({job_id:'f'.repeat(32)})}
+  return response({state:'queued'});
+ });
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('videoSize').value,'832x480');
+ assert.equal(p.elements.get('lastFields').hidden,true);
+ for(const [id,value] of [['prompt','wave'],['seed','1'],['frames','33']])p.elements.get(id).value=value;
+ p.elements.get('videoSize').value='480x832';
+ await p.elements.get('generate').onclick();
+ assert.equal(payloads[0].size,'480x832');
+ const resumed=page(async(url,options)=>{
+  if(url==='/video/models')return response({models:sized});
+  if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({job_id:'e'.repeat(32)})}
+  return response({state:'queued'});
+ },new Map([['cc.media.video.pending.v1',JSON.stringify({prompt:'kf',model_id:'ltx-video-2b-distilled',steps:8,seed:1,frames:33,size:'512x512',image:'AAAA',last_image:'BBBB',request_id:'resume-1'})]]));
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(resumed.elements.get('lastFields').hidden,false);
+ await resumed.elements.get('generate').onclick();
+ assert.deepEqual([payloads[1].size,payloads[1].image,payloads[1].last_image],['512x512','AAAA','BBBB']);
+});

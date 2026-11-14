@@ -28,10 +28,11 @@ On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe
 | Tool | Inputs | Output |
 | --- | --- | --- |
 | `studio_status` | None | Configuration, queue, previous model usage, GPU quota, idle retention, countdown |
-| `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `model_id`, `steps` (model default when omitted) | Immediate durable `job_id` |
+| `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `model_id`, `steps` (model default when omitted), `size`, `negative_prompt`, `task`, `strength`, `feather` (inpaint edge feathering, 0–64), `image_path` / `image_base64`, `mask_path` / `mask_base64` | Immediate durable `job_id` |
 | `get_job` | `job_id` | State, real progress, downloaded bytes, model reuse |
 | `get_image` | Completed `job_id` | PNG image content and usage metadata |
-| `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed` and `steps` | Video job ID |
+| `cancel_job` | Queued `job_id` | Cancels an image or video task that has not started; a running task returns `cancelled: false` |
+| `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed`, `steps`, `size`, `negative_prompt`, `image_path` / `image_base64` (first frame), `last_image_path` / `last_image_base64` (last frame, LTX only) | Video job ID |
 | `get_video` | Completed video job ID | Local MP4 path, URI, file size and usage |
 
 Call status, submit once, poll the job at least two seconds apart, then retrieve the image. Reuse a request ID only when retrying the same intended submission. A different payload with the same ID is rejected. Do not automatically resubmit errored or interrupted tasks; the remote task may still be running.
@@ -45,7 +46,7 @@ Before upgrading, finish tasks and run `python studio_worker.py --stop`. This st
 
 ## Model selection
 
-`generate_image` accepts `model_id`: `qwen-image-2.1`, `z-image-turbo`, or `sdxl-lightning`. Omit `steps` to use 20, 9, or 4 respectively. SDXL-Lightning requires exactly 4 steps.
+`generate_image` accepts `model_id`: `qwen-image-2.1`, `z-image-turbo`, or `sdxl-lightning`. Omit `steps` to use 20, 9, or 4 respectively. SDXL-Lightning requires exactly 4 steps. For sizes, image-to-image, inpainting and image-to-video, see the [editing guide](editing.md).
 
 ```text
 generate_image(prompt="An adult catgirl by a window", request_id="catgirl-turbo-001", model_id="z-image-turbo")

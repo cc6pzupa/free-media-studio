@@ -1,15 +1,15 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CC Media Studio · Video</title><style>
-:root{font-family:Inter,system-ui,sans-serif;color:#24243b;background:#f6f5fb}*{box-sizing:border-box}body{margin:0}header{height:78px;background:white;border-bottom:1px solid #e7e5ef;display:flex;align-items:center;justify-content:space-between;padding:0 5vw}a{color:#6650d9;text-decoration:none}h1{font-size:21px}main{max-width:1320px;margin:42px auto;padding:0 28px}.intro{margin-bottom:26px}.intro h2{font-size:32px;margin:8px 0}.intro p,.muted{color:#77768b}.layout{display:grid;grid-template-columns:390px 1fr;gap:24px}.card{background:white;border:1px solid #e7e5ef;border-radius:18px;padding:26px}label{display:block;font-size:13px;font-weight:600;margin:19px 0 8px}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;border:1px solid #dedbe9;border-radius:9px;padding:12px;background:white}textarea{height:160px;resize:vertical;line-height:1.6}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}button,.download{border:0;border-radius:10px;background:#7055e8;color:white;padding:13px 18px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.generate{margin-top:24px;width:100%;font-weight:600}video{width:100%;max-height:510px;border-radius:12px;background:#151322}.empty{min-height:350px;border:1px dashed #ded9ed;border-radius:12px;display:grid;place-items:center;text-align:center;padding:30px;background:#faf9fd}.status{line-height:1.7;min-height:48px;white-space:pre-wrap;overflow-wrap:anywhere}.track{height:6px;background:#eeebf7;border-radius:9px;overflow:hidden;margin:20px 0}.track div{height:100%;background:#8065ed;width:0;transition:width .3s}.actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:20px}.download[hidden],video[hidden],.empty[hidden]{display:none}.tag{color:#7055e8;font-size:12px;letter-spacing:.1em}#lang{width:auto;padding:7px;border-radius:7px}#meta{line-height:1.7;overflow-wrap:anywhere}footer{margin-top:30px;color:#8d899e;font-size:12px}@media(max-width:850px){.layout{grid-template-columns:1fr}main{margin:25px auto;padding:0 16px}header{padding:0 18px}.intro h2{font-size:27px}.card{padding:20px}}
-</style></head><body><header><h1>CC Media Studio <span class="tag">VIDEO PREVIEW</span></h1><div><a href="/gallery">历史画廊 / Gallery</a>　<a href="/" id="back">图片与账号设置</a>　<select id="lang" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div></header><main><div class="intro"><span class="tag">YOUR NEXT FRAME</span><h2 id="title">让画面开始流动。</h2><p id="subtitle">三档视频模型 · Kaggle 双 T4 · MP4 预览与下载</p></div><div class="layout"><section class="card"><label for="model" id="modelLabel">视频模型</label><select id="model"></select><p id="modelHint" class="muted"></p><label for="prompt" id="promptLabel">画面与动作描述</label><textarea id="prompt" placeholder="An adult anime catgirl reading by a window. Her hair moves gently in the breeze. Slow camera movement."></textarea><div class="row"><div><label for="steps" id="stepsLabel">生成步数</label><input id="steps" type="number" min="1" max="50"></div><div><label for="seed" id="seedLabel">随机种子</label><input id="seed" type="number" min="0" max="2147483647" value="42"></div></div><label for="frames" id="framesLabel">帧数</label><select id="frames"><option>9</option><option>17</option><option selected>33</option><option>49</option><option>65</option><option>81</option></select><button id="generate" class="generate">生成视频</button><p class="muted" id="firstHint">先在图片工作台保存账号。首次使用自动下载视频模型。</p></section><section class="card"><div id="empty" class="empty"><div><h2 id="emptyTitle">下一段故事，从这里开始</h2><p class="muted" id="emptyHint">完成后可播放、循环预览和保存 MP4。</p></div></div><video id="video" controls loop playsinline hidden></video><div class="track"><div id="bar"></div></div><p id="status" class="status">准备就绪</p><p id="meta" class="muted"></p><div class="actions"><a id="download" class="download" hidden>保存 MP4</a><a href="/" id="imageLink">返回图片工作台 ↗</a></div></section></div><footer>CC MEDIA STUDIO · VIDEO DEVELOPMENT BRANCH</footer></main><script>
+:root{font-family:Inter,system-ui,sans-serif;color:#24243b;background:#f6f5fb}*{box-sizing:border-box}body{margin:0}header{height:78px;background:white;border-bottom:1px solid #e7e5ef;display:flex;align-items:center;justify-content:space-between;padding:0 5vw}a{color:#6650d9;text-decoration:none}h1{font-size:21px}main{max-width:1320px;margin:42px auto;padding:0 28px}.intro{margin-bottom:26px}.intro h2{font-size:32px;margin:8px 0}.intro p,.muted{color:#77768b}.layout{display:grid;grid-template-columns:390px 1fr;gap:24px}.card{background:white;border:1px solid #e7e5ef;border-radius:18px;padding:26px}label{display:block;font-size:13px;font-weight:600;margin:19px 0 8px}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;border:1px solid #dedbe9;border-radius:9px;padding:12px;background:white}textarea{height:160px;resize:vertical;line-height:1.6}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}button,.download{border:0;border-radius:10px;background:#7055e8;color:white;padding:13px 18px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.generate{margin-top:24px;width:100%;font-weight:600}video{width:100%;max-height:510px;border-radius:12px;background:#151322}.empty{min-height:350px;border:1px dashed #ded9ed;border-radius:12px;display:grid;place-items:center;text-align:center;padding:30px;background:#faf9fd}.status{line-height:1.7;min-height:48px;white-space:pre-wrap;overflow-wrap:anywhere}.track{height:6px;background:#eeebf7;border-radius:9px;overflow:hidden;margin:20px 0}.track div{height:100%;background:#8065ed;width:0;transition:width .3s}.actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:20px}.download[hidden],video[hidden],.empty[hidden]{display:none}.tag{color:#7055e8;font-size:12px;letter-spacing:.1em}#lang{width:auto;padding:7px;border-radius:7px}textarea.short{height:70px}.seed-row{display:flex;gap:8px}.seed-row input{flex:1;min-width:0}.frame{display:flex;gap:12px;align-items:center;margin-top:10px}.frame img{max-width:160px;max-height:100px;border-radius:8px;border:1px solid #e7e5ef}.secondary{background:#f1eefc;color:#6650d9;padding:8px 12px}[hidden]{display:none!important}#meta{line-height:1.7;overflow-wrap:anywhere}footer{margin-top:30px;color:#8d899e;font-size:12px}@media(max-width:850px){.layout{grid-template-columns:1fr}main{margin:25px auto;padding:0 16px}header{padding:0 18px}.intro h2{font-size:27px}.card{padding:20px}}
+</style></head><body><header><h1>CC Media Studio <span class="tag">VIDEO PREVIEW</span></h1><div><a href="/gallery">历史画廊 / Gallery</a>　<a href="/" id="back">图片与账号设置</a>　<select id="lang" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div></header><main><div class="intro"><span class="tag">YOUR NEXT FRAME</span><h2 id="title">让画面开始流动。</h2><p id="subtitle">三档视频模型 · Kaggle 双 T4 · MP4 预览与下载</p></div><div class="layout"><section class="card"><label for="model" id="modelLabel">视频模型</label><select id="model"></select><p id="modelHint" class="muted"></p><label for="prompt" id="promptLabel">画面与动作描述</label><textarea id="prompt" placeholder="An adult anime catgirl reading by a window. Her hair moves gently in the breeze. Slow camera movement."></textarea><div id="frameFields"><label for="firstFrame" id="frameLabel">首帧图片（可选 · 图生视频）</label><input id="firstFrame" type="file" accept="image/png,image/jpeg,image/webp"><div class="frame"><img id="framePreview" alt="" hidden><button id="clearFrame" type="button" class="secondary" hidden>移除首帧</button></div><div id="lastFields" hidden><label for="lastFrame" id="lastLabel">尾帧图片（可选 · 首尾帧，仅 LTX）</label><input id="lastFrame" type="file" accept="image/png,image/jpeg,image/webp"><div class="frame"><img id="lastPreview" alt="" hidden><button id="clearLast" type="button" class="secondary" hidden>移除尾帧</button></div></div></div><p id="frameHint" class="muted"></p><div id="negativeFields" hidden><label for="negative" id="negativeLabel">负面提示词（可选）</label><textarea id="negative" class="short"></textarea></div><div class="row"><div><label for="steps" id="stepsLabel">生成步数</label><input id="steps" type="number" min="1" max="50"></div><div><label for="seed" id="seedLabel">随机种子</label><div class="seed-row"><input id="seed" type="number" min="0" max="2147483647" value="42"><button id="randomSeed" type="button" class="secondary">随机</button></div></div></div><label for="videoSize" id="sizeLabel">画面尺寸</label><select id="videoSize"></select><label for="frames" id="framesLabel">帧数</label><select id="frames"><option>9</option><option>17</option><option selected>33</option><option>49</option><option>65</option><option>81</option></select><button id="generate" class="generate">生成视频</button><p class="muted" id="firstHint">先在图片工作台保存账号。首次使用自动下载视频模型。</p></section><section class="card"><div id="empty" class="empty"><div><h2 id="emptyTitle">下一段故事，从这里开始</h2><p class="muted" id="emptyHint">完成后可播放、循环预览和保存 MP4。</p></div></div><video id="video" controls loop playsinline hidden></video><div class="track"><div id="bar"></div></div><p id="status" class="status">准备就绪</p><p id="meta" class="muted"></p><div class="actions"><a id="download" class="download" hidden>保存 MP4</a><button id="cancelVideo" type="button" class="secondary" hidden>取消排队</button><a href="/" id="imageLink">返回图片工作台 ↗</a></div></section></div><footer>CC MEDIA STUDIO · VIDEO DEVELOPMENT BRANCH</footer></main><script>
 const nonce='__NONCE__',$=id=>document.getElementById(id),key='cc.media.video.job.v1',pendingKey='cc.media.video.pending.v1';
-let models=[],active=null,pending=null,submitting=false,lastJob=null,objectURL=null,timer=null;
-const text={zh:{back:'图片与账号设置',title:'让画面开始流动。',subtitle:'三档视频模型 · Kaggle 双 T4 · MP4 预览与下载',modelLabel:'视频模型',promptLabel:'画面与动作描述',stepsLabel:'生成步数',seedLabel:'随机种子',framesLabel:'帧数',generate:'生成视频',firstHint:'先在图片工作台保存账号。首次使用自动下载视频模型。',emptyTitle:'下一段故事，从这里开始',emptyHint:'完成后可播放、循环预览和保存 MP4。',download:'保存 MP4',imageLink:'返回图片工作台 ↗'},en:{back:'Images & account',title:'Set your scene in motion.',subtitle:'Three video tiers · Kaggle dual T4 · MP4 preview and download',modelLabel:'Video model',promptLabel:'Scene and motion',stepsLabel:'Steps',seedLabel:'Seed',framesLabel:'Frames',generate:'Generate video',firstHint:'Save your account in the image workspace first. First use downloads the video model.',emptyTitle:'Your next story starts here',emptyHint:'Play, loop and save your MP4 when it is ready.',download:'Save MP4',imageLink:'Image workspace ↗'}};
+let models=[],active=null,pending=null,submitting=false,lastJob=null,objectURL=null,timer=null,frameData=null,lastData=null;
+const text={zh:{back:'图片与账号设置',title:'让画面开始流动。',subtitle:'三档视频模型 · Kaggle 双 T4 · MP4 预览与下载',modelLabel:'视频模型',promptLabel:'画面与动作描述',stepsLabel:'生成步数',seedLabel:'随机种子',framesLabel:'帧数',sizeLabel:'画面尺寸',lastLabel:'尾帧图片（可选 · 首尾帧，仅 LTX）',clearLast:'移除尾帧',generate:'生成视频',randomSeed:'随机',cancelVideo:'取消排队',frameLabel:'首帧图片（可选 · 图生视频）',clearFrame:'移除首帧',negativeLabel:'负面提示词（可选）',firstHint:'先在图片工作台保存账号。首次使用自动下载视频模型。',emptyTitle:'下一段故事，从这里开始',emptyHint:'完成后可播放、循环预览和保存 MP4。',download:'保存 MP4',imageLink:'返回图片工作台 ↗'},en:{back:'Images & account',title:'Set your scene in motion.',subtitle:'Three video tiers · Kaggle dual T4 · MP4 preview and download',modelLabel:'Video model',promptLabel:'Scene and motion',stepsLabel:'Steps',seedLabel:'Seed',framesLabel:'Frames',sizeLabel:'Video size',lastLabel:'Last frame (optional · first-to-last, LTX only)',clearLast:'Remove last frame',generate:'Generate video',randomSeed:'Random',cancelVideo:'Cancel queued video',frameLabel:'First frame (optional · image to video)',clearFrame:'Remove first frame',negativeLabel:'Negative prompt (optional)',firstHint:'Save your account in the image workspace first. First use downloads the video model.',emptyTitle:'Your next story starts here',emptyHint:'Play, loop and save your MP4 when it is ready.',download:'Save MP4',imageLink:'Image workspace ↗'}};
 const english=()=>$('lang').value==='en';
 function readSaved(name){try{return localStorage.getItem(name)}catch{return null}}
 function save(name,value){try{value===null?localStorage.removeItem(name):localStorage.setItem(name,value)}catch{}}
 function controls(){
  const locked=!!active||!!pending||submitting,p=models.find(x=>x.id===$('model').value);
- for(const id of ['model','prompt','seed','frames'])$(id).disabled=locked;
+ for(const id of ['model','prompt','seed','frames','firstFrame','negative','clearFrame','randomSeed','videoSize','lastFrame','clearLast'])$(id).disabled=locked;
  $('steps').disabled=locked||!!p?.fixed_steps;
  $('generate').disabled=!!active||submitting||!models.length;
  $('generate').textContent=pending?(english()?'Resume submission':'恢复上次提交'):text[$('lang').value].generate;
@@ -17,6 +17,7 @@ function controls(){
 function translate(){
  const lang=$('lang').value;document.documentElement.lang=lang==='zh'?'zh-CN':'en';
  for(const [id,value]of Object.entries(text[lang]))$(id).textContent=value;
+ showOptions();showHint();
  if(lastJob){showProgress(lastJob);showMeta(lastJob)}
  else if(pending)$('status').textContent=english()?'Resume the previous submission with its original request ID.':'点击“恢复上次提交”，使用原提交编号取得任务。';
  else if(!active)$('status').textContent=english()?'Ready':'准备就绪';
@@ -27,13 +28,56 @@ async function request(path,body){
  if(!r.ok){let data;try{data=await r.json()}catch{}const error=Error(data?.error?.message||'Request failed');error.status=r.status;throw error}
  return r;
 }
-function selectModel(){const p=models.find(x=>x.id===$('model').value);if(!p)return;$('steps').value=p.default_steps;$('modelHint').textContent=`${p.width} × ${p.height} · ${p.fps} FPS · ${p.tier}`;controls()}
+function firstUseText(p){
+ const f=p.first_use;if(!f)return english()?' · First use downloads and loads the model (not yet measured).':' · 首次使用需下载并加载模型（尚未实测耗时）。';
+ return english()?` · First use about ${f.minutes} min${f.download_gb?`, ~${f.download_gb} GB download`:''} (measured on dual T4); reused within the session.`
+  :` · 首次使用约 ${f.minutes} 分钟${f.download_gb?`，下载约 ${f.download_gb} GB`:''}（双 T4 实测）；会话内直接复用。`;
+}
+function showHint(){const p=models.find(x=>x.id===$('model').value);if(p)$('modelHint').textContent=`${p.width} × ${p.height} · ${p.fps} FPS · ${p.tier}`+firstUseText(p)}
+function selectModel(){const p=models.find(x=>x.id===$('model').value);if(!p)return;$('steps').value=p.default_steps;showHint();showOptions();controls()}
+function sizeName(size){
+ const [w,h]=size.split('x').map(Number),shape=w>h?(english()?'landscape':'横向'):w<h?(english()?'portrait':'竖向'):(english()?'square':'方形');
+ return `${w} × ${h} · ${shape}`;
+}
+function chosenSize(){const p=models.find(x=>x.id===$('model').value)||{},sizes=p.sizes||[];return sizes.includes($('videoSize').value)?$('videoSize').value:(sizes[0]||'')}
+function showOptions(){
+ const p=models.find(x=>x.id===$('model').value)||{},sizes=p.sizes||[],keep=$('videoSize').value;
+ // The size list follows the selected model; the first size is its default.
+ if(document.createElement&&$('videoSize').replaceChildren){$('videoSize').replaceChildren(...sizes.map(size=>{const option=document.createElement('option');option.value=size;option.textContent=sizeName(size);return option}))}
+ $('videoSize').value=sizes.includes(keep)?keep:(sizes[0]||'');
+ $('negativeFields').hidden=!(p.guidance>1);
+ $('lastFields').hidden=!p.last_frame;
+ const [w,h]=(chosenSize()||`${p.width}x${p.height}`).split('x');
+ $('frameHint').textContent=p.image_to_video?(english()?'Frames are center-cropped to '+w+' × '+h+'.':'首尾帧会居中裁剪为 '+w+' × '+h+'。'):(english()?'This model is text-to-video only. Choose LTX-Video 2B or Wan2.2 5B for image-to-video.':'该模型只支持文生视频；图生视频请选择 LTX-Video 2B 或 Wan2.2 5B。');
+}
+$('videoSize').onchange=showOptions;
+function setFrame(data){frameData=data;$('framePreview').hidden=!data;$('clearFrame').hidden=!data;if(data)$('framePreview').src='data:image/jpeg;base64,'+data}
+function setLast(data){lastData=data;$('lastPreview').hidden=!data;$('clearLast').hidden=!data;if(data)$('lastPreview').src='data:image/jpeg;base64,'+data}
+function readFrame(input,apply){
+ const file=$(input).files&&$(input).files[0];if(!file)return;
+ const reader=new FileReader();
+ reader.onload=()=>{const picture=new Image();picture.onload=()=>loadFrame(picture,apply);picture.src=reader.result};
+ reader.readAsDataURL(file);
+}
+$('firstFrame').onchange=()=>readFrame('firstFrame',setFrame);
+$('lastFrame').onchange=()=>readFrame('lastFrame',setLast);
+$('clearLast').onclick=()=>{setLast(null);$('lastFrame').value=''};
+function loadFrame(picture,apply=setFrame){
+ // Keep the saved resume payload small: the GPU crops to the model size.
+ const scale=Math.min(1,1024/Math.max(picture.naturalWidth,picture.naturalHeight)),canvas=document.createElement('canvas');
+ canvas.width=Math.max(1,Math.round(picture.naturalWidth*scale));canvas.height=Math.max(1,Math.round(picture.naturalHeight*scale));
+ canvas.getContext('2d').drawImage(picture,0,0,canvas.width,canvas.height);apply(canvas.toDataURL('image/jpeg',0.9).split(',')[1]);
+}
+$('clearFrame').onclick=()=>{setFrame(null);$('firstFrame').value=''};
 function remember(id){active=id;save(key,id);controls()}
 function rememberPending(payload){pending=payload;save(pendingKey,payload?JSON.stringify(payload):null);controls()}
-function restorePending(payload){for(const id of ['model','prompt','steps','seed','frames'])$(id).value=payload[id==='model'?'model_id':id];selectModel();$('steps').value=payload.steps;rememberPending(payload)}
+function restorePending(payload){for(const id of ['model','prompt','steps','seed','frames'])$(id).value=payload[id==='model'?'model_id':id];selectModel();$('steps').value=payload.steps;$('negative').value=payload.negative_prompt||'';setFrame(typeof payload.image==='string'?payload.image:null);setLast(typeof payload.last_image==='string'?payload.last_image:null);if(payload.size){showOptions();$('videoSize').value=payload.size}rememberPending(payload)}
+const failureText={out_of_memory:'Out of GPU memory: resubmit with fewer frames or a smaller model. The task was not resubmitted.',model_files:'Model files failed to load: resubmit and they will be verified and downloaded again if needed.',disk:'The Kaggle session disk is full or read-only: stop the session on Kaggle, then resubmit.',session:'The Kaggle session is unavailable: check GPU quota, phone verification and the network.',timeout:'Timed out waiting for Kaggle: it may still be running, so check the session first.',invalid_result:'The video was invalid (for example blank): try another seed or prompt.',input:'The first frame is missing or invalid: upload it again.',unknown:'Generation failed and was not resubmitted. Check the configuration, network or Kaggle session.'};
 function showProgress(job){
- const labels=english()?{installing:'Installing video environment',encoding:'Encoding prompt',generating:'Generating video',decoding:'Decoding frames',exporting:'Saving MP4',complete:'Video ready'}:{installing:'正在安装视频环境',encoding:'正在编码提示词',generating:'正在生成视频',decoding:'正在解码画面',exporting:'正在保存 MP4',complete:'视频已完成'};
+ const labels=english()?{cleanup:'Freeing disk space',installing:'Installing video environment',encoding:'Encoding prompt',generating:'Generating video',decoding:'Decoding frames',exporting:'Saving MP4',complete:'Video ready'}:{cleanup:'正在清理磁盘空间',installing:'正在安装视频环境',encoding:'正在编码提示词',generating:'正在生成视频',decoding:'正在解码画面',exporting:'正在保存 MP4',complete:'视频已完成'};
  let label=labels[job.state==='complete'?'complete':job.phase]||job.message||job.phase||job.state,percent=job.percent||8;
+ if(job.state==='error'&&english())label=failureText[job.reason]||failureText.unknown;
+ if(job.state==='cancelled')label=english()?'Video cancelled; it did not run on Kaggle.':(job.message||'任务已取消。');
  if(job.phase==='generating'&&job.steps>0){label+=` · ${job.step}/${job.steps}`;percent=100*job.step/job.steps}
  if(job.phase==='decoding'||job.phase==='exporting')percent=100;
  $('status').textContent=label;$('bar').style.width=Math.min(100,job.state==='complete'?100:percent)+'%';
@@ -52,7 +96,8 @@ async function poll(){
    $('video').src=objectURL;$('video').hidden=false;$('empty').hidden=true;$('download').href=objectURL;$('download').download='cc-media-'+active+'.mp4';$('download').hidden=false;
    showMeta(job);remember(null);return;
   }
-  if(['error','interrupted'].includes(job.state)){remember(null);return}
+  $('cancelVideo').hidden=job.state!=='queued';
+  if(['error','interrupted','cancelled'].includes(job.state)){$('cancelVideo').hidden=true;remember(null);return}
  }catch(error){
   if(error.status===404){const missing=active;remember(null);lastJob=null;$('status').textContent=(english()?'Task record not found. You can submit a new video. ID: ':'任务记录不存在，可提交新视频。原任务 ID：')+missing;return}
   $('status').textContent=error.message+' · '+active;
@@ -62,12 +107,33 @@ async function poll(){
 $('generate').onclick=async()=>{
  if(active||submitting)return;submitting=true;controls();
  try{
-  if(!pending)rememberPending({prompt:$('prompt').value,model_id:$('model').value,steps:Number($('steps').value),seed:Number($('seed').value),frames:Number($('frames').value),request_id:crypto.randomUUID()});
+  if(!pending){
+   const p=models.find(x=>x.id===$('model').value)||{},payload={prompt:$('prompt').value,model_id:$('model').value,steps:Number($('steps').value),seed:Number($('seed').value),frames:Number($('frames').value),request_id:crypto.randomUUID()};
+   if(frameData){if(!p.image_to_video)throw Object.assign(Error(english()?'This model does not support image-to-video. Remove the first frame or choose LTX-Video 2B / Wan2.2 5B.':'该模型不支持图生视频。请移除首帧，或选择 LTX-Video 2B / Wan2.2 5B。'),{status:400});payload.image=frameData}
+   if(p.guidance>1&&($('negative').value||'').trim())payload.negative_prompt=$('negative').value;
+   const size=chosenSize();if(size&&size!==(p.sizes||[])[0])payload.size=size;
+   if(lastData){
+    if(!p.last_frame)throw Object.assign(Error(english()?'Only LTX-Video 2B supports a last frame. Remove it or choose LTX.':'只有 LTX-Video 2B 支持尾帧。请移除尾帧，或选择 LTX。'),{status:400});
+    if(!frameData)throw Object.assign(Error(english()?'A last frame needs a first frame too.':'使用尾帧时需要同时上传首帧。'),{status:400});
+    payload.last_image=lastData;
+   }
+   rememberPending(payload);
+  }
   const job=await(await request('/video/jobs',pending)).json();if(!job||!/^[a-f0-9]{32}$/.test(job.job_id))throw Error('Missing task ID');remember(job.job_id);rememberPending(null);await poll();
  }catch(error){
   if([400,401,403,409,422].includes(error.status))rememberPending(null);
   $('status').textContent=error.message+(pending?(english()?' · Resume submission to retrieve the original task.':' · 点击恢复上次提交，取得原任务。'):'');
  }finally{submitting=false;controls()}
+};
+$('randomSeed').onclick=()=>{$('seed').value=String(Math.floor(Math.random()*2147483648))};
+// Only a queued video can be cancelled; one already running on Kaggle continues.
+$('cancelVideo').onclick=async()=>{
+ if(!active)return;$('cancelVideo').disabled=true;
+ try{const job=await(await request('/video/jobs/'+active+'/cancel',{})).json();
+  if(!job.cancelled)$('status').textContent=english()?'The video has already started and will finish; it cannot be cancelled.':'视频已开始生成，会继续完成，无法取消。';
+  await poll()}
+ catch(error){$('status').textContent=error.message}
+ finally{$('cancelVideo').disabled=false}
 };
 $('model').onchange=selectModel;$('lang').onchange=translate;controls();
 (async()=>{
@@ -77,7 +143,18 @@ $('model').onchange=selectModel;$('lang').onchange=translate;controls();
   $('model').value='wan21-t2v-1.3b';selectModel();
   const saved=readSaved(key);if(saved&&/^[a-f0-9]{32}$/.test(saved)){active=saved;rememberPending(null)}
   else{try{const candidate=JSON.parse(readSaved(pendingKey));if(candidate&&typeof candidate.prompt==='string'&&typeof candidate.request_id==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(candidate.request_id)&&models.some(p=>p.id===candidate.model_id))restorePending(candidate);else save(pendingKey,null)}catch{save(pendingKey,null)}}
-  translate();if(active)await poll();
+  translate();
+  // Opened from the gallery's "Use as video first frame".
+  const frame=typeof location!=='undefined'?new URLSearchParams(location.search).get('frame'):null;
+  if(frame&&/^[a-f0-9]{32}$/.test(frame)&&!active&&!pending){
+   try{
+    const blob=await(await request('/gallery/media/'+frame)).blob(),url=URL.createObjectURL(blob),picture=new Image();
+    picture.onload=()=>{loadFrame(picture);URL.revokeObjectURL(url)};picture.src=url;
+    if(!models.find(x=>x.id===$('model').value)?.image_to_video){$('model').value='wan22-ti2v-5b';selectModel()}
+    history.replaceState(null,'','/video');
+   }catch(error){$('status').textContent=error.message}
+  }
+  if(active)await poll();
  }catch(error){$('status').textContent=error.message;controls()}
 })();
 </script></body></html>

@@ -6,6 +6,8 @@
 
 本分支提供 [视频功能预览](docs/video.md)：三档模型、MP4 播放与下载，以及 GUI、MCP、ComfyUI 和 Kaggle Notebook 入口。
 
+0.10.0 新增 [图片编辑、尺寸与批量预览](docs/editing.md)（[更新记录](CHANGELOG.md)）：图生图、涂抹局部编辑、图生视频、7 种尺寸、负面提示词，以及 GUI 批量生成与 ZIP 打包。
+
 使用自己的 Kaggle GPU 额度生成图片。双击启动器，填写 Kaggle 用户名和 API Key，即可在本机界面创作；模型下载、加载和推理都在云端完成。
 
 ![CC Media Studio 界面](docs/gui.jpg)
@@ -67,7 +69,7 @@ API Token 可在 [Kaggle API 设置](https://www.kaggle.com/settings/api) 中创
 
 热请求示例为模型就绪后的云端耗时，首次下载、模型加载和客户端网络传输另计。
 
-选择模型后自动应用推荐步数。当前输出为单张 **512×512 PNG**，随机种子默认为 **42**。完成状态显示实际执行策略，以及编码、模型迁移、采样和解码耗时。
+选择模型后自动应用推荐步数。默认输出 **512×512 PNG**，可在“画面尺寸”选择最大 1024 的 7 种尺寸；随机种子默认为 **42**。完成状态显示实际执行策略，以及编码、模型迁移、采样和解码耗时。
 
 每个模型使用独立私有缓存。Qwen 首次原始权重下载约 23.51 GB，准备后的 INT8 / Q4 缓存约 16 GB；其他模型的实际下载量以进度显示为准。
 
@@ -93,9 +95,13 @@ python launch.py --acceleration split
 
 ## 单张生成与任务队列
 
-GUI 与 HTTP 生图接口每次生成一张 PNG。MCP 可用不同的 `request_id` 连续提交多个任务，后台串行排队并复用模型；分别用返回的 `job_id` 查询进度和取图。
+HTTP 生图接口用 `n`（1–8）一次生成多张，种子依次递增。MCP 可用不同的 `request_id` 连续提交多个任务，后台串行排队并复用模型；分别用返回的 `job_id` 查询进度和取图。
 
-GUI 的批量张数、批量提示词、自动递增种子和打包下载列入后续计划。
+GUI 支持批量（预览）：每个提示词 1–8 张、每行一个提示词、种子递增，完成后打包下载 ZIP。历史画廊也可打包当前列表。
+
+## 图片编辑（预览）
+
+Z-Image Turbo 与 SDXL-Lightning 支持 **图生图**（参考图 + 重绘强度）和 **局部编辑**（在图片上涂抹，白色区域重绘）。LTX-Video 2B 与 Wan2.2 5B 支持 **图生视频**（上传首帧；LTX 还可加尾帧生成过渡视频），视频可选横向、竖向和方形。局部编辑带橡皮擦、撤销和边缘羽化。Qwen-Image 2.1 与 Wan 模型支持负面提示词。排队中的任务可以取消，失败时显示原因与建议。这些功能已在 Kaggle 双 T4 上实测通过，例如 Z-Image 图生图 512 约 6.6 秒、Wan2.2 图生视频 33 帧约 210 秒。详见 [图片编辑说明](docs/editing.md)。
 
 ## GPU 用量与保活
 
@@ -152,6 +158,7 @@ git clone https://github.com/cc6pzupa/free-media-studio.git ComfyUI/custom_nodes
 | `generate_image` | 提交生图并返回任务编号 |
 | `get_job` | 查询生成进度 |
 | `get_image` | 取得完成后的 PNG |
+| `cancel_job` | 取消尚未开始的任务 |
 
 完整的三系统配置和调用步骤见 **[MCP 使用指南](docs/mcp.md)**。
 

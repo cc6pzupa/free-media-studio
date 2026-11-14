@@ -90,13 +90,14 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 | 工具 | 参数 | 返回 |
 | --- | --- | --- |
 | `studio_status` | 无 | 账号是否配置、排队数量、当前任务、最近一次模型使用情况 |
-| `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`model_id`、`steps`（省略时采用模型默认步数） | 立即返回任务 ID，不等待首次下载或生图 |
+| `generate_image` | `prompt`、`request_id`；可选 `seed=42`、`model_id`、`steps`（省略时采用模型默认步数）、`size`、`negative_prompt`、`task`、`strength`、`feather`（局部编辑边缘羽化 0–64）、`image_path` / `image_base64`、`mask_path` / `mask_base64` | 立即返回任务 ID，不等待首次下载或生图 |
 | `get_job` | `job_id` | `queued/running/complete/error/interrupted`、真实阶段、下载字节与百分比、复用信息 |
 | `get_image` | 已完成的 `job_id` | MCP `image/png` 内容，以及图片尺寸和耗时等元数据 |
-| `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps` | 立即返回视频任务 ID |
+| `cancel_job` | 排队中的 `job_id` | 取消尚未开始的图片或视频任务；已在执行的任务返回 `cancelled: false` |
+| `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps`、`size`、`negative_prompt`、`image_path` / `image_base64`（首帧）、`last_image_path` / `last_image_base64`（尾帧，仅 LTX） | 立即返回视频任务 ID |
 | `get_video` | 已完成的视频 `job_id` | 本机 MP4 路径、文件 URI、文件大小与耗时 |
 
-每个图片任务输出一张 512×512 PNG；视频任务输出一个 MP4。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。
+每个图片任务输出一张 PNG（默认 512×512，可用 `size` 选择最大 1024 的尺寸；图生图与局部编辑见 [图片编辑说明](editing.md)）；视频任务输出一个 MP4。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。
 
 `studio_status` 不申请 GPU。`last_usage` 是历史信息，不保证 Kaggle 当前仍存活；实际生成时后端会重新检查会话和模型。
 

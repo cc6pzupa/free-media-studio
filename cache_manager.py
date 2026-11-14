@@ -179,9 +179,17 @@ def save_private_cache(folder, encoder):
             return
         folder = Path(folder)
         emit_progress('cache-prepare', '正在保存 INT8 编码器和 Q4 权重，首次需要额外等待。')
+        generic=globals().get('_CC_MODEL_ID','qwen-image-2.1')!='qwen-image-2.1'
+        # A bundle left by an interrupted save is never reused; remove it.
+        for stale in Path('/kaggle/temp').glob('qwen-private-cache-*'):
+            shutil.rmtree(stale, ignore_errors=True)
+        # Qwen's bundle copies its weights (other models use hardlinks), so the
+        # copy needs room within the model disk budget too.
+        if not generic and callable(globals().get('release_model_disk')):
+            release_model_disk(folder, _disk_bytes([folder]), count_existing=False,
+                notify=lambda names: emit_progress('cleanup', '正在清理较早使用的模型文件以释放磁盘：'+'、'.join(names)))
         with tempfile.TemporaryDirectory(prefix='qwen-private-cache-', dir='/kaggle/temp') as temporary:
             bundle = Path(temporary)
-            generic=globals().get('_CC_MODEL_ID','qwen-image-2.1')!='qwen-image-2.1'
             if generic:
                 def link_or_copy(src,dst):
                     try:os.link(src,dst)

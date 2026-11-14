@@ -18,6 +18,49 @@ else:
     from model_registry import DEFAULT_MODEL,model_profile,MODEL_SOURCES
 
 
+# A failed cell leaves its traceback in sys.last_* and IPython's traceback
+# formatter. Those frames still reference GPU tensors (or a whole model), so
+# later loads run out of memory. Drop them before freeing GPU memory.
+RELEASE_FAILURE_CODE = '''
+import sys as _cc_sys
+for _cc_name in ('last_type', 'last_value', 'last_traceback', 'last_exc'):
+    if getattr(_cc_sys, _cc_name, None) is not None: setattr(_cc_sys, _cc_name, None)
+try:
+    _cc_shell_tb = getattr(get_ipython(), 'InteractiveTB', None)
+    if _cc_shell_tb is not None and getattr(_cc_shell_tb, 'tb', None) is not None: _cc_shell_tb.tb = None
+except NameError: pass
+'''
+
+
+# Free cached GPU memory on every device. Measured on Kaggle: after Qwen's
+# dual-GPU CFG, cuBLAS workspaces pinned a 9.3 GB segment on GPU 1 that
+# empty_cache() alone could not return, so video models then ran out of memory.
+FREE_GPU_CODE = '''
+import torch as _cc_torch
+try: _cc_torch._C._cuda_clearCublasWorkspaces()
+except Exception: pass
+try:
+    for _cc_device in range(_cc_torch.cuda.device_count()):
+        with _cc_torch.cuda.device(_cc_device): _cc_torch.cuda.empty_cache()
+except Exception: _cc_torch.cuda.empty_cache()
+'''
+
+
+# diffusers decides once, at import, whether the gguf package exists. Found on
+# Kaggle: after Z-Image or SDXL imported diffusers, Qwen's later gguf install
+# went unseen and its Q4 weights failed with "Unable to load weights".
+GGUF_READY_CODE = '''
+import importlib as _cc_importlib, sys as _cc_sys
+if 'diffusers' in _cc_sys.modules:
+    import diffusers.utils.import_utils as _cc_import_utils
+    if not _cc_import_utils.is_gguf_available():
+        _cc_importlib.invalidate_caches()
+        _cc_import_utils._gguf_available, _cc_import_utils._gguf_version = _cc_import_utils._is_package_available('gguf')
+        for _cc_module in ('diffusers.quantizers.gguf.utils', 'diffusers.quantizers.gguf.gguf_quantizer'):
+            if _cc_module in _cc_sys.modules: _cc_importlib.reload(_cc_sys.modules[_cc_module])
+'''
+
+
 def model_switch_code(model_id):
     model_profile(model_id)
     return f"""
@@ -29,13 +72,12 @@ if _CC_PREVIOUS_MODEL != _CC_REQUESTED_MODEL:
     # Do not retain aliases to an old pipeline or its GPU modules during collection.
     if globals().get('_CC_VIDEO_PROCESS') is not None:globals()['_CC_VIDEO_PROCESS'].close()
     if globals().get('_CC_VIDEO_RUNTIME') is not None:globals()['_CC_VIDEO_RUNTIME'].close()
-    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_CC_VIDEO_RUNTIME','_CC_VIDEO_PROCESS','_value','_module','_decoded'):
+    for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_CC_VIDEO_RUNTIME','_CC_VIDEO_PROCESS','_CC_TASK_PIPES','_value','_module','_decoded'):
         globals().pop(_cc_key,None)
+    exec(compile({RELEASE_FAILURE_CODE!r},'<cc-release-failure>','exec'),globals())
     import gc
     gc.collect()
-    try:
-        import torch
-        torch.cuda.empty_cache()
+    try:exec(compile({FREE_GPU_CODE!r},'<cc-free-gpu>','exec'),globals())
     except ImportError:pass
 _CC_MODEL_ID = _CC_REQUESTED_MODEL
 _CC_MANAGED_MODEL = True
@@ -60,7 +102,8 @@ _existing_state=globals().get('_COMFY_QWEN_STATE')
 if not (_existing_state and globals().get('pipe') is not None and callable(globals().get('generate_image'))):
     if {install!r}:
         import subprocess,sys
-        subprocess.run([sys.executable,'-m','pip','install','-q','bitsandbytes==0.50.2','safetensors','diffusers>=0.36,<0.43','transformers>=4.51,<6','accelerate>=1.2'],check=True,timeout=900)
+        # gguf is installed before diffusers is first imported (see GGUF_READY_CODE).
+        subprocess.run([sys.executable,'-m','pip','install','-q','bitsandbytes==0.50.2','gguf>=0.10','safetensors','diffusers>=0.36,<0.43','transformers>=4.51,<6','accelerate>=1.2'],check=True,timeout=900)
     for _cc_partial in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image'):
         globals().pop(_cc_partial,None)
     import gc
@@ -129,7 +172,8 @@ else:
     if {install!r}:
         import subprocess, sys
         print('Installing image runtime dependencies once...', flush=True)
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'bitsandbytes==0.50.2', 'gguf'], check=True, timeout=900)
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'bitsandbytes==0.50.2', 'gguf>=0.10'], check=True, timeout=900)
+    exec(compile({GGUF_READY_CODE!r}, '<cc-gguf-ready>', 'exec'), globals())
     exec(compile({source!r}, '<qwen-model-bootstrap>', 'exec'), globals())
     _existing_state = {{'dataset': _expected_dataset, 'runtime_id': uuid.uuid4().hex,
                        'load_count': (_existing_state or {{}}).get('load_count', 0) + 1,
@@ -144,14 +188,55 @@ print('COMFY_SESSION_READY:' + json.dumps({{'runtime_id': _COMFY_QWEN_STATE['run
 '''
 
 
-def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL):
+def generation_code(prompt, seed, steps, model_id=DEFAULT_MODEL, width=512, height=512, negative_prompt=None,
+                    task='text', strength=None, image=None, mask=None, feather=None):
+    """Remote call for one image. Inputs travel as base64 inside the cell and are
+    center-cropped to the requested size on the kernel, never on the client."""
     model_profile(model_id)
-    args = repr(json.dumps({'prompt': prompt, 'seed': seed, 'steps': steps}, ensure_ascii=False))
+    payload = {'prompt': prompt, 'seed': seed, 'steps': steps}
+    # Only non-default options are sent, so an older live runtime keeps working
+    # for plain 512x512 text-to-image requests.
+    extra = {}
+    if (width, height) != (512, 512): payload.update(width=width, height=height)
+    if negative_prompt: extra['negative_prompt'] = negative_prompt
+    if task != 'text':
+        if image is None: raise ValueError('Missing input image')
+        extra.update(task=task, strength=strength)
+        if feather: extra['feather'] = feather
+        payload['image'] = base64.b64encode(image).decode('ascii')
+        if mask is not None: payload['mask'] = base64.b64encode(mask).decode('ascii')
+    payload['extra'] = extra
+    args = repr(json.dumps(payload, ensure_ascii=False))
     return (
         'import json, io, base64\n' + \
         'assert globals().get("_CC_MODEL_ID","qwen-image-2.1") == '+repr(model_id)+', "Active model changed; reconnect before generating."\n' + \
         'args = json.loads(' + args + ')\n'
-        "im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=512, height=512)\n"
+        "_cc_size = (args.get('width', 512), args.get('height', 512))\n"
+        "def _cc_fit(data, mode):\n"
+        "    from PIL import Image, ImageOps\n"
+        "    picture = ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(data))))\n"
+        "    return ImageOps.fit(picture.convert(mode), _cc_size, method=Image.Resampling.LANCZOS)\n"
+        "_cc_extra = dict(args['extra'])\n"
+        "if 'image' in args: _cc_extra['image'] = _cc_fit(args['image'], 'RGB')\n"
+        "if 'mask' in args: _cc_extra['mask'] = _cc_fit(args['mask'], 'L')\n"
+        # Free any earlier failure first; then report a failure of this call
+        # without keeping its frames (and their GPU tensors) alive.
+        "if getattr(__import__('sys'), 'last_traceback', None) is not None:\n"
+        "    exec(compile(" + repr(RELEASE_FAILURE_CODE) + ", '<cc-release-failure>', 'exec'), globals())\n"
+        "    import gc; gc.collect(); exec(compile(" + repr(FREE_GPU_CODE) + ", '<cc-free-gpu>', 'exec'), globals())\n"
+        "_cc_failure = None\n"
+        "try:\n"
+        "    im, stats = generate_image(args['prompt'], seed=args['seed'], steps=args['steps'], width=_cc_size[0], height=_cc_size[1], **_cc_extra)\n"
+        "except Exception as _cc_error:\n"
+        "    import traceback\n"
+        "    _cc_chain = globals().get('exception_chain', lambda e: type(e).__name__ + ': ' + str(e)[:1500])\n"
+        "    _cc_failure = _cc_chain(_cc_error) + ' | ' + ''.join(traceback.format_tb(_cc_error.__traceback__)[-3:])[-1500:]\n"
+        "    traceback.clear_frames(_cc_error.__traceback__)\n"
+        "    del _cc_error\n"
+        "if _cc_failure is not None:\n"
+        "    _cc_extra.clear()\n"
+        "    import gc; gc.collect(); exec(compile(" + repr(FREE_GPU_CODE) + ", '<cc-free-gpu>', 'exec'), globals())\n"
+        "    raise RuntimeError(_cc_failure)\n"
         "_COMFY_QWEN_STATE['generations'] += 1\n"
         "stats = dict(stats, model_id=globals().get('_CC_MODEL_ID','qwen-image-2.1'), runtime_id=_COMFY_QWEN_STATE['runtime_id'], "
         "model_load_count=_COMFY_QWEN_STATE['load_count'], "
@@ -214,17 +299,17 @@ class SessionBackend:
                     if line.startswith(prefix): self.progress({'phase':'generating' if prefix=='COMFY_SESSION_READY:' else 'loading','message':message})
         if len(self.progress_buffer)>2*1024*1024: self.progress_buffer=''
 
-    def generate(self, prompt, seed=42, steps=20):
-        return self.generate_with_progress(prompt, seed, steps)
+    def generate(self, prompt, seed=42, steps=20, **options):
+        return self.generate_with_progress(prompt, seed, steps, **options)
 
-    def generate_with_progress(self, prompt, seed=42, steps=20, progress=None):
+    def generate_with_progress(self, prompt, seed=42, steps=20, progress=None, **options):
         with self.lock:
             started = time.monotonic()
             self.progress = progress
             if progress:
                 progress({'phase':'generating' if self.session.transport is not None else 'session', 'message':'正在复用已加载的模型生图。' if self.session.transport is not None else '正在检查远端模型，首次使用将自动准备。'})
             try:
-                output = self.session.execute(generation_code(prompt, seed, steps, self.model_id), timeout=7200)
+                output = self.session.execute(generation_code(prompt, seed, steps, self.model_id, **options), timeout=7200)
                 matches = [line[len('COMFY_RESULT:'):] for line in output.splitlines()
                            if line.startswith('COMFY_RESULT:')]
                 if len(matches) != 1:

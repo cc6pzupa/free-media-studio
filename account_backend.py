@@ -173,10 +173,10 @@ class AccountBackend:
             time.sleep(10)
         raise TimeoutError('Kaggle 启动等待超时。再次请求会继续检查同一个启动任务，不会重复申请。')
 
-    def generate(self,prompt,seed=42,steps=None,model_id=None):
-        return self.generate_with_progress(prompt,seed,steps,model_id=model_id)
+    def generate(self,prompt,seed=42,steps=None,model_id=None,**options):
+        return self.generate_with_progress(prompt,seed,steps,model_id=model_id,**options)
 
-    def generate_with_progress(self,prompt,seed=42,steps=None,progress=None,model_id=None):
+    def generate_with_progress(self,prompt,seed=42,steps=None,progress=None,model_id=None,**options):
         if __package__:
             from .model_registry import model_profile,model_steps
         else:
@@ -193,14 +193,14 @@ class AccountBackend:
                 url=self._ensure_session(notify)
                 self.backend=SessionBackend(self.user,self.dataset,url,asset_mode='auto',
                     cache_handle=self.user+'/'+profile['cache_slug'],api_token=self.token,model_id=profile['id'],acceleration=self.acceleration)
-            image,stats=self.backend.generate_with_progress(prompt,seed,steps,notify)
+            image,stats=self.backend.generate_with_progress(prompt,seed,steps,notify,**options)
             stats.update(backend='account',request_seconds=round(time.monotonic()-started,2))
             return image,stats
 
-    def generate_video_with_progress(self,prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,progress=None):
+    def generate_video_with_progress(self,prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,progress=None,image=None,negative_prompt=None,size=None,last_image=None):
         from video_registry import validate_video,video_profile
         from video_session import VideoSessionBackend
-        params=validate_video(prompt,seed,steps,model_id,frames)
+        params=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image)
         notify=progress or (lambda event:None)
         with self.lock:
             if self.backend is not None:self.backend.close();self.backend=None

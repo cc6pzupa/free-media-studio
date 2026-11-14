@@ -4,6 +4,7 @@ import json
 import threading
 from pathlib import Path
 from session_runtime import JupyterTransport,ModelSession
+from session_backend import RELEASE_FAILURE_CODE,FREE_GPU_CODE
 from video_registry import video_profile,validate_video
 
 VIDEO_FILES=('asset_manager.py','cache_manager.py','video_precision.py','video_registry.py','video_assets.py',
@@ -28,10 +29,12 @@ if globals().get('_CC_VIDEO_PROCESS') is None:
     if (globals().get('pipe') is not None or globals().get('encoder') is not None) and not (globals().get('_CC_MANAGED_MODEL') or globals().get('_COMFY_QWEN_STATE')):
         raise RuntimeError('Unmanaged model exists; select a separate video notebook')
     if globals().get('_CC_VIDEO_RUNTIME') is not None:globals()['_CC_VIDEO_RUNTIME'].close()
-    for _name in ('pipe','encoder','transformer','vae','processor','scheduler','_COMFY_QWEN_STATE','_CC_DUAL_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_value','_module','_decoded','generate_image','_CC_VIDEO_RUNTIME','_cc_existing_video'):
+    for _name in ('pipe','encoder','transformer','vae','processor','scheduler','_COMFY_QWEN_STATE','_CC_DUAL_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_TASK_PIPES','_value','_module','_decoded','generate_image','_CC_VIDEO_RUNTIME','_cc_existing_video'):
         globals().pop(_name,None)
+    # An earlier failed image cell can still pin the image model through its traceback.
+    exec(compile({RELEASE_FAILURE_CODE!r},'<cc-release-failure>','exec'),globals())
     gc.collect()
-    if 'torch' in sys.modules:sys.modules['torch'].cuda.empty_cache()
+    if 'torch' in sys.modules:exec(compile({FREE_GPU_CODE!r},'<cc-free-gpu>','exec'),globals())
     for _name,_source in _cc_video_sources.items():
         (_cc_video_modules/_name).write_text(_source,encoding='utf-8')
     if str(_cc_video_modules) not in sys.path:sys.path.insert(0,str(_cc_video_modules))
@@ -48,8 +51,10 @@ print('CC_VIDEO_READY',flush=True)
 
 
 
-def video_generation_code(prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None):
-    args=validate_video(prompt,seed,steps,model_id,frames)
+def video_generation_code(prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
+    if image is not None and not isinstance(image,str):image=base64.b64encode(image).decode('ascii')
+    if last_image is not None and not isinstance(last_image,str):last_image=base64.b64encode(last_image).decode('ascii')
+    args=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image)
     return f'''
 import json,base64
 assert globals().get('_CC_MODEL_ID')=={model_id!r},'Active model changed'
@@ -76,12 +81,12 @@ class VideoSessionBackend:
                 except (ValueError,TypeError):pass
         if len(self.buffer)>2*1024*1024:self.buffer=''
 
-    def generate_with_progress(self,prompt,seed=42,steps=None,model_id=None,frames=None,progress=None):
+    def generate_with_progress(self,prompt,seed=42,steps=None,model_id=None,frames=None,progress=None,image=None,negative_prompt=None,size=None,last_image=None):
         if model_id is not None and model_id!=self.model_id:raise ValueError('Wrong video model')
         with self.lock:
             self.progress=progress
             try:
-                result=self.session.execute(video_generation_code(prompt,seed,steps,self.model_id,frames),timeout=14400)
+                result=self.session.execute(video_generation_code(prompt,seed,steps,self.model_id,frames,image,negative_prompt,size,last_image),timeout=14400)
                 lines=[line.split(':',1)[1] for line in result.splitlines() if line.startswith('CC_VIDEO_RESULT:')]
                 if len(lines)!=1:raise RuntimeError('Missing video result')
                 data=json.loads(lines[0]);raw=base64.b64decode(data['mp4'],validate=True)

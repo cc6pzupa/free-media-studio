@@ -29,7 +29,7 @@ def _cc_release_parallel():
 
 
 @torch.inference_mode()
-def generate_image(prompt,seed=42,width=512,height=512,steps=20):
+def generate_image(prompt,seed=42,width=512,height=512,steps=20,negative_prompt=None):
     for device in range(2):torch.cuda.reset_peak_memory_stats(device)
     started=time.perf_counter();encoding_seconds=0;movement=0;replica_load=0
     positive=negative=None;events=[];fallback=None
@@ -43,7 +43,7 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=20):
         movement+=time.perf_counter()-before
         before=time.perf_counter()
         p=pipe.encode_prompt(prompt,device=torch.device('cuda:1'))
-        n=pipe.encode_prompt(' ',device=torch.device('cuda:1'))
+        n=pipe.encode_prompt(negative_prompt or ' ',device=torch.device('cuda:1'))
         p=tuple(v.to('cuda:0') if v is not None else None for v in p)
         n=tuple(v.to('cuda:0') if v is not None else None for v in n)
         torch.cuda.synchronize(0);torch.cuda.synchronize(1)
@@ -114,5 +114,5 @@ def generate_image(prompt,seed=42,width=512,height=512,steps=20):
         'decode_seconds':round(decode,3) if decode is not None else None,
         'denoising_steps':len(events),'milliseconds_per_step':round(denoise*1000/len(events),2) if events else None,
         'attention_backend':'sdpa','parallel_strategy':'cfg_parallel' if parallel_enabled else 'encoder_split',
-        'width':width,'height':height,'steps':steps,'seed':seed,
+        'width':width,'height':height,'steps':steps,'seed':seed,'task':'text',
         'peak_gpu_gib':[round(torch.cuda.max_memory_allocated(i)/2**30,2) for i in range(2)]}

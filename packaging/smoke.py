@@ -14,6 +14,23 @@ from urllib.request import Request,build_opener,ProxyHandler
 urlopen=build_opener(ProxyHandler({})).open
 
 
+def wait_for_released_logs(folder,timeout=20):
+    """Wait until no process holds a log open.
+
+    The worker removes connection.json before its process exits. Windows
+    refuses to rename (or delete) a file another process still has open, so
+    the temporary folder cannot be removed until the worker has exited."""
+    deadline=time.monotonic()+timeout
+    for log in Path(folder).rglob('*.log'):
+        moved=log.with_name(log.name+'.released')
+        while True:
+            try:
+                log.rename(moved);moved.rename(log);break
+            except OSError:
+                if time.monotonic()>=deadline:raise RuntimeError('Worker still holds '+log.name) from None
+                time.sleep(.2)
+
+
 def check(executable):
     executable=str(Path(executable).resolve())
     with tempfile.TemporaryDirectory() as folder:
@@ -32,7 +49,7 @@ def check(executable):
             cli=Path(executable).with_name('cc-media-cli'+('.exe' if os.name=='nt' else ''))
             async with Client(StdioServerParameters(command=str(cli),args=['--mcp'],env=env)) as client:
                 tools=await client.list_tools()
-                assert len(tools.tools)==6
+                assert len(tools.tools)==7
         try:
             asyncio.run(asyncio.wait_for(mcp_check(),timeout=30))
             with (root/'gui-launch.log').open('wb') as output:
@@ -70,6 +87,7 @@ def check(executable):
                     deadline=time.monotonic()+10
                     while (state/'connection.json').exists() and time.monotonic()<deadline:time.sleep(.1)
                     assert not (state/'connection.json').exists(),'Worker did not stop'
+                    wait_for_released_logs(state)
                 except OSError:raise RuntimeError('Frozen worker cleanup failed') from None
     print('Frozen GUI, gallery, resources and independent worker passed')
 

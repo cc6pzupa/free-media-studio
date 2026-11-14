@@ -100,11 +100,13 @@ def make_backend(config):
     return BatchBackend(config['user'], config['dataset'], config['token'],acceleration=config['acceleration'])
 
 
-def validate_generation(prompt, seed, steps, model_id=None):
+def validate_generation(prompt, seed, steps, model_id=None, size=None, negative_prompt=None, task=None, strength=None, image=None, mask=None, feather=None):
+    """Validate one image request. `image` and `mask` are passed through as
+    given (stored input digests in the queue, bytes on the backend)."""
     if __package__:
-        from .model_registry import model_profile,model_steps,DEFAULT_MODEL
+        from .model_registry import model_profile,model_steps,image_options,DEFAULT_MODEL
     else:
-        from model_registry import model_profile,model_steps,DEFAULT_MODEL
+        from model_registry import model_profile,model_steps,image_options,DEFAULT_MODEL
     model_id=model_profile(model_id)["id"];steps=model_steps(model_id,steps)
     if not isinstance(prompt,str) or not prompt.strip() or not 1 <= len(prompt) <= 4000:
         raise ValueError('提示词需要 1–4000 个字符。')
@@ -114,7 +116,14 @@ def validate_generation(prompt, seed, steps, model_id=None):
         raise ValueError('steps 需要为 1–50 的整数。')
     result={'prompt':prompt,'seed':seed,'steps':steps}
     if model_id!=DEFAULT_MODEL:result['model_id']=model_id
+    result.update(image_options(model_id,steps,size,negative_prompt,task,strength,bool(image),bool(mask),feather))
+    if result.get('task') in ('img2img','inpaint'):result['image']=image
+    if result.get('task')=='inpaint':result['mask']=mask
     return result
+
+
+def output_size(params):
+    return params.get('width',512),params.get('height',512)
 
 
 # Explicit allow-lists keep transport addresses, credentials and exception text
@@ -123,13 +132,14 @@ STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width'
     'steps','seed','peak_gpu_gib','runtime_id','model_load_count','model_reused',
     'generation_number','asset_source','cache_status','backend','model_id','denoising_seconds','decode_seconds',
     'denoising_steps','milliseconds_per_step','attention_backend','parallel_strategy','total_generation_seconds','migration_seconds','replica_load_seconds',
-    'dual_model_reused','acceleration_mode','acceleration_fallback','media_type','frames','fps','loading_seconds','cfg_pairs'}
-PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file'}
+    'dual_model_reused','acceleration_mode','acceleration_fallback','media_type','frames','fps','loading_seconds','cfg_pairs',
+    'task','strength','image_to_video','feather','last_frame'}
+PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file','reason'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
-    'cache-prepare','cache-upload','cache-processing','cache-saved','cache-warning','session-warning','encoding','decoding','exporting','installing'}
+    'cache-prepare','cache-upload','cache-processing','cache-saved','cache-warning','session-warning','encoding','decoding','exporting','installing','cleanup'}
 MESSAGES = {
-    'installing':'正在安装视频环境。','decoding':'正在解码视频画面。',
+    'installing':'正在安装视频环境。','decoding':'正在解码视频画面。','cleanup':'正在清理较早使用的模型文件以释放磁盘。',
     'encoding':'正在编码视频提示词。','exporting':'正在保存 MP4 视频。',
     'session':'正在检查 Kaggle 会话。','checking':'正在检查专用 Notebook。',
     'connecting':'正在恢复已有会话。','starting':'正在申请 Kaggle GPU。',
@@ -144,12 +154,51 @@ MESSAGES = {
     'session-warning':'远端启动记录未保存；本机连接记录仍可使用。'}
 
 
+# Failures are reported by category only. Backends hide raw transport errors
+# (they can contain connection URLs); the remote cause survives as the
+# exception's __cause__/__context__, which is read here and never displayed.
+FAILURE_MESSAGES = {
+    'out_of_memory':'显存不足：请改用更小的尺寸、更少的帧数或较小的模型后重新提交。该任务没有自动重发。',
+    'model_files':'模型文件加载失败：请重新提交；程序会校验文件并在需要时重新下载。该任务没有自动重发。',
+    'disk':'Kaggle 会话磁盘不可写或空间不足：请在 Kaggle 停止会话后重新提交。该任务没有自动重发。',
+    'session':'Kaggle 会话不可用：请检查 GPU 额度、手机号验证和网络后重新提交。该任务没有自动重发。',
+    'timeout':'等待 Kaggle 超时：远端可能仍在执行，请先在 Kaggle 确认会话状态。该任务没有自动重发。',
+    'invalid_result':'生成结果无效（例如画面为空或数值异常）：请更换种子或提示词后重新提交。该任务没有自动重发。',
+    'input':'输入图片已不存在或无效：请重新上传后提交。该任务没有自动重发。',
+    'unknown':'生成失败；该任务没有自动重发。请检查配置、网络或 Kaggle 会话后再决定是否提交新任务。',
+}
+FAILURE_PATTERNS = (
+    ('out_of_memory', r'out of memory|OutOfMemoryError|CUBLAS_STATUS_ALLOC_FAILED'),
+    ('disk', r'No space left|Read-only file system|Errno 28|Errno 30'),
+    ('model_files', r'Unable to load weights|failed to load twice|checksum mismatch|Incomplete model download|Model weights missing'),
+    ('invalid_result', r'Invalid image result|Invalid MP4|Invalid or blank video|non-finite|Unexpected output size'),
+    ('input', r'输入图片已不存在|输入图片引用无效'),
+    ('timeout', r'TimeoutError|timed out|超时'),
+    ('session', r'KaggleApiError|Kaggle API|无法连接 Kaggle|会话启动失败|Jupyter connection closed|No live kernel|ConnectionError|WebSocket'),
+)
+
+
+def failure_reason(error):
+    """Classify a failure from its whole exception chain."""
+    texts, seen = [], set()
+    while error is not None and id(error) not in seen and len(texts) < 8:
+        seen.add(id(error)); texts.append(type(error).__name__ + ': ' + str(error))
+        error = error.__cause__ or error.__context__
+    text = '\n'.join(texts)
+    for reason, pattern in FAILURE_PATTERNS:
+        if re.search(pattern, text, re.I): return reason
+    return 'unknown'
+
+
 class JobStore:
     def __init__(self, directory):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.outputs = self.directory/'images'
         self.outputs.mkdir(exist_ok=True, mode=0o700)
+        # Uploaded reference images and masks, content-addressed by SHA-256.
+        self.inputs = self.directory/'inputs'
+        self.inputs.mkdir(exist_ok=True, mode=0o700)
         self.lock = threading.RLock()
         self.db = sqlite3.connect(self.directory/'jobs.sqlite3', check_same_thread=False)
         os.chmod(self.directory/'jobs.sqlite3', 0o600)
@@ -226,6 +275,19 @@ class JobStore:
             self.update(row['id'],state='running',progress={'phase':'session','message':MESSAGES['session']})
             return dict(row)
 
+    def cancel(self, job_id, request_ids=None):
+        """Cancel queued jobs. A running job is already executing on Kaggle and
+        is never interrupted; it is reported as not cancelled."""
+        self.get(job_id)
+        with self.lock:
+            # One statement under the store lock: claim() cannot take this job
+            # between the state check and the update.
+            changed=self.db.execute("UPDATE jobs SET state='cancelled', updated=?, progress=? WHERE id=? AND state='queued' AND hidden=0",
+                (time.time(),json.dumps({'phase':'cancelled','message':'任务已取消，未在 Kaggle 上执行。'},ensure_ascii=False),job_id)).rowcount
+            self.db.commit()
+        job=self.get(job_id)
+        return dict(job,cancelled=bool(changed))
+
     def pending(self):
         with self.lock:
             return self.db.execute("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running')").fetchone()[0]
@@ -241,6 +303,27 @@ class JobStore:
                 (" AND config_hash=?" if config_hash else '')+" ORDER BY updated DESC LIMIT 1",
                 (config_hash,) if config_hash else ()).fetchone()
             return json.loads(row[0]) if row else None
+
+    def save_input(self, raw):
+        from media_inputs import decode_image,digest
+        raw=decode_image(raw);name=digest(raw)
+        path=self.inputs/name
+        if not path.is_file():private_write(path,raw)
+        return name
+
+    def read_input(self, name):
+        from media_inputs import is_digest
+        if not is_digest(name):raise ValueError('输入图片引用无效。')
+        try:return (self.inputs/name).read_bytes()
+        except FileNotFoundError:raise ValueError('输入图片已不存在，请重新上传。') from None
+
+    def _release_inputs(self, params):
+        # Inputs are shared by content. Keep one while any visible job uses it.
+        from media_inputs import is_digest
+        for name in (params.get('image'),params.get('mask'),params.get('last_image')):
+            if not is_digest(name):continue
+            used=self.db.execute("SELECT COUNT(*) FROM jobs WHERE hidden=0 AND instr(params,?)>0",(name,)).fetchone()[0]
+            if not used:(self.inputs/name).unlink(missing_ok=True)
 
     def image(self, job_id):
         job=self.get(job_id)
@@ -290,6 +373,8 @@ class JobStore:
                 path=self.outputs/(job_id+('.mp4' if job['media_type']=='video' else '.png'))
                 path.unlink(missing_ok=True)
                 self.db.execute('UPDATE jobs SET hidden=1 WHERE id=?',(job_id,))
+                row=self.db.execute('SELECT params FROM jobs WHERE id=?',(job_id,)).fetchone()
+                self._release_inputs(json.loads(row[0]))
             else:raise ValueError('无效的画廊操作。')
             self.db.commit()
             return {'ok':True}
@@ -369,10 +454,20 @@ class StudioCore:
                 'model_state':'released' if self.session_state=='released' else ('last_request_ready' if last_usage else 'not_checked'),
                 'message':'模型状态以最近一次生图为准；查询状态不会申请 GPU。'}
 
-    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None):
-        params=validate_generation(prompt,seed,steps,model_id)
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None,size=None,negative_prompt=None,task=None,strength=None,image=None,mask=None,feather=None):
+        # Validate before storing any upload, then replace bytes with digests.
+        if __package__:
+            from .media_inputs import decode_image
+        else:
+            from media_inputs import decode_image
+        image=decode_image(image,'参考图') if image not in (None,'') else None
+        mask=decode_image(mask,'蒙版') if mask not in (None,'') else None
+        params=validate_generation(prompt,seed,steps,model_id,size,negative_prompt,task,strength,image,mask,feather)
+        if 'image' in params:params['image']=self.store.save_input(image)
+        if 'mask' in params:params['mask']=self.store.save_input(mask)
+        extended=set(params)-{'prompt','seed','steps','model_id'}
         with self.lock:
-            if model_id not in (None,'qwen-image-2.1') and (self.config or {}).get('mode')!='account':raise ValueError('新增模型请使用自动账号模式。')
+            if (model_id not in (None,'qwen-image-2.1') or extended) and (self.config or {}).get('mode')!='account':raise ValueError('新增模型、尺寸、负面提示词与图片编辑请使用自动账号模式。')
             if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
             if not self.backend:raise ValueError('先在 GUI 保存账号配置，或设置 KAGGLE_USERNAME 与 KAGGLE_API_TOKEN。')
             job,reused=self.store.submit(params,self.fingerprint,request_id or secrets.token_hex(16))
@@ -385,9 +480,14 @@ class StudioCore:
             return None
         return max(0,math.ceil(minutes*60-(time.monotonic()-self.idle_since)))
 
-    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None):
+    def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
         from video_registry import validate_video
-        params=dict(validate_video(prompt,seed,steps,model_id,frames),media_type='video')
+        from media_inputs import decode_image
+        image=decode_image(image,'首帧图片') if image not in (None,'') else None
+        last_image=decode_image(last_image,'尾帧图片') if last_image not in (None,'') else None
+        params=dict(validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image),media_type='video')
+        if 'image' in params:params['image']=self.store.save_input(image)
+        if 'last_image' in params:params['last_image']=self.store.save_input(last_image)
         with self.lock:
             if not self.backend or (self.config or {}).get('mode')!='account':
                 raise ValueError('视频需要自动账号模式。')
@@ -461,6 +561,9 @@ class StudioCore:
             try:
                 params=json.loads(row['params'])
                 video=params.pop('media_type',None)=='video'
+                expected=output_size(params)
+                for name in ('image','mask','last_image'):
+                    if name in params:params[name]=self.store.read_input(params[name])
                 if video:
                     raw,stats=backend.generate_video_with_progress(**params,progress=lambda event:self._progress(job_id,event))
                 elif callable(getattr(backend,'generate_with_progress',None)):
@@ -468,13 +571,14 @@ class StudioCore:
                 else:
                     raw,stats=backend.generate(**params)
                 if video and (len(raw)<12 or raw[4:8]!=b'ftyp'):raise ValueError('Invalid MP4 result')
-                if not video and (not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)<24 or struct.unpack('>II',raw[16:24])!=(512,512)):
+                if not video and (not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw)<24 or struct.unpack('>II',raw[16:24])!=expected):
                     raise ValueError('Invalid image result')
                 clean_stats={key:value for key,value in stats.items() if key in STAT_FIELDS}
                 private_write(self.store.outputs/(job_id+('.mp4' if video else '.png')),raw)
                 self.store.update(job_id,state='complete',progress={'phase':'complete','message':'视频已生成并保存。' if video else '图片已生成并保存。'},stats=clean_stats)
-            except Exception:
-                self.store.update(job_id,state='error',progress={'phase':'error','message':'生成失败；该任务没有自动重发。请检查配置、网络或 Kaggle 会话后再决定是否提交新任务。'})
+            except Exception as error:
+                reason=failure_reason(error)
+                self.store.update(job_id,state='error',progress={'phase':'error','reason':reason,'message':FAILURE_MESSAGES[reason]})
 
             finally:
                 with self.lock:

@@ -2,20 +2,22 @@
 <style>
 :root{--ink:#202439;--muted:#85899a;--line:#e9ebf2;--accent:#6258ee;--accent2:#8b83ff;--canvas:#f5f6fa}*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.6 Inter,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif}button,input,textarea,select{font:inherit}button,a,input,textarea,select{outline-color:#b8b2ff}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}a{color:var(--accent);text-decoration:none}svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;vertical-align:middle}.app{display:flex;min-height:100vh}.rail{width:212px;flex-shrink:0;background:#fff;border-right:1px solid var(--line);padding:30px 20px;display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0}.brand{display:flex;align-items:center;gap:11px;font-size:16px;font-weight:750;letter-spacing:-.5px}.brand-icon{display:grid;grid-template-columns:repeat(2,7px);gap:3px;padding:10px;border-radius:12px;background:var(--accent);transform:rotate(-5deg)}.brand-icon i{width:7px;height:7px;border-radius:2px;background:#fff}.brand-icon i:last-child{opacity:.45}.brand small{display:block;color:var(--muted);font:10px/1.3 system-ui;letter-spacing:2px;margin-top:2px}.nav-title{font-size:10px;letter-spacing:1.8px;color:#afb2bf;margin:45px 14px 12px}.nav{display:grid;gap:7px}.nav button{display:flex;gap:12px;align-items:center;border:0;background:transparent;padding:13px 15px;text-align:left;border-radius:11px;color:#797e92;font-weight:600}.nav button.active{background:#f0eeff;color:var(--accent)}.rail-bottom{margin-top:auto;padding:20px 12px 0}.cloud-card{background:linear-gradient(145deg,#f0eeff,#f5f8ff);padding:16px;border:1px solid #e7e3ff;border-radius:14px;font-size:12px;color:#797b96}.cloud-card strong{display:block;color:#555078;margin-bottom:6px}.rail-bottom>small{display:block;color:#afb3c0;font-size:10px;margin-top:20px}main{margin-left:212px;width:calc(100% - 212px);padding:32px 40px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:31px}.breadcrumb{color:#a2a6b5;font-size:12px}.breadcrumb span{color:#61677d;margin-left:13px}.pill{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:30px;padding:8px 13px;color:#7a8093;font-size:11px}.dot{width:6px;height:6px;border-radius:50%;background:#b5bac9}.dot.online{background:#41bd97}.intro{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}h1{font-size:29px;letter-spacing:-1px;line-height:1.4;margin:0 0 7px;font-weight:740}.intro p{margin:0;color:#969baa;font-size:12px}.version{font-size:10px;color:#a8aabc;border:1px solid #e1e4ed;border-radius:6px;padding:4px 8px}.workspace{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(360px,1.15fr);gap:23px;align-items:start}.panel{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 7px 20px #30355b03}.editor{padding:25px}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px}.section-head h2{font-size:14px;margin:0;font-weight:680}.tag{color:#9b9fae;font-size:10px;border-radius:5px;background:#f6f7fa;padding:3px 7px}.label{font-size:12px;color:#686e83;font-weight:600;display:block;margin:15px 0 8px}textarea,input,select{width:100%;border:1px solid #e4e6ef;border-radius:10px;padding:12px 13px;color:var(--ink);background:#fff}textarea{resize:vertical;min-height:180px;line-height:1.9;background:#fcfcfe;font-size:13px}textarea::placeholder,input::placeholder{color:#b0b4c2}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chip{background:#f7f7fc;border:1px solid #ececf5;border-radius:6px;padding:5px 8px;font-size:10px;color:#8a8a9f}.divider{height:1px;background:#f0f1f6;margin:23px 0}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.two .label{margin-top:0}.hint{font-size:10px;color:#a6aab8;margin:7px 0 0}.resolution{margin-top:19px;display:flex;justify-content:space-between;align-items:center;border:1px solid #e9e7fb;background:#fbfaff;border-radius:9px;padding:10px 13px;color:#8a86a4;font-size:11px}.resolution strong{font-weight:550;color:#706a9c}.primary{border:0;width:100%;border-radius:11px;background:linear-gradient(105deg,#6256ed,#8a7af6);color:white;padding:14px 18px;font-size:13px;font-weight:650;box-shadow:0 7px 15px #7461ef23;margin-top:23px}.primary svg{margin-right:7px}.run-note{text-align:center;font-size:10px;color:#afb1bf;margin:11px 0 0}.preview-head{padding:19px 24px;border-bottom:1px solid #f0f1f6;display:flex;justify-content:space-between;align-items:center}.preview-head h2{margin:0;font-size:13px}.preview-head span{font-size:10px;color:#a1a6b5}.preview{margin:20px;min-height:400px;border:1px dashed #e5e5f0;border-radius:12px;background:radial-gradient(ellipse at 50% 45%,#f0edff70,transparent 63%),#fcfcfe;display:flex;align-items:center;justify-content:center;padding:18px;position:relative}.empty{text-align:center;color:#b0b2c1;max-width:260px}.empty-icon{width:64px;height:64px;background:#eeebff;border:1px solid #e7e2ff;color:#a39ae5;border-radius:19px;display:grid;place-items:center;margin:0 auto 20px;transform:rotate(-6deg)}.empty-icon svg{width:29px;height:29px}.empty h3{font-size:13px;color:#8b8eaa;font-weight:550;margin:0 0 7px}.empty p{font-size:11px;line-height:1.8;margin:0}.result{display:none;max-width:100%;max-height:480px;border-radius:9px}.result-footer{display:flex;justify-content:space-between;align-items:center;padding:0 23px 20px;font-size:10px;color:#a9adbb}.save{display:none;color:var(--accent);border:1px solid #e6e2ff;background:#f9f8ff;padding:6px 11px;border-radius:7px}.status-card{margin-top:20px;padding:21px 24px}.status-top{display:flex;align-items:center;justify-content:space-between;font-size:11px;margin-bottom:13px}.status-top strong{color:#7a7f94;font-weight:600}.status-top span{color:#9fa3b5;font-size:10px}.track{background:#f0eff8;height:5px;border-radius:8px;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,#7565f0,#a89af9);border-radius:8px;transition:width .3s}.bar.indeterminate{width:30%;animation:slide 1.6s infinite ease-in-out}@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(430%)}}.status{font-size:11px;color:#969bae;margin:12px 0 0;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere}.stages{display:flex;justify-content:space-between;font-size:9px;color:#b5b6c7;margin:12px 0 0}.stages span.active{color:var(--accent)}.stages span.done{color:#48aa8c}.file{font-size:9px;color:#b0b3c2;margin-top:7px;overflow-wrap:anywhere}.task{display:none;font-size:10px;margin-top:8px}.help{margin-top:25px;background:#eef1f844;border:1px solid #e9ebf2;border-radius:13px;padding:16px 20px;display:flex;gap:13px;color:#9097aa;font-size:11px}.help svg{flex-shrink:0;color:#aaa1df}.help strong{color:#7c8399;font-weight:600}.guide{display:none;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:20px}.guide article{background:#fff;padding:20px;border:1px solid var(--line);border-radius:13px;font-size:11px;color:#969bad}.guide h3{font-size:12px;color:#666d85;margin:0 0 8px}.overlay{display:none;position:fixed;inset:0;background:#151c3b65;backdrop-filter:blur(5px);z-index:50;align-items:center;justify-content:center;padding:20px}.dialog{background:white;border-radius:20px;padding:30px;width:450px;max-width:100%;max-height:94vh;overflow:auto;box-shadow:0 24px 90px #131b5030}.dialog-top{display:flex;align-items:center;justify-content:space-between}.dialog-top h2{font-size:20px;margin:0}.close{border:0;background:#f5f6fa;color:#8b90a3;width:28px;height:28px;border-radius:8px}.dialog>p{font-size:11px;color:#9b9faf;margin:9px 0 20px}.dialog label{font-size:11px;display:block;font-weight:600;color:#777c91;margin:16px 0 7px}.dialog input{font-size:12px}.check{display:flex!important;align-items:center;gap:8px;font-weight:400!important;color:#a0a4b2!important}.check input{width:auto;accent-color:var(--accent)}details{border-top:1px solid var(--line);padding-top:12px;margin-top:18px;font-size:10px;color:#969bad}summary{cursor:pointer}.api{display:none;background:#f7f7fc;font-size:10px;padding:12px;border-radius:8px;margin-top:12px;overflow-wrap:anywhere}.setup-status{font-size:10px;color:#9da3b3;white-space:pre-wrap}.footer{margin-top:20px;text-align:center;color:#b6bac7;font-size:9px}@media(max-width:1150px){.rail{width:170px;padding:25px 15px}.brand{font-size:16px}main{margin-left:170px;width:calc(100% - 170px);padding:27px}.workspace{grid-template-columns:1fr 1.1fr;gap:16px}.editor{padding:20px}.preview{min-height:380px}.brand small{font-size:8px}}@media(max-width:880px){.rail{position:static;width:100%;height:auto;padding:15px 20px;flex-direction:row;align-items:center;justify-content:space-between;border-right:0;border-bottom:1px solid var(--line)}.app{display:block}.nav{display:flex}.nav button{padding:9px;font-size:11px}.nav-title,.rail-bottom{display:none}main{margin:0;width:100%;padding:24px 18px}.workspace{grid-template-columns:1fr}.preview{min-height:360px}.guide{grid-template-columns:1fr}.intro h1{font-size:25px}.top{margin-bottom:22px}}
 .top-actions{display:flex;gap:12px;align-items:center}.language-select{width:auto;max-width:130px;padding:7px 10px;font-size:12px}.top{gap:12px;flex-wrap:wrap}.usage-card{margin-top:20px;padding:22px 24px}.usage-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.usage-grid span{display:block;font-size:11px;color:var(--muted)}.usage-grid strong{display:block;font-size:22px;margin-top:5px}@media(max-width:600px){.usage-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.rail{flex-wrap:wrap;gap:12px}.nav{width:100%;justify-content:space-between}.nav button{flex:1;min-width:0;gap:6px}.intro{flex-wrap:wrap;gap:12px}.workspace>*,.two>div{min-width:0}.brand{font-size:16px}}
+textarea.short{min-height:64px;line-height:1.6}#brushFields{margin-top:14px}.seed-row{display:flex;gap:8px;align-items:center}.seed-row input{flex:1;min-width:0}.mask-tools{display:flex;flex-wrap:wrap;gap:6px}.chip[aria-pressed=true]{background:#efedff;border-color:#c9c2ff;color:#5a50d6}#cancelQueued{margin-top:8px}.batch-row{margin-top:16px}.mask-stage{position:relative;margin-top:10px;border-radius:9px;overflow:hidden;background:#f3f3f8}.mask-stage canvas{display:block;width:100%;height:auto}.mask-stage .mask{position:absolute;inset:0;opacity:.55;cursor:crosshair;touch-action:none}input[type=range]{padding:0;border:0;accent-color:var(--accent)}.checks{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:12px;color:#686e83}.checks label{display:flex;align-items:center;gap:6px}.checks input{width:auto}.batch{padding:0 23px 20px}.batch-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#8a8a9f;margin-bottom:10px}.batch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}.batch-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;cursor:pointer;border:1px solid var(--line)}.batch-grid span{display:grid;place-items:center;aspect-ratio:1;border-radius:7px;border:1px dashed var(--line);font-size:10px;color:#a6aab8}
 </style></head><body><div class="app">
 <aside class="rail"><div class="brand"><span class="brand-icon"><i></i><i></i><i></i><i></i></span><span>CC Media Studio<small>YOUR CREATIVE SPACE</small></span></div><div class="nav-title">WORKSPACE</div><a class="pill" href="/video" style="display:block;margin:12px 0">视频 / Video Preview ↗</a><a class="pill" href="/gallery" style="display:block;margin-bottom:12px">历史画廊 / Gallery ↗</a><nav class="nav"><button class="active" id="workspaceTab"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM15 4h5v5h-5zM15 13h5v7h-5zM4 15h7v5H4z"/></svg>创作工作台</button><button id="settingsTab"><svg viewBox="0 0 24 24"><path d="M8 8V5a4 4 0 0 1 8 0v3M5 8h14v13H5z"/><path d="M12 12v5"/></svg>账号与连接</button><button id="guideTab"><svg viewBox="0 0 24 24"><path d="M4 4h7l2 2h7v15H4zM8 11h8M8 15h6"/></svg>使用说明</button></nav><div class="rail-bottom"><div class="cloud-card"><strong>云端算力，本地创作</strong>双 T4 为你生成画面。<br>首次自动下载，之后复用模型。</div><small>CC MEDIA STUDIO · PERSONAL EDITION</small></div></aside>
 <main><header class="top"><div class="breadcrumb">工作空间<span>／ 创作工作台</span></div><div class="top-actions"><select id="languageSelect" class="language-select" aria-label="Language / 语言"><option value="zh">简体中文</option><option value="en">English</option></select><button class="pill" id="connectionStatus"><i class="dot" id="connectionDot"></i><span id="connectionText">尚未配置账号</span></button></div></header><section class="intro"><div><h1>把想象，变成画面<span style="color:#aaa2ef">。</span></h1><p>描述你的灵感，在 CC Media Studio 开始创作。</p></div><span class="version" id="modelVersion">QWEN IMAGE 2.1</span></section>
-<div class="workspace"><section class="panel editor"><div class="section-head"><h2>画面描述</h2><span class="tag">TEXT TO IMAGE</span></div><label class="label" for="modelChoice">生成模型</label><select id="modelChoice"><option value="qwen-image-2.1">Qwen-Image 2.1 · 画质基线</option><option value="z-image-turbo">Z-Image Turbo · 效率优先</option><option value="sdxl-lightning">SDXL-Lightning · 4 步预览</option></select><p class="hint" id="modelHint">默认 20 步；切换模型时释放旧模型。</p><textarea id="prompt" placeholder="描述你想看到的画面…&#10;例如：清晨的小狐狸依偎在茶杯旁，柔和的窗边光线，自然摄影。"></textarea><div class="chips"><button class="chip" id="exampleFox">窗边的小狐狸</button><button class="chip" id="exampleAnime">温柔的动漫插画</button><button class="chip" id="exampleStill">静物与光影</button></div><div class="divider"></div><div class="two"><div><label class="label" for="steps">生成步数</label><input id="steps" type="number" value="20" min="1" max="50"><p class="hint">更多步数通常需要更久</p></div><div><label class="label" for="seed">随机种子</label><input id="seed" type="number" value="42" min="0" max="2147483647"><p class="hint">相同种子可复现画面</p></div></div><div class="resolution"><span>画面尺寸</span><strong>512 × 512 · 方形</strong></div><button class="primary" id="generate"><svg viewBox="0 0 24 24"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></svg>生成图片</button><p class="run-note">首次自动准备模型 · 会话运行时持续复用</p></section>
-<div><section class="panel"><div class="preview-head"><h2>你的画面</h2><span id="resultMeta">PNG · 512 × 512</span></div><div class="preview"><div class="empty" id="emptyState"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M3 4h18v16H3zM3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="8" r="1.4"/></svg></div><h3>灵感，即将在这里成像</h3><p>写下画面描述，点击生成。<br>你创造的每一个细节，都值得被看见。</p></div><img class="result" id="result" alt="生成的图片"></div><div class="result-footer"><span>原始 PNG，无水印</span><a id="save" class="save" download="cc-media-studio.png">↓ 保存图片</a></div></section>
-<section class="panel status-card"><div class="status-top"><strong>生成进度</strong><span id="progressCaption">准备就绪后开始</span></div><div class="track"><div id="progressBar" class="bar"></div></div><div class="stages"><span id="stage0">01 启动会话</span><span id="stage1">02 下载权重</span><span id="stage2">03 加载模型</span><span id="stage3">04 生成画面</span></div><p id="status" class="status">填入账号与 API Key，首次生成会自动准备云端环境。</p><div id="progressFile" class="file"></div><a id="taskLink" class="task" target="_blank" rel="noopener noreferrer">查看 Kaggle 任务日志 ↗</a></section></div></div>
+<div class="workspace"><section class="panel editor"><div class="section-head"><h2>画面描述</h2><span class="tag" id="taskTag">TEXT TO IMAGE</span></div><label class="label" for="modelChoice">生成模型</label><select id="modelChoice"><option value="qwen-image-2.1">Qwen-Image 2.1 · 画质基线</option><option value="z-image-turbo">Z-Image Turbo · 效率优先</option><option value="sdxl-lightning">SDXL-Lightning · 4 步预览</option></select><p class="hint" id="modelHint">默认 20 步；切换模型时释放旧模型。</p><textarea id="prompt" placeholder="描述你想看到的画面…&#10;例如：清晨的小狐狸依偎在茶杯旁，柔和的窗边光线，自然摄影。"></textarea><div class="chips"><button class="chip" id="exampleFox">窗边的小狐狸</button><button class="chip" id="exampleAnime">温柔的动漫插画</button><button class="chip" id="exampleStill">静物与光影</button></div><label class="label" for="taskMode">创作方式</label><select id="taskMode"><option value="text">文生图</option><option value="img2img">图生图 · 参考图</option><option value="inpaint">局部编辑 · 涂抹重绘</option></select><p class="hint" id="taskHint">根据文字描述生成画面。</p><div id="editFields" style="display:none"><label class="label" for="sourceImage">参考图</label><input id="sourceImage" type="file" accept="image/png,image/jpeg,image/webp"><div class="mask-stage" id="maskStage" style="display:none"><canvas id="sourceCanvas"></canvas><canvas id="maskCanvas" class="mask"></canvas></div><div class="two" id="brushFields" style="display:none"><div><label class="label" for="brushSize">画笔大小</label><input id="brushSize" type="range" min="8" max="160" value="48"></div><div><label class="label">蒙版</label><div class="mask-tools"><button class="chip" id="maskEraser" type="button" aria-pressed="false">橡皮擦</button><button class="chip" id="undoMask" type="button">撤销</button><button class="chip" id="clearMask" type="button">清除涂抹</button></div></div></div><label class="label" for="strength">重绘强度 <span id="strengthValue">0.60</span></label><input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6"><div id="featherFields" style="display:none"><label class="label" for="feather">边缘羽化 <span id="featherValue">8</span> px</label><input id="feather" type="range" min="0" max="64" step="1" value="8"><p class="hint">让重绘区域与原图柔和过渡；涂抹区域以外保持原图不变。</p></div><p class="hint" id="editHint">参考图会按所选尺寸居中裁剪。强度越高，画面变化越大。</p></div><div id="negativeFields"><label class="label" for="negativePrompt">负面提示词（可选）</label><textarea id="negativePrompt" class="short" placeholder="不希望出现的内容，例如：模糊、文字、水印"></textarea></div><div class="divider"></div><div class="two"><div><label class="label" for="steps">生成步数</label><input id="steps" type="number" value="20" min="1" max="50"><p class="hint">更多步数通常需要更久</p></div><div><label class="label" for="seed">随机种子</label><div class="seed-row"><input id="seed" type="number" value="42" min="0" max="2147483647"><button class="chip" id="randomSeed" type="button">随机</button></div><p class="hint">相同种子可复现画面</p></div></div><div class="two batch-row"><div><label class="label" for="sizeChoice">画面尺寸</label><select id="sizeChoice"><option value="512x512">512 × 512 · 方形</option><option value="768x768">768 × 768 · 方形</option><option value="1024x1024">1024 × 1024 · 方形</option><option value="768x512">768 × 512 · 横向 3:2</option><option value="512x768">512 × 768 · 竖向 2:3</option><option value="1024x576">1024 × 576 · 横向 16:9</option><option value="576x1024">576 × 1024 · 竖向 9:16</option></select></div><div><label class="label" for="batchCount">每个提示词张数</label><input id="batchCount" type="number" value="1" min="1" max="8"></div></div><div class="checks"><label><input type="checkbox" id="promptList"> 每行一个提示词</label><label><input type="checkbox" id="seedIncrement" checked> 批量时种子递增</label></div><p class="hint">更大尺寸需要更长时间与更多显存。批量任务进入同一队列依次生成。</p><button class="primary" id="generate"><svg viewBox="0 0 24 24"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></svg>生成图片</button><p class="run-note">首次自动准备模型 · 会话运行时持续复用</p></section>
+<div><section class="panel"><div class="preview-head"><h2>你的画面</h2><span id="resultMeta">PNG · 512 × 512</span></div><div class="preview"><div class="empty" id="emptyState"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M3 4h18v16H3zM3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="8" r="1.4"/></svg></div><h3>灵感，即将在这里成像</h3><p>写下画面描述，点击生成。<br>你创造的每一个细节，都值得被看见。</p></div><img class="result" id="result" alt="生成的图片"></div><div class="result-footer"><span>原始 PNG，无水印</span><a id="save" class="save" download="cc-media-studio.png">↓ 保存图片</a></div><div id="batchPanel" class="batch" style="display:none"><div class="batch-head"><span id="batchSummary"></span><button class="chip" id="downloadZip" type="button" disabled>↓ 打包下载 ZIP</button></div><div class="batch-grid" id="batchGrid"></div></div></section>
+<section class="panel status-card"><div class="status-top"><strong>生成进度</strong><span id="progressCaption">准备就绪后开始</span></div><div class="track"><div id="progressBar" class="bar"></div></div><div class="stages"><span id="stage0">01 启动会话</span><span id="stage1">02 下载权重</span><span id="stage2">03 加载模型</span><span id="stage3">04 生成画面</span></div><p id="status" class="status">填入账号与 API Key，首次生成会自动准备云端环境。</p><button class="chip" id="cancelQueued" type="button" style="display:none">取消排队中的任务</button><div id="progressFile" class="file"></div><a id="taskLink" class="task" target="_blank" rel="noopener noreferrer">查看 Kaggle 任务日志 ↗</a></section></div></div>
 <section class="panel usage-card"><div class="section-head"><h2>GPU 用量</h2><button id="refreshUsage" class="chip">刷新用量</button></div><div class="usage-grid"><div><span>已用</span><strong id="gpuUsed">—</strong></div><div><span>预留</span><strong id="gpuReserved">—</strong></div><div><span>可用</span><strong id="gpuRemaining">—</strong></div><div><span>总额度</span><strong id="gpuTotal">—</strong></div></div><p id="quotaReset" class="hint"></p><p id="keepAliveStatus" class="hint"></p><p id="usageStatus" class="hint">额度暂不可用</p></section><div class="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><div><strong>第一次使用会稍久一些</strong>　程序会从 Hugging Face 自动下载模型到 Kaggle；下载完成后加载一次，后续请求直接复用。</div></div><div class="guide" id="guide"><article><h3>独立 GUI</h3>启动客户端，填写 Kaggle 账号和 API Key。无需准备 Dataset，也无需复制 Jupyter 地址。</article><article><h3>ComfyUI</h3>添加 CC Media Image 节点，读取已保存的账号配置，独立运行；不需要先启动 GUI。</article><article><h3>Kaggle 直接运行</h3>在 Kaggle 开启双 T4，导入独立 Notebook，运行后直接输入提示词。<p><a href="/kaggle_standalone.ipynb" download="kaggle_standalone.ipynb">下载 Notebook ↗</a></p></article></div><footer class="footer">CC MEDIA STUDIO · 模型运行在你的 Kaggle 账号中</footer></main></div>
 <div id="connectionPanel" class="overlay"><section class="dialog"><div class="dialog-top"><h2>连接你的云端画室</h2><button id="closeSettings" class="close" aria-label="关闭设置">×</button></div><p>只需填写两项。会话、权重下载和模型加载由程序处理。</p><label for="acceleration">加速策略</label><select id="acceleration"><option value="auto" selected>自动加速 · 双卡优先</option><option value="split">原分卡模式</option></select><p class="hint">自动选择模型适配的双卡策略，显示实际执行方式。</p><label for="keepAlive">空闲保活（分钟）</label><input id="keepAlive" type="number" min="0" max="1440" step="1" value="15"><p class="hint">最后一个任务结束后计时；0 表示不自动释放。仅自动连接模式会停止 Kaggle 会话。</p><label for="user">Kaggle 账号</label><input id="user" autocomplete="username" placeholder="个人主页中的用户名，不是邮箱"><div id="batchFields"><label for="token">API Key / API Token</label><input id="token" type="password" autocomplete="off" placeholder="在 Kaggle Settings → API Tokens 中创建"></div><label class="check"><input id="remember" type="checkbox" checked>记住账号配置，仅保存在这台电脑</label><button id="configure" class="primary">保存连接</button><p id="setupStatus" class="setup-status">账号需已完成 Kaggle 手机验证，且有可用 GPU 额度。</p><details><summary>高级连接选项</summary><label for="mode">运行方式</label><select id="mode"><option value="account" selected>自动连接 · 账号 + Key</option><option value="session">手动连接现有 Jupyter 会话</option><option value="batch">旧版批处理</option></select><label for="dataset">模型 Dataset（自动模式不需要填写）</label><input id="dataset" autocomplete="off" placeholder="留空即可，从 Hugging Face 自动下载"><div id="sessionFields" style="display:none"><label for="jupyterUrl">VSCode Compatible URL</label><input id="jupyterUrl" type="password" autocomplete="off" placeholder="仅手动连接模式使用"></div><p id="modeHint">默认自动下载公开权重，不需要先建立 Dataset。</p><div id="api" class="api"></div></details></section></div>
 <script>
 const uiTranslations = {"创作工作台": "Creative workspace", "账号与连接": "Account & connection", "使用说明": "Getting started", "云端算力，本地创作": "Cloud power, local creativity", "双 T4 为你生成画面。": "Create images with dual T4 GPUs.", "首次自动下载，之后复用模型。": "Automatic first download; reuse the loaded model.", "工作空间": "Workspace", "／ 创作工作台": "/ Creative workspace", "尚未配置账号": "Account not configured", "把想象，变成画面": "Bring your imagination to life", "描述你的灵感，在 CC Media Studio 开始创作。": "Describe your idea and start creating in CC Media Studio.", "画面描述": "Your prompt", "描述你想看到的画面…\n例如：清晨的小狐狸依偎在茶杯旁，柔和的窗边光线，自然摄影。": "Describe the image you want…\nFor example: a fox beside a teacup, soft morning window light, natural photography.", "窗边的小狐狸": "Fox by the window", "温柔的动漫插画": "Soft anime illustration", "静物与光影": "Still life & light", "生成步数": "Steps", "更多步数通常需要更久": "More steps usually take longer", "随机种子": "Seed", "相同种子可复现画面": "Use the same seed to reproduce an image", "画面尺寸": "Image size", "512 × 512 · 方形": "512 × 512 · Square", "生成图片": "Generate image", "首次自动准备模型 · 会话运行时持续复用": "Automatic setup on first use · Reuse while the session is alive", "你的画面": "Your image", "灵感，即将在这里成像": "Your next image starts here", "写下画面描述，点击生成。": "Write a prompt and click Generate.", "你创造的每一个细节，都值得被看见。": "Bring every detail of your idea into view.", "生成的图片": "Generated image", "原始 PNG，无水印": "Original PNG, no watermark", "↓ 保存图片": "↓ Save image", "生成进度": "Progress", "准备就绪后开始": "Ready when you are", "01 启动会话": "01 Start session", "02 下载权重": "02 Download weights", "03 加载模型": "03 Load model", "04 生成画面": "04 Generate", "填入账号与 API Key，首次生成会自动准备云端环境。": "Enter your account and API key. The cloud environment is set up automatically on first use.", "查看 Kaggle 任务日志 ↗": "View Kaggle task logs ↗", "第一次使用会稍久一些": "First use takes longer", "程序会从 Hugging Face 自动下载模型到 Kaggle；下载完成后加载一次，后续请求直接复用。": "Models download automatically from Hugging Face to Kaggle, load once, and are reused for subsequent requests.", "独立 GUI": "Standalone GUI", "启动客户端，填写 Kaggle 账号和 API Key。无需准备 Dataset，也无需复制 Jupyter 地址。": "Start the client and enter your Kaggle username and API key. No dataset or Jupyter URL is required.", "添加 CC Media Image 节点，读取已保存的账号配置，独立运行；不需要先启动 GUI。": "Add the CC Media Image node. It uses your saved configuration and runs independently of the GUI.", "Kaggle 直接运行": "Run directly on Kaggle", "在 Kaggle 开启双 T4，导入独立 Notebook，运行后直接输入提示词。": "Enable dual T4 GPUs, import the standalone notebook, run it, and enter a prompt.", "下载 Notebook ↗": "Download notebook ↗", "CC MEDIA STUDIO · 模型运行在你的 Kaggle 账号中": "CC MEDIA STUDIO · Models run in your Kaggle account", "连接你的云端画室": "Connect your cloud studio", "关闭设置": "Close settings", "只需填写两项。会话、权重下载和模型加载由程序处理。": "Just two fields. Session setup, downloads, and model loading are handled for you.", "Kaggle 账号": "Kaggle username", "个人主页中的用户名，不是邮箱": "Your profile username, not your email", "在 Kaggle Settings → API Tokens 中创建": "Create one in Kaggle Settings → API Tokens", "记住账号配置，仅保存在这台电脑": "Remember configuration on this computer only", "保存连接": "Save connection", "账号需已完成 Kaggle 手机验证，且有可用 GPU 额度。": "Your Kaggle account needs phone verification and available GPU quota.", "高级连接选项": "Advanced connection options", "运行方式": "Connection mode", "自动连接 · 账号 + Key": "Automatic · Username + key", "手动连接现有 Jupyter 会话": "Connect an existing Jupyter session", "旧版批处理": "Legacy batch mode", "模型 Dataset（自动模式不需要填写）": "Model dataset (not needed in automatic mode)", "留空即可，从 Hugging Face 自动下载": "Leave empty to download from Hugging Face", "仅手动连接模式使用": "For manual connection mode only", "默认自动下载公开权重，不需要先建立 Dataset。": "Public weights download automatically; no existing dataset is required.", "自动建立会话，从 Hugging Face 下载权重，后续直接复用。": "Create a session, download weights from Hugging Face, then reuse the model.", "连接现有 Notebook 内核，已加载的模型直接复用。": "Connect to an existing notebook kernel and reuse its loaded model.", "批处理每次创建独立任务并重新加载模型。": "Batch mode starts a separate job and reloads the model on every request.", "请求失败": "Request failed", "配置已记住。今后打开后直接填写提示词。": "Configuration saved. Enter a prompt next time you open the app.", "配置完成。停止本机后台后需要重新填写。": "Configured. Enter credentials again after stopping the local worker.", "本机任务记录已失效，可能重启过服务。请先到 Kaggle 确认旧任务状态，再决定是否重新生成。": "The local task record has expired. Check the existing task on Kaggle before generating again.", "无法读取任务状态。恢复网络后刷新页面继续查看；不要重复提交。": "Cannot read task status. Restore your connection and refresh to resume; avoid submitting twice.", "生成完成，用时 ": "Completed in ", " 秒。": " seconds. ", "已复用现有模型，未重新加载。": "Reused the existing model without reloading. ", "首次加载完成，后续请求将复用。": "Initial model load complete. Later requests will reuse it. ", "私有缓存已就绪。": "Private cache is ready.", "私有缓存尚未就绪，重新连接后会检查。": "Private cache is not ready yet; it will be checked on reconnection.", "任务仍在执行或排队": "Task running or queued", " 本次查看已等待约 ": " Viewing for about ", " 秒。刷新页面可继续查看。": " seconds. Refresh to continue watching.", "（刷新页面会重新检查任务状态。）": " (Refresh to check the task again.)", "先保存 Kaggle 账号与 API Key。": "Save your Kaggle username and API key first.", "正在准备云端任务…": "Preparing cloud task…", "；若提交状态不明，请先刷新页面检查已有任务。": "; if submission status is unclear, refresh to check existing tasks first.", "无法读取本机配置，请刷新页面。": "Cannot read local configuration. Please refresh.", "已读取本机账号配置。": "Loaded the saved local configuration.", "配置保留在后台内存，停止后台后需重新填写。": "Configuration is in worker memory; enter it again after stopping the worker.", "账号已配置": "Account configured", "生成完成": "Complete", "需要检查": "Check required", "校验 ": "Verifying ", "正在生成": "Generating", "正在准备": "Preparing", "正在下载": "Downloading", "任务已进入本机队列。": "Task added to the local queue.", "图片已生成并保存。": "Image generated and saved.", "生成失败；该任务没有自动重发。请检查配置、网络或 Kaggle 会话后再决定是否提交新任务。": "Generation failed. The task was not automatically resubmitted. Check your configuration, network, or Kaggle session before submitting a new task.", "后台曾中断，远端可能仍在执行。该任务未重发，请先检查 Kaggle。": "The worker was interrupted. The remote task may still be running; check Kaggle before resubmitting.", "账号配置已变化，该排队任务未执行。": "Account configuration changed. This queued task was not run."};
 Object.assign(uiTranslations, {"空闲保活（分钟）": "Idle retention (minutes)", "最后一个任务结束后计时；0 表示不自动释放。仅自动连接模式会停止 Kaggle 会话。": "Starts after the last task finishes. 0 disables auto-release. Only automatic mode stops the Kaggle session.", "GPU 用量": "GPU usage", "刷新用量": "Refresh usage", "已用": "Used", "预留": "Reserved", "可用": "Available", "总额度": "Total quota", "额度暂不可用": "Quota currently unavailable", "GPU 额度来自 Kaggle API；可用 = 总额度 − 已用 − 预留。": "GPU quota from the Kaggle API; available = total − used − reserved.", "重置时间：": "Resets: ", "空闲保活已关闭": "Automatic idle release is disabled", "会话已释放，下次生成会重新加载": "Session released. The next generation will reload the model.", "自动释放失败，请到 Kaggle 检查会话": "Automatic release failed. Check the session on Kaggle.", "正在释放空闲会话": "Releasing idle session", "生成或下载期间不计空闲超时": "Idle timeout is paused during generation or downloads", "空闲剩余 ": "Idle time left: ", "默认保活 ": "Idle retention: ", " 分钟": " minutes", "仅自动连接模式支持自动释放": "Automatic release is supported in automatic mode only", "当前无空闲倒计时": "No idle countdown is active", "小时": "hours", "数据更新时间：": "Updated: "});
-Object.assign(uiTranslations,{"正在检查 Kaggle 会话。": "Checking the Kaggle session.", "正在检查专用 Notebook。": "Checking the managed notebook.", "正在恢复已有会话。": "Reconnecting to the existing session.", "正在申请 Kaggle GPU。": "Requesting a Kaggle GPU.", "正在等待 Kaggle 准备 GPU。": "Waiting for Kaggle to prepare the GPU.", "会话已连接。": "Session connected.", "正在获取模型清单。": "Fetching the model manifest.", "正在下载模型。": "Downloading model weights.", "正在校验模型。": "Verifying model weights.", "模型文件缓存已就绪。": "Model file cache is ready.", "正在拉取模型 Dataset。": "Downloading the model dataset.", "正在准备模型文件。": "Preparing model files.", "正在加载模型。": "Loading the model.", "正在生成图片。": "Generating an image.", "正在检查私有缓存。": "Checking the private cache.", "正在下载私有模型缓存。": "Downloading the private model cache.", "正在保存 INT8/Q4 缓存。": "Preparing the INT8/Q4 cache.", "正在上传私有缓存。": "Uploading the private cache.", "Kaggle 正在处理私有缓存。": "Kaggle is processing the private cache.", "私有缓存已保存。": "Private cache saved.", "私有缓存暂未就绪；本次仍可继续生图。": "The private cache is not ready yet; this generation can continue.", "远端启动记录未保存；本机连接记录仍可使用。": "The remote startup record was not saved; the local connection record remains available.", "正在释放空闲会话，请稍后重试。": "Releasing the idle session. Please try again shortly.", "保活时间需要为 0–1440 分钟的整数。": "Idle retention must be an integer between 0 and 1440 minutes.", "。": "."});
+Object.assign(uiTranslations,{"正在检查 Kaggle 会话。": "Checking the Kaggle session.", "正在清理较早使用的模型文件以释放磁盘。": "Removing earlier model files to free disk space.", "正在检查专用 Notebook。": "Checking the managed notebook.", "正在恢复已有会话。": "Reconnecting to the existing session.", "正在申请 Kaggle GPU。": "Requesting a Kaggle GPU.", "正在等待 Kaggle 准备 GPU。": "Waiting for Kaggle to prepare the GPU.", "会话已连接。": "Session connected.", "正在获取模型清单。": "Fetching the model manifest.", "正在下载模型。": "Downloading model weights.", "正在校验模型。": "Verifying model weights.", "模型文件缓存已就绪。": "Model file cache is ready.", "正在拉取模型 Dataset。": "Downloading the model dataset.", "正在准备模型文件。": "Preparing model files.", "正在加载模型。": "Loading the model.", "正在生成图片。": "Generating an image.", "正在检查私有缓存。": "Checking the private cache.", "正在下载私有模型缓存。": "Downloading the private model cache.", "正在保存 INT8/Q4 缓存。": "Preparing the INT8/Q4 cache.", "正在上传私有缓存。": "Uploading the private cache.", "Kaggle 正在处理私有缓存。": "Kaggle is processing the private cache.", "私有缓存已保存。": "Private cache saved.", "私有缓存暂未就绪；本次仍可继续生图。": "The private cache is not ready yet; this generation can continue.", "远端启动记录未保存；本机连接记录仍可使用。": "The remote startup record was not saved; the local connection record remains available.", "正在释放空闲会话，请稍后重试。": "Releasing the idle session. Please try again shortly.", "保活时间需要为 0–1440 分钟的整数。": "Idle retention must be an integer between 0 and 1440 minutes.", "。": "."});
 Object.assign(uiTranslations,{"生成模型":"Generation model","Qwen-Image 2.1 · 画质基线":"Qwen-Image 2.1 · Quality baseline","Z-Image Turbo · 效率优先":"Z-Image Turbo · Efficient","SDXL-Lightning · 4 步预览":"SDXL-Lightning · 4-step preview","默认 20 步；切换模型时释放旧模型。":"20 steps by default. Switching models releases the old model.","推荐 9 步，适合快速生成。":"9 steps recommended for efficient generation.","固定 4 步；英文提示词效果更稳定。":"Fixed at 4 steps. English prompts work best."," · 编码 ":" · Encode "," · 采样 ":" · Denoise "," · 解码 ":" · Decode "," 秒":" s"});
 Object.assign(uiTranslations,{'加速策略':'Acceleration','自动加速 · 双卡优先':'Automatic · prefer dual GPU','原分卡模式':'Encoder/model split','自动选择模型适配的双卡策略，显示实际执行方式。':'Selects a supported dual-GPU strategy and shows the actual execution mode.','CFG 双卡并行':'Dual-GPU CFG','编码/生成分卡':'Encoder/model split','单卡生成':'Single-GPU generation','已自动回退原分卡模式。':'Automatically fell back to encoder/model split.',' · 迁移 ':' · Transfers '});
+Object.assign(uiTranslations,{'创作方式':'Mode','文生图':'Text to image','图生图 · 参考图':'Image to image · reference','局部编辑 · 涂抹重绘':'Inpaint · paint to repaint','根据文字描述生成画面。':'Generate an image from your description.','上传参考图，按描述重新绘制；保留构图与配色。':'Upload a reference image and redraw it from your description, keeping its composition and colors.','上传图片，在画面上涂抹需要修改的区域，只重绘涂抹部分。':'Upload an image and paint over the area to change. Only the painted area is redrawn.','参考图':'Reference image','画笔大小':'Brush size','蒙版':'Mask','清除涂抹':'Clear mask','重绘强度':'Strength','参考图会按所选尺寸居中裁剪。强度越高，画面变化越大。':'The reference is center-cropped to the selected size. Higher strength changes more.','负面提示词（可选）':'Negative prompt (optional)','不希望出现的内容，例如：模糊、文字、水印':'What to avoid, e.g. blur, text, watermark','画面尺寸':'Image size','每个提示词张数':'Images per prompt','每行一个提示词':'One prompt per line','批量时种子递增':'Increment seed in batches','更大尺寸需要更长时间与更多显存。批量任务进入同一队列依次生成。':'Larger sizes take longer and need more GPU memory. Batch tasks run one after another in the shared queue.','· 方形':'· square','· 横向':'· landscape','· 竖向':'· portrait','↓ 打包下载 ZIP':'↓ Download ZIP','批量任务：完成 ':'Batch: completed ','（已提交 ':' (submitted ','批量完成：成功 ':'Batch finished: ',' 张。':' images. ','可打包下载 ZIP。':' Download them as a ZIP.','正在提交第 ':'Submitting ',' 个任务…':' tasks…','请先上传参考图。':'Upload a reference image first.','请在图片上涂抹需要重绘的区域。':'Paint the area to repaint on the image.','参考图只支持 PNG、JPEG 或 WebP。':'Reference images must be PNG, JPEG or WebP.','无法读取这张图片。':'This image could not be read.','参考图已载入：':'Reference loaded: ','一次最多提交 32 个任务，请减少张数或提示词行数。':'Up to 32 tasks per batch. Reduce the count or prompt lines.','请至少填写一行提示词。':'Enter at least one prompt line.','图生图':'Image to image','局部编辑':'Inpaint','打包失败':'ZIP export failed',' 首次使用约 ':' First use takes about ',' 分钟':' min','，下载约 ':', downloading about ','（双 T4 实测，含申请 GPU、下载与加载）；同一会话内再次生成直接复用。':' (measured on dual T4, including GPU request, download and loading); later requests in the same session reuse the model.','随机':'Random','已取消':'Cancelled','橡皮擦':'Eraser','撤销':'Undo','边缘羽化 ':'Edge feather ','让重绘区域与原图柔和过渡；涂抹区域以外保持原图不变。':'Blends the repainted area softly into the original; everything outside the mask stays unchanged.','取消排队中的任务':'Cancel queued tasks','已取消 ':'Cancelled ',' 个排队中的任务。正在执行的任务会继续完成，不会被中断。':' queued tasks. A running task continues and is not interrupted.','任务已取消，未在 Kaggle 上执行。':'Task cancelled; it did not run on Kaggle.','显存不足：请改用更小的尺寸、更少的帧数或较小的模型后重新提交。该任务没有自动重发。':'Out of GPU memory: resubmit with a smaller size, fewer frames or a smaller model. The task was not resubmitted.','模型文件加载失败：请重新提交；程序会校验文件并在需要时重新下载。该任务没有自动重发。':'Model files failed to load: resubmit and the files will be verified and downloaded again if needed. The task was not resubmitted.','Kaggle 会话磁盘不可写或空间不足：请在 Kaggle 停止会话后重新提交。该任务没有自动重发。':'The Kaggle session disk is full or read-only: stop the session on Kaggle, then resubmit. The task was not resubmitted.','Kaggle 会话不可用：请检查 GPU 额度、手机号验证和网络后重新提交。该任务没有自动重发。':'The Kaggle session is unavailable: check GPU quota, phone verification and the network, then resubmit. The task was not resubmitted.','等待 Kaggle 超时：远端可能仍在执行，请先在 Kaggle 确认会话状态。该任务没有自动重发。':'Timed out waiting for Kaggle: it may still be running, so check the session on Kaggle first. The task was not resubmitted.','生成结果无效（例如画面为空或数值异常）：请更换种子或提示词后重新提交。该任务没有自动重发。':'The result was invalid (for example blank or non-finite): try another seed or prompt. The task was not resubmitted.','输入图片已不存在或无效：请重新上传后提交。该任务没有自动重发。':'The input image is missing or invalid: upload it again and resubmit. The task was not resubmitted.','无法载入要继续编辑的作品。':'The work to edit could not be loaded.','第 ':'Image ',' 张：':': '});
 const languageStorageKey = 'cc-media-language';
 let uiLanguage = 'zh';
 try { const saved = localStorage.getItem(languageStorageKey); uiLanguage = saved === 'en' || saved === 'zh' ? saved : ((navigator.language || '').startsWith('zh') ? 'zh' : 'en'); } catch {}
@@ -74,10 +76,119 @@ function selectModel(resetSteps=true){
     if(resetSteps)el('steps').value=modelDefaults[id];
     el('modelVersion').textContent=id;
     el('steps').disabled=id==='sdxl-lightning';
-    el('modelHint').textContent=id==='z-image-turbo'?'推荐 9 步，适合快速生成。':id==='sdxl-lightning'?'固定 4 步；英文提示词效果更稳定。':'默认 20 步；切换模型时释放旧模型。';
+    el('modelHint').textContent=(id==='z-image-turbo'?'推荐 9 步，适合快速生成。':id==='sdxl-lightning'?'固定 4 步；英文提示词效果更稳定。':'默认 20 步；切换模型时释放旧模型。')+firstUseText(firstUse[id]);
     try{localStorage.setItem('cc-media-model',id)}catch{}
+    // Only Qwen runs CFG; the two editing models ignore negative prompts.
+    el('negativeFields').style.display=id==='qwen-image-2.1'?'block':'none';
+    if(id==='qwen-image-2.1'&&currentTask()!=='text'){el('taskMode').value='text';updateTask()}
+}
+// Measured first-use time per model, injected by the gateway from the catalog.
+const firstUse=typeof __FIRST_USE__==='object'?__FIRST_USE__:{};
+function firstUseText(info){
+    if(!info||!info.minutes)return '';
+    return ' 首次使用约 '+info.minutes+' 分钟'+(info.download_gb?'，下载约 '+info.download_gb+' GB':'')+'（双 T4 实测，含申请 GPU、下载与加载）；同一会话内再次生成直接复用。';
+}
+const editableModels=['z-image-turbo','sdxl-lightning'];
+const taskTags={text:'TEXT TO IMAGE',img2img:'IMAGE TO IMAGE',inpaint:'INPAINT'};
+let sourceData=null,maskDirty=false,painting=false,lastPoint=null;
+function currentTask(){const value=el('taskMode').value;return value==='img2img'||value==='inpaint'?value:'text'}
+function updateTask(){
+    const task=currentTask();
+    if(task!=='text'&&!editableModels.includes(el('modelChoice').value)){el('modelChoice').value='z-image-turbo';selectModel()}
+    el('taskTag').textContent=taskTags[task];
+    el('taskHint').textContent=task==='img2img'?'上传参考图，按描述重新绘制；保留构图与配色。':task==='inpaint'?'上传图片，在画面上涂抹需要修改的区域，只重绘涂抹部分。':'根据文字描述生成画面。';
+    el('editFields').style.display=task==='text'?'none':'block';
+    el('featherFields').style.display=task==='inpaint'?'block':'none';
+    el('brushFields').style.display=task==='inpaint'?'grid':'none';
+    el('maskCanvas').style.display=task==='inpaint'?'block':'none';
+    el('strength').value=task==='inpaint'?'0.9':'0.6';showStrength();
+}
+function showStrength(){el('strengthValue').textContent=Number(el('strength').value||0.6).toFixed(2)}
+el('taskMode').onchange=updateTask;
+el('strength').oninput=showStrength;
+el('feather').oninput=()=>{el('featherValue').textContent=el('feather').value};
+el('randomSeed').onclick=()=>{el('seed').value=String(Math.floor(Math.random()*2147483648))};
+el('sourceImage').onchange=()=>{
+    const file=el('sourceImage').files&&el('sourceImage').files[0];
+    if(!file)return;
+    if(!/^image\/(png|jpeg|webp)$/.test(file.type)){el('status').textContent='参考图只支持 PNG、JPEG 或 WebP。';return}
+    const reader=new FileReader();
+    reader.onload=()=>{const picture=new Image();picture.onload=()=>loadSource(picture,file.type);picture.onerror=()=>{el('status').textContent='无法读取这张图片。'};picture.src=reader.result};
+    reader.readAsDataURL(file);
+};
+function loadSource(picture,type){
+    // Downscale in the browser: the GPU crops to the selected size anyway.
+    const scale=Math.min(1,1536/Math.max(picture.naturalWidth,picture.naturalHeight));
+    const width=Math.max(1,Math.round(picture.naturalWidth*scale)),height=Math.max(1,Math.round(picture.naturalHeight*scale));
+    const canvas=el('sourceCanvas');canvas.width=width;canvas.height=height;canvas.getContext('2d').drawImage(picture,0,0,width,height);
+    let data=canvas.toDataURL(type==='image/jpeg'?'image/jpeg':'image/png',0.92);
+    if(data.length>10e6)data=canvas.toDataURL('image/jpeg',0.9);
+    sourceData=data.split(',')[1];
+    const mask=el('maskCanvas');mask.width=width;mask.height=height;maskHistory.length=0;clearMask(false);
+    el('maskStage').style.display='block';
+    el('status').textContent='参考图已载入：'+picture.naturalWidth+' × '+picture.naturalHeight+'。';
+}
+// Undo keeps up to 20 mask states; the eraser removes painted strokes.
+const maskHistory=[];let erasing=false;
+function snapshotMask(){const mask=el('maskCanvas');if(!mask.getContext||!mask.width)return;maskHistory.push(mask.getContext('2d').getImageData(0,0,mask.width,mask.height));if(maskHistory.length>20)maskHistory.shift()}
+function clearMask(record=true){const mask=el('maskCanvas');if(!mask.getContext)return;if(record)snapshotMask();mask.getContext('2d').clearRect(0,0,mask.width,mask.height);maskDirty=false}
+el('clearMask').onclick=()=>clearMask(true);
+el('undoMask').onclick=()=>{const mask=el('maskCanvas'),last=maskHistory.pop();if(last&&mask.getContext){mask.getContext('2d').putImageData(last,0,0);maskDirty=true}};
+el('maskEraser').onclick=()=>{erasing=!erasing;el('maskEraser').setAttribute('aria-pressed',String(erasing))};
+function paint(event){
+    const mask=el('maskCanvas'),box=mask.getBoundingClientRect(),ratio=mask.width/box.width;
+    const point=[(event.clientX-box.left)*ratio,(event.clientY-box.top)*ratio];
+    const context=mask.getContext('2d');
+    context.globalCompositeOperation=erasing?'destination-out':'source-over';
+    context.strokeStyle='#fff';context.fillStyle='#fff';context.lineCap='round';context.lineJoin='round';
+    context.lineWidth=Number(el('brushSize').value||48)*ratio;
+    context.beginPath();context.moveTo(...(lastPoint||point));context.lineTo(...point);context.stroke();
+    lastPoint=point;maskDirty=true;
+}
+el('maskCanvas').onpointerdown=event=>{snapshotMask();painting=true;lastPoint=null;if(el('maskCanvas').setPointerCapture)el('maskCanvas').setPointerCapture(event.pointerId);paint(event)};
+el('maskCanvas').onpointermove=event=>{if(painting)paint(event)};
+el('maskCanvas').onpointerup=el('maskCanvas').onpointercancel=()=>{painting=false;lastPoint=null};
+function maskData(){
+    if(!maskDirty)return null;
+    // White strokes on black: white areas are repainted.
+    const mask=el('maskCanvas'),pixels=mask.getContext('2d').getImageData(0,0,mask.width,mask.height).data;
+    let painted=false;for(let i=3;i<pixels.length;i+=4)if(pixels[i]){painted=true;break}
+    if(!painted)return null;  // everything was erased or undone
+    const output=document.createElement('canvas');
+    output.width=mask.width;output.height=mask.height;
+    const context=output.getContext('2d');context.fillStyle='#000';context.fillRect(0,0,output.width,output.height);context.drawImage(mask,0,0);
+    return output.toDataURL('image/png').split(',')[1];
+}
+function requestBody(prompt,seed){
+    const body={prompt,model_id:el('modelChoice').value||'qwen-image-2.1',steps:Number(el('steps').value),seed};
+    const size=el('sizeChoice').value;if(size&&size!=='512x512')body.size=size;
+    const negative=el('negativePrompt').value||'';
+    if(body.model_id==='qwen-image-2.1'&&negative.trim())body.negative_prompt=negative;
+    const task=currentTask();
+    if(task!=='text'){
+        if(!sourceData)throw Error('请先上传参考图。');
+        body.task=task;body.strength=Number(el('strength').value);body.image=sourceData;
+        if(task==='inpaint'){
+            body.mask=maskData();if(!body.mask)throw Error('请在图片上涂抹需要重绘的区域。');
+            const feather=Math.round(Number(el('feather').value));if(feather>0)body.feather=Math.min(64,feather);
+        }
+    }
+    return body;
+}
+function plannedJobs(){
+    const base=Number(el('seed').value);
+    const prompts=el('promptList').checked?String(el('prompt').value).split('\n').map(line=>line.trim()).filter(Boolean):[el('prompt').value];
+    const count=Math.max(1,Math.min(8,Math.floor(Number(el('batchCount').value))||1));
+    const increment=el('seedIncrement').checked!==false;
+    const planned=[];
+    for(const prompt of prompts)for(let i=0;i<count;i++){planned.push({prompt,seed:increment?(base+planned.length)%2147483648:base})}
+    if(!planned.length)throw Error('请至少填写一行提示词。');
+    if(planned.length>32)throw Error('一次最多提交 32 个任务，请减少张数或提示词行数。');
+    return planned;
 }
 el('modelChoice').onchange=()=>selectModel();
+el('negativeFields').style.display=(el('modelChoice').value||'qwen-image-2.1')==='qwen-image-2.1'?'block':'none';
+el('modelHint').textContent+=firstUseText(firstUse[el('modelChoice').value||'qwen-image-2.1']);
 try{const saved=localStorage.getItem('cc-media-model');if(saved in modelDefaults){el('modelChoice').value=saved;selectModel()}}catch{}
 function updateMode(){
     const session=el('mode').value==='session';
@@ -88,7 +199,7 @@ function updateMode(){
 el('mode').onchange=updateMode;
 function pendingJob(){try{return sessionStorage.getItem(jobStorageKey)}catch{return null}}
 function rememberJob(id){try{if(id)sessionStorage.setItem(jobStorageKey,id);else sessionStorage.removeItem(jobStorageKey)}catch{}}
-function setBusy(value){busy=value;el('generate').disabled=value;el('configure').disabled=value;el('modelChoice').disabled=value}
+function setBusy(value){busy=value;el('generate').disabled=value;el('configure').disabled=value;el('modelChoice').disabled=value;el('taskMode').disabled=value}
 async function call(path,data){
     const r=await fetch(path,{method:'POST',headers,body:JSON.stringify(data)});
     const d=await r.json();
@@ -106,55 +217,151 @@ el('configure').onclick=async()=>{
     }catch(e){el('setupStatus').textContent=e.message}
     finally{el('configure').disabled=busy}
 };
+const batchStorageKey='cc-media-batch';
+function showResult(job){
+    const src='data:image/png;base64,'+job.result.data[0].b64_json;el('emptyState').style.display='none';
+    el('result').src=src;el('result').style.display='block';
+    el('save').href=src;el('save').style.display='inline';
+    const usage=job.result.usage;
+    el('status').textContent='生成完成，用时 '+usage.request_seconds+' 秒。'+(['session','account'].includes(usage.backend)?(usage.model_reused?'已复用现有模型，未重新加载。':'首次加载完成，后续请求将复用。'):'');
+    if(usage.cache_status==='saved')el('status').textContent+='私有缓存已就绪。';
+    if(['failed','unavailable'].includes(usage.cache_status))el('status').textContent+='私有缓存尚未就绪，重新连接后会检查。';
+    if(usage.acceleration_fallback)el('status').textContent+='已自动回退原分卡模式。';
+    const timingParts=[['migration_seconds',' · 迁移 '],['encoding_seconds',' · 编码 '],['denoising_seconds',' · 采样 '],['decode_seconds',' · 解码 ']];
+    for(const [key,label] of timingParts)if(Number.isFinite(usage[key]))el('status').textContent+=label+usage[key]+' 秒';
+    const strategyNames={cfg_parallel:'CFG 双卡并行',encoder_split:'编码/生成分卡',single_gpu:'单卡生成'};
+    const taskNames={img2img:'图生图',inpaint:'局部编辑'};
+    el('resultMeta').textContent=(strategyNames[usage.parallel_strategy]||'')+' · '+(usage.model_id||'qwen-image-2.1')+(taskNames[usage.task]?' · '+taskNames[usage.task]:'')+' · '+(usage.steps??el('steps').value)+' steps · PNG '+(usage.width||512)+' × '+(usage.height||512);
+    return src;
+}
+// Polls one job until it completes. Throws on failure; `expired` marks a lost record.
+async function waitJob(id,label=''){
+    const started=Date.now();
+    while(true){
+        const r=await fetch('/jobs/'+id,{headers:{'X-Local-Session':nonce}});
+        if(r.status===404){
+            const error=Error('本机任务记录已失效，可能重启过服务。请先到 Kaggle 确认旧任务状态，再决定是否重新生成。');error.expired=true;throw error;
+        }
+        if(!r.ok)throw Error('无法读取任务状态。恢复网络后刷新页面继续查看；不要重复提交。');
+        const job=await r.json();renderProgress(job);
+        // A single running task cannot be cancelled; a batch may still have queued ones.
+        if(watchedIds.length===1)el('cancelQueued').style.display=job.state==='queued'?'inline-flex':'none';
+        if(job.kaggle_url&&/^https:\/\/www\.kaggle\.com\/code\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/log$/.test(job.kaggle_url)){
+            el('taskLink').href=job.kaggle_url;el('taskLink').style.display='inline';
+        }
+        if(job.state==='error'){const error=Error(job.message);error.failed=true;throw error}
+        if(job.state==='cancelled'){const error=Error(job.message||'任务已取消。');error.failed=true;error.cancelled=true;throw error}
+        if(job.state==='complete')return job;
+        el('status').textContent=label+(job.message||'任务仍在执行或排队')+' 本次查看已等待约 '+Math.floor((Date.now()-started)/1000)+' 秒。刷新页面可继续查看。';
+        await new Promise(r=>setTimeout(r,5000));
+    }
+}
+// Jobs this page is following; queued ones can be cancelled before they start.
+let watchedIds=[];
+function showCancel(ids){watchedIds=ids;el('cancelQueued').style.display=ids.length?'inline-flex':'none'}
+el('cancelQueued').onclick=async()=>{
+    const ids=[...watchedIds];el('cancelQueued').disabled=true;let cancelled=0;
+    for(const id of ids){
+        try{
+            const r=await fetch('/jobs/'+id+'/cancel',{method:'POST',headers,body:'{}'});
+            if(r.ok&&(await r.json()).cancelled)cancelled++;
+        }catch{}
+    }
+    el('cancelQueued').disabled=false;
+    el('status').textContent='已取消 '+cancelled+' 个排队中的任务。正在执行的任务会继续完成，不会被中断。';
+};
 async function watchJob(id){
     setBusy(true);
-    rememberJob(id);
-    const started=Date.now();
+    rememberJob(id);showCancel([id]);
     try{
-        while(true){
-            const r=await fetch('/jobs/'+id,{headers:{'X-Local-Session':nonce}});
-            if(r.status===404){
-                rememberJob(null);
-                throw Error('本机任务记录已失效，可能重启过服务。请先到 Kaggle 确认旧任务状态，再决定是否重新生成。');
+        showResult(await waitJob(id));
+        rememberJob(null);
+    }catch(e){
+        if(e.expired||e.failed)rememberJob(null);
+        el('status').textContent=e.message+(e.cancelled?'':'（刷新页面会重新检查任务状态。）');
+    }finally{setBusy(false);showCancel([])}
+}
+function readBatch(){try{const value=JSON.parse(sessionStorage.getItem(batchStorageKey));return value&&Array.isArray(value.ids)&&value.ids.every(id=>/^[a-f0-9]{32}$/.test(id))?value:null}catch{return null}}
+function rememberBatch(value){try{if(value)sessionStorage.setItem(batchStorageKey,JSON.stringify(value));else sessionStorage.removeItem(batchStorageKey)}catch{}}
+let batchDone=[];
+function renderBatch(ids,total,states={}){
+    el('batchPanel').style.display='block';
+    el('batchSummary').textContent='批量任务：完成 '+batchDone.length+' / '+total+(ids.length<total?'（已提交 '+ids.length+'）':'');
+    el('downloadZip').disabled=!batchDone.length;
+    if(!document.createElement)return;
+    const cells=ids.map(id=>{
+        if(states[id]?.src){const image=document.createElement('img');image.src=states[id].src;image.alt='批量结果';image.onclick=()=>showResult(states[id].job);return image}
+        const state=states[id]?.cancelled?'cancelled':states[id]?.error?'failed':'waiting';
+        const cell=document.createElement('span');cell.textContent=(uiLanguage==='en'?{cancelled:'Cancelled',failed:'Failed',waiting:'Waiting'}:{cancelled:'已取消',failed:'失败',waiting:'等待'})[state];return cell;
+    });
+    el('batchGrid').replaceChildren(...cells);
+}
+async function watchBatch(batch){
+    setBusy(true);batchDone=[];const states={};
+    renderBatch(batch.ids,batch.total,states);showCancel(batch.ids);
+    try{
+        for(const [index,id] of batch.ids.entries()){
+            try{
+                const job=await waitJob(id,'第 '+(index+1)+' / '+batch.total+' 张：');
+                states[id]={job,src:showResult(job)};batchDone.push(id);
+            }catch(e){
+                if(!(e.expired||e.failed))throw e;
+                states[id]={error:true,cancelled:!!e.cancelled};
             }
-            if(!r.ok)throw Error('无法读取任务状态。恢复网络后刷新页面继续查看；不要重复提交。');
-            const job=await r.json();renderProgress(job);
-            if(job.kaggle_url&&/^https:\/\/www\.kaggle\.com\/code\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/log$/.test(job.kaggle_url)){
-                el('taskLink').href=job.kaggle_url;el('taskLink').style.display='inline';
-            }
-            if(job.state==='error'){rememberJob(null);throw Error(job.message)}
-            if(job.state==='complete'){
-                const src='data:image/png;base64,'+job.result.data[0].b64_json;el('emptyState').style.display='none';
-                el('result').src=src;el('result').style.display='block';
-                el('save').href=src;el('save').style.display='inline';
-                const usage=job.result.usage;
-                el('status').textContent='生成完成，用时 '+usage.request_seconds+' 秒。'+(['session','account'].includes(usage.backend)?(usage.model_reused?'已复用现有模型，未重新加载。':'首次加载完成，后续请求将复用。'):'');
-                if(usage.cache_status==='saved')el('status').textContent+='私有缓存已就绪。';
-                if(['failed','unavailable'].includes(usage.cache_status))el('status').textContent+='私有缓存尚未就绪，重新连接后会检查。';
-                if(usage.acceleration_fallback)el('status').textContent+='已自动回退原分卡模式。';
-                const timingParts=[['migration_seconds',' · 迁移 '],['encoding_seconds',' · 编码 '],['denoising_seconds',' · 采样 '],['decode_seconds',' · 解码 ']];
-                for(const [key,label] of timingParts)if(Number.isFinite(usage[key]))el('status').textContent+=label+usage[key]+' 秒';
-                const strategyNames={cfg_parallel:'CFG 双卡并行',encoder_split:'编码/生成分卡',single_gpu:'单卡生成'};
-                el('resultMeta').textContent=(strategyNames[usage.parallel_strategy]||'')+' · '+(usage.model_id||'qwen-image-2.1')+' · '+(usage.steps??el('steps').value)+' steps · PNG 512 × 512';
-                rememberJob(null);
-                break;
-            }
-            el('status').textContent=(job.message||'任务仍在执行或排队')+' 本次查看已等待约 '+Math.floor((Date.now()-started)/1000)+' 秒。刷新页面可继续查看。';
-            await new Promise(r=>setTimeout(r,5000));
+            renderBatch(batch.ids,batch.total,states);
+        }
+        rememberBatch(null);
+        const skipped=Object.values(states).filter(state=>state.cancelled).length;
+        el('status').textContent='批量完成：成功 '+batchDone.length+' / '+batch.total+' 张。'+(skipped?'已取消 '+skipped+' 张。':'')+(batchDone.length?'可打包下载 ZIP。':'');
+    }catch(e){el('status').textContent=e.message+'（刷新页面会继续检查这批任务。）'}
+    finally{setBusy(false);showCancel([])}
+}
+async function runBatch(planned){
+    setBusy(true);
+    const prefix='gui-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+    const batch={ids:[],total:planned.length};
+    batchDone=[];renderBatch(batch.ids,batch.total);
+    try{
+        for(const [index,job] of planned.entries()){
+            el('status').textContent='正在提交第 '+(index+1)+' / '+planned.length+' 个任务…';
+            const d=await call('/jobs',{...requestBody(job.prompt,job.seed),request_id:prefix+'-'+index});
+            batch.ids.push(d.job_id);rememberBatch(batch);
         }
     }catch(e){
-        el('status').textContent=e.message+'（刷新页面会重新检查任务状态。）';
-    }finally{setBusy(false)}
+        batch.total=batch.ids.length;rememberBatch(batch.ids.length?batch:null);
+        el('status').textContent=e.message+'；已提交 '+batch.ids.length+' 个任务，未提交的不会自动重发。';
+        if(!batch.ids.length){setBusy(false);return}
+    }
+    setBusy(false);
+    await watchBatch(batch);
 }
+el('downloadZip').onclick=async()=>{
+    if(!batchDone.length)return;
+    el('downloadZip').disabled=true;
+    try{
+        const r=await fetch('/gallery/zip',{method:'POST',headers,body:JSON.stringify({job_ids:batchDone})});
+        if(!r.ok){let message='打包失败';try{message=(await r.json()).error?.message||message}catch{}throw Error(message)}
+        const url=URL.createObjectURL(await r.blob());
+        const link=document.createElement('a');link.href=url;link.download='cc-media-batch.zip';link.click();
+        setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(e){el('status').textContent=e.message}
+    finally{el('downloadZip').disabled=!batchDone.length}
+};
 el('generate').onclick=async()=>{
     if(busy)return;
     if(pendingJob()){await watchJob(pendingJob());return}
+    const savedBatch=readBatch();if(savedBatch){await watchBatch(savedBatch);return}
     if(!configured){el('connectionPanel').style.display='flex';el('status').textContent='先保存 Kaggle 账号与 API Key。';return}
-    setBusy(true);
+    let planned,body;
+    try{planned=plannedJobs();body=requestBody(planned[0].prompt,planned[0].seed)}
+    catch(e){el('status').textContent=e.message;return}
     el('result').style.display='none';el('emptyState').style.display='block';el('save').style.display='none';el('taskLink').style.display='none';
     el('status').textContent='正在准备云端任务…';renderProgress({phase:'starting'});
+    if(planned.length>1){await runBatch(planned);return}
+    el('batchPanel').style.display='none';
+    setBusy(true);
     try{
-        const d=await call('/jobs',{prompt:el('prompt').value,model_id:el('modelChoice').value||'qwen-image-2.1',steps:Number(el('steps').value),seed:Number(el('seed').value)});
+        const d=await call('/jobs',body);
         await watchJob(d.job_id);
     }catch(e){el('status').textContent=e.message+'；若提交状态不明，请先刷新页面检查已有任务。'}
     finally{setBusy(false)}
@@ -173,7 +380,10 @@ async function initialize(){
             el('api').style.display='block';
             el('api').textContent='API：POST '+d.endpoint+'；Authorization: Bearer '+d.api_key;
         }
-        if(!d.configured)el('connectionPanel').style.display='flex';const id=d.active_job_id||pendingJob();
+        if(!d.configured)el('connectionPanel').style.display='flex';
+        const batch=readBatch();
+        if(batch){await watchBatch(batch);return}
+        const id=d.active_job_id||pendingJob();
         if(id)await watchJob(id);
     }catch(e){el('status').textContent=e.message}
     finally{setBusy(false)}
@@ -194,6 +404,7 @@ function renderProgress(job){
     const bar=el('progressBar');const bytePhase=['download','copy','verify','cache-download'].includes(job.phase);
     if(job.state==='complete'){bar.className='bar';bar.style.width='100%';el('progressCaption').textContent='生成完成';el('progressFile').textContent='';return}
     if(job.state==='error'){bar.className='bar';el('progressCaption').textContent='需要检查';return}
+    if(job.state==='cancelled'){bar.className='bar';bar.style.width='0%';el('progressCaption').textContent='已取消';el('progressFile').textContent='';return}
     if(bytePhase&&Number.isFinite(job.percent)){
         bar.className='bar';bar.style.width=Math.max(0,Math.min(100,job.percent))+'%';
         let caption=(job.phase==='verify'?'校验 ':'')+job.percent.toFixed(1)+'%';
@@ -242,5 +453,20 @@ el('refreshUsage').onclick=refreshUsage;
 if(typeof setInterval==='function'){
     refreshUsage();setInterval(refreshUsage,60000);setInterval(renderUsage,1000);
 }
+// Opened from the gallery's "Edit further": load that work as the reference image.
+async function loadEditTarget(){
+    if(typeof location==='undefined'||typeof URLSearchParams==='undefined')return;
+    const id=new URLSearchParams(location.search).get('edit');
+    if(!id||!/^[a-f0-9]{32}$/.test(id))return;
+    try{
+        const r=await fetch('/gallery/media/'+id,{headers:{'X-Local-Session':nonce}});
+        if(!r.ok)throw Error();
+        const url=URL.createObjectURL(await r.blob()),picture=new Image();
+        picture.onload=()=>{el('taskMode').value='img2img';updateTask();loadSource(picture,'image/png');URL.revokeObjectURL(url)};
+        picture.src=url;
+        history.replaceState(null,'','/');
+    }catch{el('status').textContent='无法载入要继续编辑的作品。'}
+}
 initialize();
+loadEditTarget();
 </script></html>

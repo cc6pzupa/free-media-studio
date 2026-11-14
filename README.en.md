@@ -6,6 +6,8 @@
 
 This branch includes a [video preview](docs/video.md): three model tiers, MP4 playback/download, and GUI, MCP, ComfyUI and Kaggle notebook entry points.
 
+New in 0.10.0 ([changelog](CHANGELOG.md)): an [image editing, sizes and batches preview](docs/editing.md) with image-to-image, inpainting, image-to-video, seven sizes, negative prompts, and GUI batches with ZIP export.
+
 Generate images with your own Kaggle GPU quota. Start the launcher, enter your Kaggle username and API key, and create in a lightweight local interface. Model downloads, loading, and inference run in the cloud.
 
 ![CC Media Studio interface](docs/gui-en.jpg)
@@ -65,7 +67,7 @@ First use prepares a dual T4 session, downloads weights, and saves a private cac
 | Z-Image Turbo | 9, adjustable | Efficiency | 8.2 s |
 | SDXL-Lightning | Fixed at 4 | Quick previews; English prompts recommended | 1.5 s |
 
-Selecting a model applies its recommended steps. Output is one **512×512 PNG**, with seed **42** by default. Completion status shows the actual strategy and encoding, transfer, sampling, and decode timings.
+Selecting a model applies its recommended steps. Output defaults to one **512×512 PNG**; choose one of seven sizes up to 1024 under Image size. Seed **42** is the default. Completion status shows the actual strategy and encoding, transfer, sampling, and decode timings.
 
 Each model has a separate private cache. Qwen's initial raw download is approximately 23.51 GB, with a prepared INT8/Q4 cache of about 16 GB. Other models show their actual download size in the progress card.
 
@@ -93,9 +95,13 @@ Use `--acceleration auto` for automatic acceleration. The Kaggle notebook has th
 
 ## Single images and queued tasks
 
-The GUI and HTTP image endpoint generate one PNG per request. MCP can submit separate tasks with unique `request_id` values to the shared serial queue. Poll and retrieve each image using its returned `job_id`; active models are reused.
+The HTTP image endpoint generates `n` PNGs per request (1–8, incrementing seeds). MCP can submit separate tasks with unique `request_id` values to the shared serial queue. Poll and retrieve each image using its returned `job_id`; active models are reused.
 
-GUI batch counts, prompt lists, automatic seed increments, and ZIP export are on the roadmap.
+The GUI supports batches (preview): 1–8 images per prompt, one prompt per line, incrementing seeds and a ZIP download. The gallery can also export its current list as a ZIP.
+
+## Image editing (preview)
+
+Z-Image Turbo and SDXL-Lightning support **image-to-image** (reference image + strength) and **inpainting** (paint over the image; white areas are redrawn). LTX-Video 2B and Wan2.2 5B support **image-to-video** from a first frame (LTX also takes a last frame for a transition), with landscape, portrait or square video. Inpainting has an eraser, undo and edge feathering. Qwen-Image 2.1 and the Wan models accept negative prompts. Queued tasks can be cancelled, and failures show a reason and a suggestion. These features are verified on Kaggle dual T4; for example, Z-Image image-to-image at 512 takes about 6.6 s and Wan2.2 image-to-video (33 frames) about 210 s. See the [editing guide](docs/editing.md).
 
 ## GPU usage and idle retention
 
@@ -152,6 +158,7 @@ Register `mcp_server.py` in an AI client supporting local stdio MCP. It uses cre
 | `generate_image` | Submit generation and return a job ID |
 | `get_job` | Read progress |
 | `get_image` | Retrieve the completed PNG |
+| `cancel_job` | Cancel a task that has not started |
 
 See the [MCP setup guide](docs/mcp.en.md) for platform configurations and examples.
 

@@ -114,3 +114,77 @@ test('completed image shows actual dual strategy and model transfer timing',asyn
     assert.match(p.elements.get('resultMeta').textContent,/CFG 双卡并行/);
     assert.match(p.elements.get('status').textContent,/迁移 13/);
 });
+
+test('batch submits one task per prompt line and count with incrementing seeds',async()=>{
+    const calls=[];let serial=0;
+    const p=page(async(url,options)=>{
+        calls.push([url,options]);
+        if(url==='/configuration')return config(null);
+        if(url==='/jobs')return response({job_id:String(serial++).padStart(32,'0')});
+        return complete();
+    });
+    for(let i=0;i<5;i++)await tick();
+    p.elements.set('prompt',{value:'fox\n\n cat ',style:{}});
+    p.elements.set('promptList',{checked:true,style:{}});
+    p.elements.set('batchCount',{value:'2',style:{}});
+    p.elements.set('seed',{value:'10',style:{}});
+    p.elements.set('sizeChoice',{value:'768x512',style:{}});
+    await p.elements.get('generate').onclick();
+    for(let i=0;i<20;i++)await tick();
+    const posted=calls.filter(([url])=>url==='/jobs').map(c=>JSON.parse(c[1].body));
+    assert.deepEqual(posted.map(b=>[b.prompt,b.seed]),[['fox',10],['fox',11],['cat',12],['cat',13]]);
+    assert.ok(posted.every(b=>b.size==='768x512'&&/^gui-[a-z0-9]+-[a-z0-9]+-\d$/.test(b.request_id)));
+    assert.equal(new Set(posted.map(b=>b.request_id)).size,4);
+    assert.equal(calls.filter(([url])=>url.startsWith('/jobs/')).length,4);
+    assert.equal(p.storage.size,0);
+    assert.equal(p.elements.get('downloadZip').disabled,false);
+    assert.match(p.elements.get('batchSummary').textContent,/4 \/ 4/);
+});
+
+test('editing requires an uploaded image and switches away from Qwen',async()=>{
+    const calls=[];
+    const p=page(async(url,options)=>{calls.push(url);return url==='/configuration'?config(null):response({job_id:'x'})});
+    for(let i=0;i<5;i++)await tick();
+    p.elements.get('modelChoice').value='qwen-image-2.1';
+    p.elements.get('taskMode').value='inpaint';p.elements.get('taskMode').onchange();
+    assert.equal(p.elements.get('modelChoice').value,'z-image-turbo');
+    assert.equal(p.elements.get('strength').value,'0.9');
+    assert.equal(p.elements.get('negativeFields').style.display,'none');
+    p.elements.set('prompt',{value:'hat',style:{}});
+    await p.elements.get('generate').onclick();
+    assert.deepEqual(calls,['/configuration']);
+    assert.match(p.elements.get('status').textContent,/参考图/);
+    p.elements.get('modelChoice').value='qwen-image-2.1';p.elements.get('modelChoice').onchange();
+    assert.equal(p.elements.get('taskMode').value,'text');
+    assert.equal(p.elements.get('negativeFields').style.display,'block');
+});
+
+test('random seed and cancelling a batch skip the queued tasks',async()=>{
+    const calls=[];let serial=0;const cancelled=new Set();
+    const p=page(async(url,options)=>{
+        calls.push([url,options]);
+        if(url==='/configuration')return config(null);
+        if(url==='/jobs')return response({job_id:String(serial++).padStart(32,'0')});
+        if(url.endsWith('/cancel')){const id=url.split('/')[2];const ok=id!=='0'.repeat(32);if(ok)cancelled.add(id);return response({cancelled:ok,state:ok?'cancelled':'running'})}
+        const id=url.split('/')[2];
+        if(cancelled.has(id))return response({state:'cancelled',message:'任务已取消，未在 Kaggle 上执行。'});
+        if(id==='0'.repeat(32)&&!cancelled.size)return response({state:'running',phase:'generating'});
+        return complete();
+    });
+    for(let i=0;i<5;i++)await tick();
+    p.elements.get('randomSeed').onclick();
+    const seed=Number(p.elements.get('seed').value);
+    assert.ok(Number.isInteger(seed)&&seed>=0&&seed<2147483648);
+    p.elements.set('prompt',{value:'fox',style:{}});
+    p.elements.set('batchCount',{value:'3',style:{}});
+    const run=p.elements.get('generate').onclick();
+    for(let i=0;i<10;i++)await tick();
+    assert.equal(p.elements.get('cancelQueued').style.display,'inline-flex');
+    await p.elements.get('cancelQueued').onclick();
+    assert.match(p.elements.get('status').textContent,/已取消 2 个/);
+    await run;for(let i=0;i<20;i++)await tick();
+    const posted=calls.filter(([url])=>url==='/jobs').map(c=>JSON.parse(c[1].body).seed);
+    assert.deepEqual(posted,[seed,seed+1,seed+2]);
+    assert.match(p.elements.get('status').textContent,/已取消 2 张/);
+    assert.equal(p.elements.get('cancelQueued').style.display,'none');
+});

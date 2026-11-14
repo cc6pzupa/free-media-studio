@@ -62,9 +62,11 @@ class VideoProcess:
             return message.get('result')
         self.close();raise TimeoutError('Video request timed out')
 
-    def generate(self,prompt,seed=42,steps=None,frames=None,output=None):
+    def generate(self,prompt,seed=42,steps=None,frames=None,output=None,image=None,negative_prompt=None,size=None,last_image=None):
+        # Frames travel as base64 on the worker's JSON stdin line.
+        extra={k:v for k,v in (('image',image),('negative_prompt',negative_prompt),('size',size),('last_image',last_image)) if v is not None}
         result=self.request('generate',prompt=prompt,seed=seed,steps=steps,frames=frames,
-                            output=output,acceleration=self.acceleration)
+                            output=output,acceleration=self.acceleration,**extra)
         return Path(result['path']),result['stats']
 
     def close(self):
@@ -105,7 +107,12 @@ def worker():
                     else:raise ValueError('Unknown video command')
                 send(result=result)
             except Exception as error:
-                traceback.print_exc(file=sys.stderr);send(error=type(error).__name__+': '+str(error))
+                traceback.print_exc(file=sys.stderr)
+                # Include wrapped causes: libraries often re-raise a generic error.
+                parts,current=[],error
+                while current is not None and len(parts)<6:
+                    parts.append(type(current).__name__+': '+str(current)[:300]);current=current.__cause__ or current.__context__
+                send(error=' <- '.join(parts))
     finally:
         if runtime is not None:
             with contextlib.redirect_stdout(sys.stderr):runtime.close()

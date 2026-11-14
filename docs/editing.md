@@ -38,7 +38,18 @@ Qwen-Image 2.1 暂不支持图生图和局部编辑：diffusers 没有它的编�
 | LTX-Video 2B 图生视频 33 帧 | 12.5 秒 | 9.3 / 7.4 GB |
 | Wan2.2 5B 图生视频 33 帧（CFG 双卡并行） | 210 秒 | 9.4 / 9.1 GB |
 
-已知限制：SDXL-Lightning 4 步局部编辑覆盖面部时细节较粗；LTX 图生视频使用单卡路径。Z-Image 大于 512×512 时，VAE 编解码在 GPU 1 执行以避免显存不足。
+0.10 后续功能（2026-11-14）：
+
+| 用例 | 生成耗时 | 峰值显存 GPU0 / GPU1 |
+| --- | --- | --- |
+| Z-Image 局部编辑 512 + 羽化 12 px（蒙版外与原图差异 0） | 12.4 秒 | 12.6 / 7.6 GB |
+| LTX-Video 2B 图生视频 768×448（双卡序列并行） | 50.0 秒（含首次启动双卡） | 11.8 / 11.1 GB |
+| LTX-Video 2B 文生视频竖向 448×768（双卡序列并行） | 57.9 秒 | 11.8 / 11.0 GB |
+| LTX-Video 2B 首尾帧 512×512（单卡） | 8.3 秒 | 9.4 / 7.4 GB |
+| Wan2.2 5B 图生视频竖向 448×768（CFG 双卡并行） | 202 秒 | 9.4 / 9.1 GB |
+| Wan2.1 1.3B 文生视频方形 624×624（CFG 双卡并行） | 276 秒；首次使用约 12 分钟 | 4.5 / 9.1 GB |
+
+已知限制：SDXL-Lightning 4 步局部编辑覆盖面部时细节较粗；LTX 首尾帧使用单卡路径。切换到图片模型后再用 LTX，会重新加载模型并启动双卡进程。Z-Image 大于 512×512 时，VAE 编解码在 GPU 1 执行以避免显存不足。
 
 ## GUI
 
@@ -113,8 +124,12 @@ Run with `edit_gpu_check.py` through the same automatic-account path as the GUI.
 | Qwen-Image 2.1 1024 + negative prompt (dual-GPU CFG) | 121 s | 11.6 / 9.5 GB |
 | LTX-Video 2B image-to-video, 33 frames | 12.5 s | 9.3 / 7.4 GB |
 | Wan2.2 5B image-to-video, 33 frames (dual-GPU CFG) | 210 s | 9.4 / 9.1 GB |
+| Z-Image inpaint 512 + feather 12 px (zero difference outside the mask) | 12.4 s | 12.6 / 7.6 GB |
+| LTX image-to-video 768×448 (context parallel) / text-to-video portrait 448×768 | 50.0 (incl. dual-GPU start) / 57.9 s | 11.8 / 11.1 GB |
+| LTX first and last frame 512×512 (single GPU) | 8.3 s | 9.4 / 7.4 GB |
+| Wan2.2 image-to-video portrait 448×768 / Wan2.1 text-to-video 624×624 (dual-GPU CFG) | 202 / 276 s | ≤ 9.4 / 9.1 GB |
 
-Known limits: 4-step SDXL-Lightning inpainting over faces is coarse; LTX image-to-video uses the single-GPU path. Above 512×512, Z-Image runs its VAE on GPU 1 to stay within memory.
+Known limits: 4-step SDXL-Lightning inpainting over faces is coarse; LTX first-and-last-frame runs on one GPU; after an image model runs, LTX reloads and restarts its dual-GPU workers. Above 512×512, Z-Image runs its VAE on GPU 1 to stay within memory.
 
 
 All features need automatic account mode and reuse the loaded models; no extra weights are downloaded.

@@ -15,7 +15,7 @@ VIDEO_MODELS = {
         'id':'wan21-t2v-1.3b','name':'Wan2.1 1.3B · Balanced','tier':'balanced',
         'family':'wan','default_steps':30,'fixed_steps':None,'width':832,'height':480,
         'frames':33,'fps':16,'guidance':5.0,'cache_slug':'cc-media-wan21-1-3b','image_to_video':False,
-        'first_use':None,'sizes':['832x480','480x832','624x624'],'last_frame':False,
+        'first_use':{'minutes':'12–14','download_gb':None},'sizes':['832x480','480x832','624x624'],'last_frame':False,
         'repo':'Wan-AI/Wan2.1-T2V-1.3B-Diffusers','revision':'0fad780a534b6463e45facd96134c9f345acfa5b'},
     'wan22-ti2v-5b': {
         'id':'wan22-ti2v-5b','name':'Wan2.2 5B · Quality','tier':'quality',

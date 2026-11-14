@@ -94,7 +94,7 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 | `get_job` | `job_id` | `queued/running/complete/error/interrupted`、真实阶段、下载字节与百分比、复用信息 |
 | `get_image` | 已完成的 `job_id` | MCP `image/png` 内容，以及图片尺寸和耗时等元数据 |
 | `cancel_job` | 排队中的 `job_id` | 取消尚未开始的图片或视频任务；已在执行的任务返回 `cancelled: false` |
-| `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps` | 立即返回视频任务 ID |
+| `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps`、`size`、`negative_prompt`、`image_path` / `image_base64`（首帧）、`last_image_path` / `last_image_base64`（尾帧，仅 LTX） | 立即返回视频任务 ID |
 | `get_video` | 已完成的视频 `job_id` | 本机 MP4 路径、文件 URI、文件大小与耗时 |
 
 每个图片任务输出一张 PNG（默认 512×512，可用 `size` 选择最大 1024 的尺寸；图生图与局部编辑见 [图片编辑说明](editing.md)）；视频任务输出一个 MP4。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。

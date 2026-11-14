@@ -67,7 +67,7 @@ Content-Type: application/json
 - `task`：`text`（默认）、`img2img`、`inpaint`。`image` / `mask` 为 base64，也接受 `data:image/...;base64,` 前缀。单张不超过 8 MB。
 - 蒙版白色为重绘区域，黑色保留。`feather`（0–64 像素，仅 inpaint）让重绘区域与原图柔和过渡。
 - 返回尺寸与 `size` 一致；`usage` 包含 `task`、`strength`、`width`、`height`。
-- 每次请求仍生成 1 张（`n=1`）；批量请提交多个请求。
+- `n`（1–8）一次生成多张，种子依次递增；`data` 按顺序返回每张图片，`usages` 列出每张的耗时信息（`usage` 为第一张）。图片依次生成，请求会等待全部完成。
 
 视频：`POST /v1/videos/generations` 增加可选的 `image`（首帧 base64）和 `negative_prompt`。
 

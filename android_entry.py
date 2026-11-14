@@ -66,10 +66,13 @@ def stop():
         if state in ('active','release_failed') and callable(release):
             try:release();message='released'
             except Exception:message='release_failed'
+    thread=_state.get('worker_thread')
     for key in ('gateway','worker'):
         server=_state.pop(key,None)
         if server is not None:
             try:server.shutdown();server.server_close()
             except Exception:pass
+    # serve() closes the job database after serve_forever returns; wait for it.
+    if thread is not None:thread.join(15)
     _state.clear()
     return message

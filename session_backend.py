@@ -46,6 +46,21 @@ except Exception: _cc_torch.cuda.empty_cache()
 '''
 
 
+# diffusers decides once, at import, whether the gguf package exists. Found on
+# Kaggle: after Z-Image or SDXL imported diffusers, Qwen's later gguf install
+# went unseen and its Q4 weights failed with "Unable to load weights".
+GGUF_READY_CODE = '''
+import importlib as _cc_importlib, sys as _cc_sys
+if 'diffusers' in _cc_sys.modules:
+    import diffusers.utils.import_utils as _cc_import_utils
+    if not _cc_import_utils.is_gguf_available():
+        _cc_importlib.invalidate_caches()
+        _cc_import_utils._gguf_available, _cc_import_utils._gguf_version = _cc_import_utils._is_package_available('gguf')
+        for _cc_module in ('diffusers.quantizers.gguf.utils', 'diffusers.quantizers.gguf.gguf_quantizer'):
+            if _cc_module in _cc_sys.modules: _cc_importlib.reload(_cc_sys.modules[_cc_module])
+'''
+
+
 def model_switch_code(model_id):
     model_profile(model_id)
     return f"""
@@ -87,7 +102,8 @@ _existing_state=globals().get('_COMFY_QWEN_STATE')
 if not (_existing_state and globals().get('pipe') is not None and callable(globals().get('generate_image'))):
     if {install!r}:
         import subprocess,sys
-        subprocess.run([sys.executable,'-m','pip','install','-q','bitsandbytes==0.50.2','safetensors','diffusers>=0.36,<0.43','transformers>=4.51,<6','accelerate>=1.2'],check=True,timeout=900)
+        # gguf is installed before diffusers is first imported (see GGUF_READY_CODE).
+        subprocess.run([sys.executable,'-m','pip','install','-q','bitsandbytes==0.50.2','gguf>=0.10','safetensors','diffusers>=0.36,<0.43','transformers>=4.51,<6','accelerate>=1.2'],check=True,timeout=900)
     for _cc_partial in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image'):
         globals().pop(_cc_partial,None)
     import gc
@@ -156,7 +172,8 @@ else:
     if {install!r}:
         import subprocess, sys
         print('Installing image runtime dependencies once...', flush=True)
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'bitsandbytes==0.50.2', 'gguf'], check=True, timeout=900)
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'bitsandbytes==0.50.2', 'gguf>=0.10'], check=True, timeout=900)
+    exec(compile({GGUF_READY_CODE!r}, '<cc-gguf-ready>', 'exec'), globals())
     exec(compile({source!r}, '<qwen-model-bootstrap>', 'exec'), globals())
     _existing_state = {{'dataset': _expected_dataset, 'runtime_id': uuid.uuid4().hex,
                        'load_count': (_existing_state or {{}}).get('load_count', 0) + 1,

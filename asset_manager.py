@@ -78,7 +78,9 @@ def _disk_bytes(paths):
             except OSError:
                 continue
             if path.is_file() and (stat.st_dev, stat.st_ino) not in seen:
-                seen.add((stat.st_dev, stat.st_ino)); total += stat.st_blocks * 512
+                # st_blocks (allocated space) is POSIX-only; fall back to the size.
+                blocks = getattr(stat, 'st_blocks', None)
+                seen.add((stat.st_dev, stat.st_ino)); total += blocks * 512 if blocks is not None else stat.st_size
     return total
 
 

@@ -4,6 +4,7 @@ VIDEO_MODELS = {
         'id':'ltx-video-2b-distilled','name':'LTX-Video 2B · Efficient','tier':'efficient',
         'family':'ltx','default_steps':8,'fixed_steps':8,'width':768,'height':448,
         'frames':33,'fps':16,'guidance':1.0,'cache_slug':'cc-media-ltx-2b-distilled','image_to_video':True,
+        'first_use':{'minutes':'7–11','download_gb':27},
         'repo':'Lightricks/LTX-Video','revision':'8984fa25007f376c1a299016d0957a37a2f797bb',
         'checkpoint':'ltxv-2b-0.9.6-distilled-04-25.safetensors',
         'sigmas':[1.0,.9937,.9875,.9812,.975,.9094,.725,.4219],
@@ -12,11 +13,13 @@ VIDEO_MODELS = {
         'id':'wan21-t2v-1.3b','name':'Wan2.1 1.3B · Balanced','tier':'balanced',
         'family':'wan','default_steps':30,'fixed_steps':None,'width':832,'height':480,
         'frames':33,'fps':16,'guidance':5.0,'cache_slug':'cc-media-wan21-1-3b','image_to_video':False,
+        'first_use':None,
         'repo':'Wan-AI/Wan2.1-T2V-1.3B-Diffusers','revision':'0fad780a534b6463e45facd96134c9f345acfa5b'},
     'wan22-ti2v-5b': {
         'id':'wan22-ti2v-5b','name':'Wan2.2 5B · Quality','tier':'quality',
         'family':'wan22','default_steps':30,'fixed_steps':None,'width':768,'height':448,
         'frames':33,'fps':24,'guidance':5.0,'cache_slug':'cc-media-wan22-5b','image_to_video':True,
+        'first_use':{'minutes':'19','download_gb':32},
         'repo':'Wan-AI/Wan2.2-TI2V-5B-Diffusers','revision':'b8fff7315c768468a5333511427288870b2e9635'},
 }
 

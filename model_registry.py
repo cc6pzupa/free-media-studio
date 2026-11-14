@@ -3,13 +3,17 @@ DEFAULT_MODEL = 'qwen-image-2.1'
 MODELS = {
     DEFAULT_MODEL: {'id':DEFAULT_MODEL,'name':'Qwen-Image 2.1 · Quality','default_steps':20,'fixed_steps':None,
                     'cache_slug':'qwen-image-studio-assets','family':'qwen21',
-                    'tasks':['text'],'negative_prompt':True},
+                    'tasks':['text'],'negative_prompt':True,
+                    # Measured on Kaggle dual T4: GPU request, download, load and first image.
+                    'first_use':{'minutes':'8–13','download_gb':23.5}},
     'z-image-turbo': {'id':'z-image-turbo','name':'Z-Image Turbo · Efficient','default_steps':9,'fixed_steps':None,
                       'cache_slug':'cc-media-z-image-turbo','family':'zimage',
-                      'tasks':['text','img2img','inpaint'],'negative_prompt':False},
+                      'tasks':['text','img2img','inpaint'],'negative_prompt':False,
+                      'first_use':{'minutes':'9–15','download_gb':None}},
     'sdxl-lightning': {'id':'sdxl-lightning','name':'SDXL-Lightning · 4-step Preview','default_steps':4,'fixed_steps':4,
                        'cache_slug':'cc-media-sdxl-lightning','family':'sdxl',
-                       'tasks':['text','img2img','inpaint'],'negative_prompt':False},
+                       'tasks':['text','img2img','inpaint'],'negative_prompt':False,
+                       'first_use':{'minutes':'2','download_gb':None}},
 }
 MODEL_SOURCES = {
     'z-image-turbo': [('Tongyi-MAI/Z-Image-Turbo','f332072aa78be7aecdf3ee76d5c247082da564a6')],

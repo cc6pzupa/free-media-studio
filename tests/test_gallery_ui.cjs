@@ -43,3 +43,26 @@ test('pagination keeps lazy image loads from the previous page valid',async()=>{
  await p.elements.get('more').onclick();await first._load();
  assert.equal(first.children[0].tag,'img');assert.equal(p.elements.get('grid').children.length,2);
 });
+test('selection mode zips and deletes only the chosen works',async()=>{
+ const calls=[];const ids=['a','b','c'].map(c=>c.repeat(32));
+ const p=page(async(url,options)=>{calls.push([url,options]);
+  if(url.startsWith('/gallery/items?'))return response({items:ids.map(id=>item(id,'image')),total:3,next_offset:null});
+  return response({ok:true});
+ });
+ for(let i=0;i<4;i++)await tick();
+ const grid=p.elements.get('grid');
+ p.elements.get('select').onclick();
+ assert.equal(p.elements.get('selectionBar').hidden,false);
+ grid.children[0].children[0].onclick();grid.children[2].children[0].onclick();
+ assert.equal(calls.filter(([url])=>url.startsWith('/gallery/media/')).length,0);  // selecting never opens the viewer
+ assert.match(p.elements.get('selectedCount').textContent,/2/);
+ assert.equal(grid.children[0].className,'card selected');assert.equal(grid.children[1].className,'card');
+ await p.elements.get('zipSelected').onclick();
+ const zip=calls.find(([url])=>url==='/gallery/zip');
+ assert.deepEqual(JSON.parse(zip[1].body).job_ids,[ids[0],ids[2]]);
+ await p.elements.get('deleteSelected').onclick();
+ const deleted=calls.filter(([url,options])=>url.startsWith('/gallery/items/')&&options.method==='POST').map(([url,options])=>[url.slice(15),JSON.parse(options.body).action]);
+ assert.deepEqual(deleted,[[ids[0],'delete'],[ids[2],'delete']]);
+ assert.match(p.elements.get('status').textContent,/已删除 2 件/);
+ p.elements.get('select').onclick();assert.equal(p.elements.get('selectionBar').hidden,true);
+});

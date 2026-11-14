@@ -47,6 +47,8 @@ Qwen-Image 2.1 暂不支持图生图和局部编辑：diffusers 没有它的编�
 - 种子旁的 **随机** 按钮生成新种子；批量时从该种子开始递增。
 - 生成进度下方的 **取消排队中的任务** 会取消尚未开始的任务（批量中剩余的任务也一并取消）。已在 Kaggle 上执行的任务不会被中断。
 - 失败时会显示原因与建议，例如显存不足时提示改小尺寸；所有失败的任务都不会自动重发。
+- 模型下方会显示 **首次使用预计耗时**（双 T4 实测，含申请 GPU、下载与加载），例如 Qwen 约 8–13 分钟、SDXL 约 2 分钟。
+- 历史画廊的 **选择** 模式：点选作品（最多 100 件）后可 **打包所选** 或 **删除所选**。
 - **画面尺寸** 与 **每个提示词张数** 在步数下方。勾选“每行一个提示词”后，每一行提交为独立任务。
 - 批量完成后，点击 **打包下载 ZIP**。历史画廊也可把当前列表（最多 100 件）打包下载。
 - 视频页可上传 **首帧图片**，并为 Wan 模型填写负面提示词。
@@ -94,7 +96,7 @@ GUI 使用 `POST /jobs/<job_id>/cancel` 与 `POST /video/jobs/<job_id>/cancel`�
 
 ## Kaggle Notebook
 
-- `kaggle_standalone.ipynb`：新增“方式”（文生图 / 图生图 / 局部编辑）、参考图与蒙版上传、重绘强度、尺寸和负面提示词（仅 Qwen）。Notebook 中蒙版需上传图片：白色为重绘区域。
+- `kaggle_standalone.ipynb`：新增“方式”（文生图 / 图生图 / 局部编辑）、参考图上传、重绘强度、边缘羽化、尺寸和负面提示词（仅 Qwen）。局部编辑的蒙版可用 **形状**（椭圆或矩形，用滑块设置位置和大小，并在原图上预览重绘区域），也可上传蒙版图片（白色为重绘区域）。
 - `kaggle_video.ipynb`：LTX-Video 2B 与 Wan2.2 5B 可上传首帧；Wan 模型可填负面提示词。
 
 ## English
@@ -125,4 +127,4 @@ All features need automatic account mode and reuse the loaded models; no extra w
 - **Image to video** from a first frame: LTX-Video 2B and Wan2.2 5B.
 - **GUI batches**: 1–8 images per prompt, optional one prompt per line, incrementing seeds, up to 32 tasks; download results as a ZIP. The gallery can also export the current list (up to 100 works).
 - Qwen-Image 2.1 has no editing pipeline in diffusers. Instruction editing would need the separate ~20B Qwen-Image-Edit model, which must be validated on dual T4 first.
-- HTTP fields: `size`, `negative_prompt`, `task`, `strength`, `image`, `mask` (base64, at most 8 MB each). MCP adds the same fields and accepts local `image_path` / `mask_path`. ComfyUI adds **CC Media Image Edit (Preview)** plus optional `size`, `negative_prompt` and a first-frame `image` on the video node. The standalone Kaggle notebooks add the same controls: upload a reference image, a mask image (white = repaint) or a video first frame.
+- HTTP fields: `size`, `negative_prompt`, `task`, `strength`, `image`, `mask` (base64, at most 8 MB each). MCP adds the same fields and accepts local `image_path` / `mask_path`. ComfyUI adds **CC Media Image Edit (Preview)** plus optional `size`, `negative_prompt` and a first-frame `image` on the video node. The standalone Kaggle notebooks add the same controls: upload a reference image or a video first frame; for inpainting, build an ellipse or rectangle mask with sliders and a live preview, or upload a mask image (white = repaint). The GUI shows each model's measured first-use time, and the gallery's Select mode downloads or deletes chosen works (up to 100).

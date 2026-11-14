@@ -25,7 +25,38 @@ strength = widgets.FloatSlider(value=0.6,min=0.05,max=1.0,step=0.05,description=
 source_upload = widgets.FileUpload(accept='image/png,image/jpeg,image/webp',multiple=False,description='Image / 参考图')
 mask_upload = widgets.FileUpload(accept='image/png,image/jpeg,image/webp',multiple=False,description='Mask / 蒙版')
 edit_hint = widgets.HTML('<span style="color:#777">Z-Image Turbo / SDXL-Lightning。蒙版白色为重绘区域；输入按所选尺寸居中裁剪。 / White mask areas are repainted; inputs are center-cropped.</span>')
-edit_box = widgets.VBox([source_upload,mask_upload,strength,edit_hint])
+# Kaggle has no drawing widget without extra extensions: build an ellipse or
+# rectangle mask from sliders on top of the uploaded image, or upload a mask.
+mask_mode = widgets.ToggleButtons(options=[('Shape / 形状','shape'),('Upload / 上传','upload')],value='shape',description='Mask / 蒙版')
+mask_shape = widgets.Dropdown(options=[('Ellipse / 椭圆','ellipse'),('Rectangle / 矩形','rectangle')],value='ellipse',description='Shape / 形状')
+mask_x = widgets.IntSlider(value=50,min=0,max=100,description='X %')
+mask_y = widgets.IntSlider(value=50,min=0,max=100,description='Y %')
+mask_w = widgets.IntSlider(value=40,min=5,max=100,description='Width / 宽 %')
+mask_h = widgets.IntSlider(value=40,min=5,max=100,description='Height / 高 %')
+feather = widgets.IntSlider(value=8,min=0,max=64,description='Feather / 羽化')
+mask_preview = widgets.Image(format='png',layout=widgets.Layout(max_width='360px'))
+shape_box = widgets.VBox([mask_shape,mask_x,mask_y,mask_w,mask_h,mask_preview])
+def shape_mask(source):
+    """White shape on black at the source image size (white is repainted)."""
+    from PIL import Image as PILImage, ImageDraw
+    width,height = PILImage.open(io.BytesIO(source)).size
+    w,h = width*mask_w.value/100, height*mask_h.value/100
+    x,y = width*mask_x.value/100, height*mask_y.value/100
+    box = (x-w/2, y-h/2, x+w/2, y+h/2)
+    mask = PILImage.new('L',(width,height),0)
+    (ImageDraw.Draw(mask).ellipse if mask_shape.value=='ellipse' else ImageDraw.Draw(mask).rectangle)(box,fill=255)
+    buffer = io.BytesIO(); mask.save(buffer,format='PNG'); return buffer.getvalue()
+def refresh_preview(change=None):
+    source = uploaded(source_upload)
+    if task.value!='inpaint' or mask_mode.value!='shape' or source is None:
+        mask_preview.value=b'';return
+    from PIL import Image as PILImage
+    picture = PILImage.open(io.BytesIO(source)).convert('RGB')
+    mask = PILImage.open(io.BytesIO(shape_mask(source)))
+    tint = PILImage.new('RGB',picture.size,(255,64,64))
+    preview = PILImage.composite(PILImage.blend(picture,tint,0.55),picture,mask)
+    preview.thumbnail((360,360)); buffer = io.BytesIO(); preview.save(buffer,format='PNG'); mask_preview.value = buffer.getvalue()
+edit_box = widgets.VBox([source_upload,mask_mode,shape_box,mask_upload,strength,feather,edit_hint])
 def uploaded(widget):
     value=widget.value
     if not value:return None
@@ -35,7 +66,11 @@ def refresh_controls(change=None):
     profile=model_profile(model.value)
     negative.layout.display='' if profile['negative_prompt'] else 'none'
     edit_box.layout.display='none' if task.value=='text' else ''
-    mask_upload.layout.display='' if task.value=='inpaint' else 'none'
+    inpaint = task.value=='inpaint'
+    for widget in (mask_mode,feather):widget.layout.display='' if inpaint else 'none'
+    shape_box.layout.display='' if inpaint and mask_mode.value=='shape' else 'none'
+    mask_upload.layout.display='' if inpaint and mask_mode.value=='upload' else 'none'
+    refresh_preview()
 def model_changed(change):
     profile=model_profile(model.value);steps.value=profile['default_steps'];steps.disabled=profile['fixed_steps'] is not None
     if task.value not in profile['tasks']:task.value='text'
@@ -46,6 +81,8 @@ def task_changed(change):
     refresh_controls()
 model.observe(model_changed,names='value')
 task.observe(task_changed,names='value')
+mask_mode.observe(refresh_controls,names='value')
+for _widget in (mask_shape,mask_x,mask_y,mask_w,mask_h,source_upload):_widget.observe(refresh_preview,names='value')
 refresh_controls()
 acceleration = widgets.Dropdown(options=[('Auto · 双卡优先','auto'),('Encoder/model split · 原分卡','split')],value='auto',description='Acceleration / 加速',layout=widgets.Layout(width='95%'))
 seed = widgets.IntText(value=42,description='Seed / 种子')
@@ -77,11 +114,14 @@ def run(_):
     started=time.perf_counter()
     try:
         image=uploaded(source_upload) if task.value!='text' else None
-        mask=uploaded(mask_upload) if task.value=='inpaint' else None
+        mask=None
+        if task.value=='inpaint':
+            mask=shape_mask(image) if mask_mode.value=='shape' and image is not None else uploaded(mask_upload)
         # The negative field is hidden for models without CFG; ignore any leftover text.
         negative_prompt=(negative.value or None) if model_profile(model.value)['negative_prompt'] else None
         options=image_options(model.value,steps.value,size.value,negative_prompt,task.value,
-            strength.value if task.value!='text' else None,image is not None,mask is not None)
+            strength.value if task.value!='text' else None,image is not None,mask is not None,
+            feather.value if task.value=='inpaint' else None)
         globals()['_QWEN_PROGRESS_CALLBACK']=on_progress
         globals()['_CC_ACCELERATION']=acceleration.value
         capture=io.StringIO()
@@ -102,7 +142,7 @@ def run(_):
         capture=io.StringIO()
         width,height=parse_size(size.value)
         with contextlib.redirect_stdout(capture):exec(generation_code(prompt.value,seed.value,steps.value,model.value,width,height,
-            options.get('negative_prompt'),options.get('task','text'),options.get('strength'),image,mask),globals())
+            options.get('negative_prompt'),options.get('task','text'),options.get('strength'),image,mask,options.get('feather')),globals())
         line=next(line for line in capture.getvalue().splitlines() if line.startswith('COMFY_RESULT:'))
         result=json.loads(line[len('COMFY_RESULT:'):])
         raw=base64.b64decode(result['png'])

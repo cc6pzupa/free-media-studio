@@ -19,6 +19,10 @@
 - **失败原因**：显存不足、模型文件、磁盘、Kaggle 会话、超时、结果无效等分类提示与建议，不显示原始错误内容。
 - **随机种子** 按钮（图片与视频）。
 - **蒙版工具**：橡皮擦、撤销（最多 20 步）、边缘羽化（`feather`，涂抹区域以外与原图一致）。
+- **首次使用预计耗时**：模型选择下方显示双 T4 实测的首次耗时与下载量，数据来自模型目录。
+- **画廊选择模式**：选择指定作品打包 ZIP 或批量删除。
+- **Notebook 形状蒙版**：用椭圆或矩形滑块生成蒙版并预览，无需另行上传。
+- 保存 Qwen 私有缓存前清理中断遗留的临时副本，并把副本所需空间计入 80 GB 磁盘预算。
 
 ### 修复（Kaggle 实测发现）
 
@@ -46,6 +50,10 @@
 - Failures show a category and suggestion (GPU memory, model files, disk, Kaggle session, timeout, invalid result) without raw error text.
 - Random seed button for images and video.
 - Mask eraser, undo (up to 20 steps) and edge feathering (`feather`; pixels outside the mask match the original).
+- Measured first-use time and download size under each model, from the model catalog.
+- Gallery Select mode to download or delete chosen works.
+- Notebook shape masks: ellipse or rectangle from sliders with a live preview.
+- Before saving the Qwen private cache, leftover bundles from interrupted saves are removed and the copy's space counts toward the 80 GB disk budget.
 
 ### Fixed (found on Kaggle)
 

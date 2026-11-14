@@ -30,6 +30,7 @@ def prepare_model_hf_assets(folder):
         emit_progress('manifest','正在获取所选模型清单。')
         records=model_asset_records(_CC_MODEL_ID,_CC_MODEL_SOURCES,http)
         total=sum(int(item.get('size') or item.get('lfs',{}).get('size') or 0) for _,_,item,_ in records)
+        release_model_disk(folder,total,notify=lambda names:emit_progress('cleanup','正在清理较早使用的模型文件以释放磁盘：'+'、'.join(names)))
         done=0;last=[0.0]
         for repo,revision,item,name in records:
             size=int(item.get('size') or item.get('lfs',{}).get('size') or 0)

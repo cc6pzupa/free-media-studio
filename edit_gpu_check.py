@@ -42,6 +42,8 @@ CASES=[
     ('qwen-text-1024-negative','image',dict(model_id='qwen-image-2.1',width=1024,height=1024,negative_prompt='blurry, text, watermark')),
     ('ltx-i2v-33','video',dict(model_id='ltx-video-2b-distilled',frames=33,image='source',prompt='She turns her head and smiles, hair moving in the breeze')),
     ('ltx-t2v-after-i2v','video',dict(model_id='ltx-video-2b-distilled',frames=33)),
+    ('ltx-t2v-motion','video',dict(model_id='ltx-video-2b-distilled',frames=33,
+        prompt='An adult anime catgirl reading a book by a sunlit window. Her hair moves gently in the breeze. Slow smooth camera movement.')),
     ('wan22-i2v-33','video',dict(model_id='wan22-ti2v-5b',frames=33,image='source',negative_prompt='blurry, distorted',
                                  prompt='She turns her head and smiles, hair moving in the breeze')),
 ]
@@ -50,8 +52,19 @@ CASES=[
 PROBE='''
 import sys,json,subprocess,traceback
 info={}
+_value=getattr(sys,'last_value',None);_parts=[]
+while _value is not None and len(_parts)<6:
+    _parts.append(type(_value).__name__+': '+str(_value)[:400]);_value=_value.__cause__ or _value.__context__
+if _parts:info['exception_chain']=' <- '.join(_parts)
+try:
+    import os
+    info['statvfs_free_gib']={p:round(os.statvfs(p).f_bavail*os.statvfs(p).f_frsize/2**30,1) for p in ('/kaggle/temp','/kaggle/working','/tmp','/') if os.path.exists(p)}
+    info['mounts']=[l.strip() for l in open('/proc/mounts') if any(k in l.split()[1] for k in ('/kaggle','/tmp')) or l.split()[1]=='/'][:8]
+    info['mem_available_gib']=round(int([l for l in open('/proc/meminfo') if l.startswith('MemAvailable')][0].split()[1])/2**20,1)
+    info['kaggle_temp_used_gib']=round(int(subprocess.run(['du','-sb','/kaggle/temp'],capture_output=True,text=True,timeout=120).stdout.split()[0])/2**30,1)
+except Exception as error:info['system']=repr(error)
 if getattr(sys,'last_traceback',None) is not None:
-    info['traceback']=''.join(traceback.format_exception(sys.last_type,sys.last_value,sys.last_traceback))[-6000:]
+    info['traceback']='\n'.join(l for l in ''.join(traceback.format_exception(sys.last_type,sys.last_value,sys.last_traceback)).splitlines() if l.strip().strip('^~')!='')[-6000:]
 try:
     import torch
     info['torch_allocated_gib']=[round(torch.cuda.memory_allocated(i)/2**30,2) for i in range(torch.cuda.device_count())]
@@ -128,6 +141,10 @@ def run(user,token,output,only=None,diagnose=True,source=None):
                 if diagnose:reports[-1]['probe']=probe(backend)
             print('GPU_CHECK_RESULT '+json.dumps(reports[-1],ensure_ascii=False),flush=True)
             (output/'report.json').write_text(json.dumps(reports,indent=2,ensure_ascii=False),encoding='utf-8')
+        if diagnose:
+            final=probe(backend);print('GPU_CHECK_SYSTEM '+json.dumps({k:v for k,v in final.items() if k!='traceback'},ensure_ascii=False),flush=True)
+            reports.append(dict(case='system',ok=True,probe=final))
+            (output/'report.json').write_text(json.dumps(reports,indent=2,ensure_ascii=False),encoding='utf-8')
     finally:
         try:backend.release_session();print('GPU_CHECK_RELEASED',flush=True)
         except Exception as error:print('GPU_CHECK_RELEASE_FAILED '+type(error).__name__+': '+str(error),flush=True)
@@ -143,5 +160,6 @@ if __name__=='__main__':
     args=parser.parse_args()
     reports=run(os.environ['KAGGLE_USERNAME'],os.environ.get('KAGGLE_API_TOKEN') or os.environ['KAGGLE_KEY'],args.output,args.only,
         source=args.source.read_bytes() if args.source else None)
-    print('GPU_CHECK_FINISHED %d/%d passed'%(sum(r['ok'] for r in reports),len(reports)),flush=True)
-    raise SystemExit(0 if all(r['ok'] for r in reports) else 1)
+    cases=[r for r in reports if r['case']!='system']
+    print('GPU_CHECK_FINISHED %d/%d passed'%(sum(r['ok'] for r in cases),len(cases)),flush=True)
+    raise SystemExit(0 if all(r['ok'] for r in cases) else 1)

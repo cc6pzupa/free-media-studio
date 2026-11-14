@@ -137,9 +137,9 @@ STAT_FIELDS = {'encoding_seconds','generation_seconds','request_seconds','width'
 PROGRESS_FIELDS = {'phase','message','downloaded_bytes','total_bytes','percent','file'}
 PHASES = {'session','checking','connecting','starting','queued','connected','manifest','download',
     'verify','cached','dataset','copy','loading','generating','cache-check','cache-download',
-    'cache-prepare','cache-upload','cache-processing','cache-saved','cache-warning','session-warning','encoding','decoding','exporting','installing'}
+    'cache-prepare','cache-upload','cache-processing','cache-saved','cache-warning','session-warning','encoding','decoding','exporting','installing','cleanup'}
 MESSAGES = {
-    'installing':'正在安装视频环境。','decoding':'正在解码视频画面。',
+    'installing':'正在安装视频环境。','decoding':'正在解码视频画面。','cleanup':'正在清理较早使用的模型文件以释放磁盘。',
     'encoding':'正在编码视频提示词。','exporting':'正在保存 MP4 视频。',
     'session':'正在检查 Kaggle 会话。','checking':'正在检查专用 Notebook。',
     'connecting':'正在恢复已有会话。','starting':'正在申请 Kaggle GPU。',

@@ -67,7 +67,7 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True,'video_options':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if urlsplit(self.path).path=='/history':
@@ -112,7 +112,7 @@ def create_worker_server(core, token, port=0):
                 if self.path=='/video/jobs':
                     job=core.submit_video(body.get('prompt'),body.get('seed',42),body.get('steps'),
                         body.get('request_id'),body.get('model_id','wan21-t2v-1.3b'),body.get('frames'),
-                        body.get('image'),body.get('negative_prompt'))
+                        body.get('image'),body.get('negative_prompt'),body.get('size'),body.get('last_image'))
                     return self.send(202,job)
                 if self.path=='/shutdown':
                     with core.lock:

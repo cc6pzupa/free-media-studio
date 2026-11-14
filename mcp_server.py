@@ -51,16 +51,19 @@ def build_server(client=None):
     def generate_video(prompt:str,request_id:str,seed:int=42,steps:int|None=None,
                        model_id:str='wan21-t2v-1.3b',frames:int|None=None,
                        image_path:str|None=None,image_base64:str|None=None,
-                       negative_prompt:str|None=None) -> dict[str,Any]:
+                       negative_prompt:str|None=None,size:str|None=None,
+                       last_image_path:str|None=None,last_image_base64:str|None=None) -> dict[str,Any]:
         """Queue one experimental MP4 on Kaggle. Models: ltx-video-2b-distilled (8 steps),
         wan21-t2v-1.3b (balanced), wan22-ti2v-5b (quality). Use a unique request_id.
         Image-to-video: pass a first frame as image_path (local PNG/JPEG/WebP) or image_base64;
         supported by ltx-video-2b-distilled and wan22-ti2v-5b. The frame is center-cropped to the model size.
-        negative_prompt applies to the Wan models only.
+        negative_prompt applies to the Wan models only. size: landscape (default), portrait or square, e.g.
+        448x768 or 512x512 for LTX, 480x832 or 624x624 for Wan2.1, 448x768 or 576x576 for Wan2.2.
+        last_image_path/last_image_base64 (LTX only, with a first frame) generates a clip from the first to the last frame.
         Poll get_job every two seconds, then get_video for its local file URI.
         Initial weights and video generation can take many minutes. Never resubmit automatically."""
-        image=read_input(image_path,image_base64,'image')
-        return call(service.submit_video,prompt,seed,steps,request_id,model_id,frames,image,negative_prompt)
+        image=read_input(image_path,image_base64,'image');last_image=read_input(last_image_path,last_image_base64,'last image')
+        return call(service.submit_video,prompt,seed,steps,request_id,model_id,frames,image,negative_prompt,size,last_image)
 
     @server.tool(structured_output=True)
     def get_video(job_id:str) -> dict[str,Any]:

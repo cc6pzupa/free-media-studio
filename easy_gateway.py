@@ -19,6 +19,7 @@ from media_inputs import MAX_REQUEST_BYTES
 
 OPTION_FIELDS=('size','negative_prompt','task','strength','image','mask','feather')
 ZIP_LIMIT=100
+MAX_IMAGES_PER_REQUEST=8
 
 
 def validate(data):
@@ -29,7 +30,9 @@ def validate(data):
     if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=4000:raise ValueError('请输入 1–4000 字的提示词')
     if type(seed) is not int or not 0<=seed<=2147483647:raise ValueError('seed 应为 0–2147483647 的整数')
     if type(steps) is not int or not 1<=steps<=50:raise ValueError('steps 应为 1–50 的整数')
-    if data.get('n',1)!=1 or data.get('response_format','b64_json')!='b64_json':raise ValueError('每次请求生成 1 张，b64_json 返回；批量请提交多个任务')
+    count=data.get('n',1)
+    if isinstance(count,bool) or not isinstance(count,int) or not 1<=count<=MAX_IMAGES_PER_REQUEST:raise ValueError('n 需要为 1–8 的整数；更多图片请分多次请求')
+    if data.get('response_format','b64_json')!='b64_json':raise ValueError('只支持 b64_json 返回')
     image_options(profile['id'],steps,data.get('size'),data.get('negative_prompt'),data.get('task'),data.get('strength'),
         data.get('image') not in (None,''),data.get('mask') not in (None,''),data.get('feather'))
     return prompt,seed,steps
@@ -264,7 +267,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     if not isinstance(backend,SharedBackend):raise ValueError('先在主界面配置自动账号模式。')
                     job=backend.client.submit_video(data.get('prompt'),data.get('seed',42),data.get('steps'),
                         data.get('request_id'),data.get('model_id','wan21-t2v-1.3b'),data.get('frames'),
-                        data.get('image'),data.get('negative_prompt'))
+                        data.get('image'),data.get('negative_prompt'),data.get('size'),data.get('last_image'))
                     return self.send(202,job)
                 except ValueError as error:
                     # Validation messages are authored locally and contain no request values.
@@ -333,11 +336,18 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
                     if data.get('model_id') not in (None,'qwen-image-2.1') and not isinstance(current,SharedBackend):raise ValueError('新增模型请使用自动账号模式。')
                     if extra_options and not isinstance(current,SharedBackend):raise ValueError('尺寸、负面提示词与图片编辑请使用自动账号模式。')
                     extra.update(extra_options)
-                    if progress is not None and callable(generate_with_progress):
-                        image,stats=generate_with_progress(prompt,seed,steps,progress=progress,**extra)
-                    else:
-                        image,stats=current.generate(prompt,seed,steps,**extra)
-                    return {'created':int(time.time()),'data':[{'b64_json':base64.b64encode(image).decode()}],'usage':stats}
+                    images=[];usages=[]
+                    # n images run one after another with incrementing seeds.
+                    for index in range(data.get('n',1)):
+                        image_seed=(seed+index)%2147483648
+                        if progress is not None and callable(generate_with_progress):
+                            image,stats=generate_with_progress(prompt,image_seed,steps,progress=progress,**extra)
+                        else:
+                            image,stats=current.generate(prompt,image_seed,steps,**extra)
+                        images.append({'b64_json':base64.b64encode(image).decode()});usages.append(stats)
+                    result={'created':int(time.time()),'data':images,'usage':usages[0]}
+                    if len(usages)>1:result['usages']=usages
+                    return result
                 finally:generation_lock.release()
             if is_api:
                 try:return self.send(200,generate())

@@ -46,7 +46,23 @@ CASES=[
         prompt='An adult anime catgirl reading a book by a sunlit window. Her hair moves gently in the breeze. Slow smooth camera movement.')),
     ('wan22-i2v-33','video',dict(model_id='wan22-ti2v-5b',frames=33,image='source',negative_prompt='blurry, distorted',
                                  prompt='She turns her head and smiles, hair moving in the breeze')),
+    # 0.10 follow-ups: feathered inpainting, video sizes, LTX keyframes and dual-GPU image-to-video.
+    ('zimage-inpaint-feather','image',dict(model_id='z-image-turbo',prompt='A large straw hat with a red ribbon',task='inpaint',strength=0.9,image='source',mask=True,feather=12)),
+    ('ltx-t2v-portrait','video',dict(model_id='ltx-video-2b-distilled',frames=33,size='448x768',
+        prompt='An adult anime catgirl walking toward the camera on a sunny street. Her hair moves in the wind. Smooth tracking shot.')),
+    ('ltx-keyframes-square','video',dict(model_id='ltx-video-2b-distilled',frames=33,size='512x512',image='source',last_image='mirrored',
+        prompt='She slowly turns from one side to the other, hair moving gently')),
+    ('wan22-i2v-portrait','video',dict(model_id='wan22-ti2v-5b',frames=33,size='448x768',image='source',
+        prompt='She turns her head and smiles, hair moving in the breeze')),
+    ('wan21-t2v-square','video',dict(model_id='wan21-t2v-1.3b',frames=33,size='624x624',
+        prompt='An adult anime catgirl reading a book by a sunlit window. Her hair moves gently in the breeze. Slow smooth camera movement.')),
 ]
+
+
+def mirrored(raw):
+    """The source image flipped horizontally, as a distinct last frame."""
+    from PIL import Image,ImageOps
+    buffer=io.BytesIO();ImageOps.mirror(Image.open(io.BytesIO(raw))).save(buffer,format='PNG');return buffer.getvalue()
 
 
 PROBE='''
@@ -118,6 +134,7 @@ def run(user,token,output,only=None,diagnose=True,source=None):
                     if source is None:raise RuntimeError('No source image from the first case')
                     arguments['image']=source
                 if arguments.pop('mask',False):arguments['mask']=mask_png(512,512)
+                if arguments.get('last_image')=='mirrored':arguments['last_image']=mirrored(source)
                 print('GPU_CHECK_START '+name,flush=True)
                 if kind=='image':
                     raw,stats=backend.generate_with_progress(prompt,42,arguments.pop('steps',None),progress(name),**arguments)

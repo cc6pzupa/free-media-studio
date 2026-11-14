@@ -73,13 +73,34 @@ class VideoRuntime:
             local_files_only=True,**kwargs)
 
     @torch.inference_mode()
-    def first_frame(self,image):
-        """Decode the base64 first frame and center-crop it to the model size."""
+    def first_frame(self,image,width=None,height=None):
+        """Decode a base64 frame and center-crop it to the video size."""
         import base64,io
         from PIL import Image,ImageOps
         picture=ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(image))))
-        return ImageOps.fit(picture.convert('RGB'),(self.profile['width'],self.profile['height']),
+        return ImageOps.fit(picture.convert('RGB'),(width or self.profile['width'],height or self.profile['height']),
             method=Image.Resampling.LANCZOS)
+
+    def condition_pipeline(self):
+        """LTX keyframe view (first and last frame) of the loaded modules."""
+        from diffusers import LTXConditionPipeline
+        pipe=self.pipe
+        return LTXConditionPipeline(scheduler=pipe.scheduler,vae=pipe.vae,text_encoder=pipe.text_encoder,
+            tokenizer=pipe.tokenizer,transformer=pipe.transformer)
+
+    def conditioned_latents(self,first,width,height,frames,seed):
+        """First-frame conditioned, packed LTX latents for the context-parallel workers.
+
+        The workers hold no VAE weights, so the first frame is encoded here exactly
+        as LTXImageToVideoPipeline.prepare_latents does; the workers then sample
+        with the same pipeline from these latents."""
+        import torch
+        view=self.image_pipeline()
+        pixels=view.video_processor.preprocess(first,height=height,width=width).to('cuda:0',dtype=torch.float16)
+        generator=torch.Generator(device='cuda:0').manual_seed(seed)
+        latents,_=view.prepare_latents(pixels,1,self.pipe.vae.config.latent_channels,height,width,frames,
+            torch.float32,torch.device('cuda:0'),generator,None)
+        return latents
 
     def image_pipeline(self):
         """An image-to-video view of the loaded modules; no weights are copied."""
@@ -107,13 +128,19 @@ class VideoRuntime:
         move_video_encoder(self.encoder,'cpu');torch.cuda.empty_cache()
 
     @torch.inference_mode()
-    def generate(self,prompt,seed=42,steps=None,frames=None,output=None,image=None,negative_prompt=None):
+    def generate(self,prompt,seed=42,steps=None,frames=None,output=None,image=None,negative_prompt=None,size=None,last_image=None):
         import torch
-        from video_registry import validate_video
+        from video_registry import validate_video,video_size
         from video_precision import move_video_encoder
         from video_parallel import WanParallelCFG
-        p=self.profile;params=validate_video(prompt,seed,steps,p['id'],frames,image,negative_prompt)
-        first=self.first_frame(image) if image is not None else None
+        p=self.profile;params=validate_video(prompt,seed,steps,p['id'],frames,image,negative_prompt,size,last_image)
+        width,height=video_size(p,params.get('size'))
+        first=self.first_frame(image,width,height) if image is not None else None
+        last=self.first_frame(last_image,width,height) if last_image is not None else None
+        ltx=p['family']=='ltx'
+        # Keyframes (first + last) need LTXConditionPipeline on one GPU; text and
+        # first-frame-only LTX videos use the dual-GPU context workers.
+        use_context=ltx and self.acceleration=='auto' and not self.disabled and last is None
         if self.pipe is None:self.prepare()
         for i in range(2):torch.cuda.reset_peak_memory_stats(i)
         start=time.perf_counter();self.emit('encoding')
@@ -150,17 +177,25 @@ class VideoRuntime:
                 if not latents_finite[-1]:raise RuntimeError('Non-finite video latents')
             return kwargs
         kwargs=dict(prompt_embeds=positive,negative_prompt_embeds=negative,
-            width=p['width'],height=p['height'],num_frames=params['frames'],
+            width=width,height=height,num_frames=params['frames'],
             num_inference_steps=params['steps'],guidance_scale=p['guidance'],
             generator=torch.Generator(device='cuda:0').manual_seed(seed),
             callback_on_step_end=progress,output_type='np')
         if p['family']=='ltx':kwargs.update(decode_timestep=.05,decode_noise_scale=.025,frame_rate=p['fps'],
             prompt_attention_mask=mask.to('cuda:0'),negative_prompt_attention_mask=negative_mask)
-        # Image-to-video uses the same modules through an image pipeline view.
+        # Image-to-video uses the same modules through an image or keyframe pipeline view.
         target=self.pipe
-        if first is not None:
+        if last is not None:
+            from diffusers.pipelines.ltx.pipeline_ltx_condition import LTXVideoCondition
+            if self.context is not None:self.restore_ltx_transformer()
+            target=self.condition_pipeline()
+            kwargs['conditions']=[LTXVideoCondition(image=first,frame_index=0),
+                LTXVideoCondition(image=last,frame_index=params['frames']-1)]
+            # The keyframe pipeline passes explicit timesteps; give it the trained schedule.
+            kwargs['timesteps']=[1000*sigma for sigma in p['sigmas']]
+        elif first is not None:
             kwargs['image']=first
-            if p['family']=='ltx' and self.context is not None:self.restore_ltx_transformer()
+            if ltx and self.context is not None and not use_context:self.restore_ltx_transformer()
             target=self.image_pipeline()
         self.pipe.register_modules(text_encoder=None);target.register_modules(text_encoder=None)
         sampling=time.perf_counter();fallback=None;cfg_pairs=0
@@ -174,17 +209,16 @@ class VideoRuntime:
             return original_decode(*args,**kwargs)
         self.pipe.vae.decode=decode
         original_encode=self.pipe.vae.encode
-        if first is not None and p['family']=='ltx':
+        if first is not None and ltx:
             # LTXImageToVideoPipeline passes the first frame in the prompt dtype
             # (fp16) while this runtime keeps the VAE in fp32.
             vae=self.pipe.vae
             self.pipe.vae.encode=lambda x,*args,**kwargs:original_encode(x.to(dtype=vae.dtype),*args,**kwargs)
         try:
-            if first is not None and strategy!='cfg_parallel':
-                # LTX context parallelism is text-to-video only; image-to-video
-                # runs the single-GPU path with the encoder already moved aside.
+            if first is not None and not use_context and strategy!='cfg_parallel':
+                # Keyframes, Wan in split mode, or LTX with dual GPU disabled.
                 result=target(**kwargs)
-            elif p['family']=='ltx' and self.acceleration=='auto' and not self.disabled:
+            elif use_context:
                 from video_context import LTXContextRunner
                 if self.context is None:
                     runner=None;original=self.pipe.transformer
@@ -201,7 +235,9 @@ class VideoRuntime:
                         self.disabled=True;fallback=type(error).__name__
                     finally:del original
                 if self.context is not None:
-                    try:packed=self.context.generate(positive,mask,params)
+                    try:
+                        conditioned=self.conditioned_latents(first,width,height,params['frames'],seed) if first is not None else None
+                        packed=self.context.generate(positive,mask,dict(params,width=width,height=height),conditioned)
                     except (RuntimeError,ValueError,TimeoutError) as error:
                         print('CC_VIDEO_CONTEXT_ERROR:'+str(error),flush=True)
                         self.context.close();self.context=None;self.disabled=True;fallback=type(error).__name__
@@ -211,13 +247,19 @@ class VideoRuntime:
                             context_transformer_folder(self.folder,p),torch_dtype=torch.float16,
                             device_map={'':0},local_files_only=True))
                         move_video_encoder(self.encoder,'cpu');torch.cuda.empty_cache()
-                        result=self.pipe(**kwargs)
+                        target=self.image_pipeline() if first is not None else self.pipe
+                        target.register_modules(text_encoder=None)
+                        result=target(**kwargs)
                     else:
                         generator=torch.Generator(device='cuda:0');generator.set_state(packed['generator_state'])
-                        decoded=self.decode_context_latents(packed['latents'].to('cuda:0'),params['frames'],generator)
+                        decoded=self.decode_context_latents(packed['latents'].to('cuda:0'),params['frames'],generator,width,height)
                         from types import SimpleNamespace
                         result=SimpleNamespace(frames=decoded);strategy='context_parallel'
-                else:result=self.pipe(**kwargs)
+                else:
+                    # The workers could not start; the transformer is back on GPU 0.
+                    target=self.image_pipeline() if first is not None else self.pipe
+                    target.register_modules(text_encoder=None)
+                    result=target(**kwargs)
             elif strategy=='cfg_parallel':
                 try:
                     router=WanParallelCFG(self.pipe.transformer,self.replica,negative)
@@ -259,20 +301,22 @@ class VideoRuntime:
             # Worker weights remain resident while the parent encodes or decodes.
             peaks=[max(peaks[i]+packed['worker_resident_gib'][i],
                 packed['worker_peak_gib'][i]+torch.cuda.memory_allocated(i)/2**30) for i in range(2)]
-        return output,dict(model_id=p['id'],media_type='video',width=p['width'],height=p['height'],
+        return output,dict(model_id=p['id'],media_type='video',width=width,height=height,
             frames=params['frames'],fps=p['fps'],steps=params['steps'],seed=seed,
             encoding_seconds=round(encoding,3),generation_seconds=round(sampling_seconds,3),
             request_seconds=round(time.perf_counter()-start,3),loading_seconds=round(self.load_seconds,3),
             model_reused=self.calls>1,model_load_count=1,generation_number=self.calls,
             parallel_strategy=strategy,acceleration_mode=self.acceleration,cfg_pairs=cfg_pairs,
             replica_load_seconds=round(replica_seconds,3),dual_model_reused=(replica_reused if strategy=='cfg_parallel' else context_reused if strategy=='context_parallel' else False),
-            acceleration_fallback=fallback,peak_gpu_gib=[round(v,3) for v in peaks],image_to_video=first is not None)
+            acceleration_fallback=fallback,peak_gpu_gib=[round(v,3) for v in peaks],image_to_video=first is not None,
+            last_frame=last is not None)
 
-    def decode_context_latents(self,latents,frames,generator):
+    def decode_context_latents(self,latents,frames,generator,width=None,height=None):
         import torch
         pipe=self.pipe;p=self.profile
+        width=width or p['width'];height=height or p['height']
         latents=pipe._unpack_latents(latents,(frames-1)//pipe.vae_temporal_compression_ratio+1,
-            p['height']//pipe.vae_spatial_compression_ratio,p['width']//pipe.vae_spatial_compression_ratio,
+            height//pipe.vae_spatial_compression_ratio,width//pipe.vae_spatial_compression_ratio,
             pipe.transformer_spatial_patch_size,pipe.transformer_temporal_patch_size)
         latents=pipe._denormalize_latents(latents,pipe.vae.latents_mean,pipe.vae.latents_std,pipe.vae.config.scaling_factor)
         timestep=None

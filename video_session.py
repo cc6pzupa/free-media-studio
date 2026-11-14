@@ -51,9 +51,10 @@ print('CC_VIDEO_READY',flush=True)
 
 
 
-def video_generation_code(prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None):
+def video_generation_code(prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
     if image is not None and not isinstance(image,str):image=base64.b64encode(image).decode('ascii')
-    args=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt)
+    if last_image is not None and not isinstance(last_image,str):last_image=base64.b64encode(last_image).decode('ascii')
+    args=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image)
     return f'''
 import json,base64
 assert globals().get('_CC_MODEL_ID')=={model_id!r},'Active model changed'
@@ -80,12 +81,12 @@ class VideoSessionBackend:
                 except (ValueError,TypeError):pass
         if len(self.buffer)>2*1024*1024:self.buffer=''
 
-    def generate_with_progress(self,prompt,seed=42,steps=None,model_id=None,frames=None,progress=None,image=None,negative_prompt=None):
+    def generate_with_progress(self,prompt,seed=42,steps=None,model_id=None,frames=None,progress=None,image=None,negative_prompt=None,size=None,last_image=None):
         if model_id is not None and model_id!=self.model_id:raise ValueError('Wrong video model')
         with self.lock:
             self.progress=progress
             try:
-                result=self.session.execute(video_generation_code(prompt,seed,steps,self.model_id,frames,image,negative_prompt),timeout=14400)
+                result=self.session.execute(video_generation_code(prompt,seed,steps,self.model_id,frames,image,negative_prompt,size,last_image),timeout=14400)
                 lines=[line.split(':',1)[1] for line in result.splitlines() if line.startswith('CC_VIDEO_RESULT:')]
                 if len(lines)!=1:raise RuntimeError('Missing video result')
                 data=json.loads(lines[0]);raw=base64.b64decode(data['mp4'],validate=True)

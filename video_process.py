@@ -62,9 +62,9 @@ class VideoProcess:
             return message.get('result')
         self.close();raise TimeoutError('Video request timed out')
 
-    def generate(self,prompt,seed=42,steps=None,frames=None,output=None,image=None,negative_prompt=None):
-        # The first frame travels as base64 on the worker's JSON stdin line.
-        extra={k:v for k,v in (('image',image),('negative_prompt',negative_prompt)) if v is not None}
+    def generate(self,prompt,seed=42,steps=None,frames=None,output=None,image=None,negative_prompt=None,size=None,last_image=None):
+        # Frames travel as base64 on the worker's JSON stdin line.
+        extra={k:v for k,v in (('image',image),('negative_prompt',negative_prompt),('size',size),('last_image',last_image)) if v is not None}
         result=self.request('generate',prompt=prompt,seed=seed,steps=steps,frames=frames,
                             output=output,acceleration=self.acceleration,**extra)
         return Path(result['path']),result['stats']

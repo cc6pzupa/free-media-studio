@@ -197,10 +197,10 @@ class AccountBackend:
             stats.update(backend='account',request_seconds=round(time.monotonic()-started,2))
             return image,stats
 
-    def generate_video_with_progress(self,prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,progress=None,image=None,negative_prompt=None):
+    def generate_video_with_progress(self,prompt,seed=42,steps=None,model_id='wan21-t2v-1.3b',frames=None,progress=None,image=None,negative_prompt=None,size=None,last_image=None):
         from video_registry import validate_video,video_profile
         from video_session import VideoSessionBackend
-        params=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt)
+        params=validate_video(prompt,seed,steps,model_id,frames,image,negative_prompt,size,last_image)
         notify=progress or (lambda event:None)
         with self.lock:
             if self.backend is not None:self.backend.close();self.backend=None

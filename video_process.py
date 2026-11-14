@@ -107,7 +107,12 @@ def worker():
                     else:raise ValueError('Unknown video command')
                 send(result=result)
             except Exception as error:
-                traceback.print_exc(file=sys.stderr);send(error=type(error).__name__+': '+str(error))
+                traceback.print_exc(file=sys.stderr)
+                # Include wrapped causes: libraries often re-raise a generic error.
+                parts,current=[],error
+                while current is not None and len(parts)<6:
+                    parts.append(type(current).__name__+': '+str(current)[:300]);current=current.__cause__ or current.__context__
+                send(error=' <- '.join(parts))
     finally:
         if runtime is not None:
             with contextlib.redirect_stdout(sys.stderr):runtime.close()

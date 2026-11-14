@@ -24,6 +24,89 @@ def emit_progress(phase, message, done=None, total=None, filename=None):
     print('COMFY_PROGRESS:' + json.dumps(event, ensure_ascii=False), flush=True)
 
 
+def exception_chain(error, limit=6):
+    """'Type: message <- Cause: message' for an exception and what it wraps.
+
+    Libraries such as diffusers re-raise a generic error; the original is
+    only kept as __cause__/__context__."""
+    parts, seen = [], set()
+    while error is not None and id(error) not in seen and len(parts) < limit:
+        seen.add(id(error)); parts.append(type(error).__name__ + ': ' + str(error)[:300])
+        error = error.__cause__ or error.__context__
+    return ' <- '.join(parts)
+
+
+def file_matches_receipt(path):
+    """True/False when a download receipt exists, None when it cannot be checked."""
+    path = Path(path)
+    try:
+        receipt = json.loads(path.with_name(path.name + '.verified.json').read_text())
+    except (OSError, ValueError):
+        return None
+    if not path.is_file() or path.stat().st_size != receipt.get('size'): return False
+    if not receipt.get('sha256'): return None
+    digest = hashlib.sha256()
+    with path.open('rb') as content:
+        for chunk in iter(lambda: content.read(16*1024*1024), b''): digest.update(chunk)
+    return digest.hexdigest() == receipt['sha256']
+
+
+# Model folders on the session's temporary disk. Kaggle sessions are capped
+# below what the host reports as free, so keep downloaded models within a
+# budget by removing the least recently used folders that are not in use.
+MODEL_ROOTS = ('/kaggle/temp/cc-media-models', '/kaggle/temp/cc-media-video', '/kaggle/temp/qwen-image-assets')
+DISK_BUDGET_BYTES = 80 * 1024**3
+
+
+def _model_folders():
+    folders = []
+    for root in map(Path, MODEL_ROOTS):
+        if root.name == 'qwen-image-assets':
+            if root.is_dir(): folders.append(root)
+        elif root.is_dir():
+            folders.extend(child for child in root.iterdir() if child.is_dir() and child.name != '_shared')
+    return folders
+
+
+def _disk_bytes(paths):
+    """Bytes used by files under `paths`, counting hardlinked files once."""
+    seen, total = set(), 0
+    for base in paths:
+        for path in Path(base).rglob('*'):
+            try:
+                stat = path.lstat()
+            except OSError:
+                continue
+            if path.is_file() and (stat.st_dev, stat.st_ino) not in seen:
+                seen.add((stat.st_dev, stat.st_ino)); total += stat.st_blocks * 512
+    return total
+
+
+def release_model_disk(keep, needed_bytes, budget=DISK_BUDGET_BYTES, notify=None):
+    """Remove least recently used model folders until `needed_bytes` fits.
+
+    `keep` is the folder about to be used; it is never removed. Video files
+    shared through hardlinks in `_shared` are released once no model links them."""
+    keep = Path(keep).resolve()
+    # Files already in the target folder (a resumed or cached download) are not new.
+    needed_bytes = max(0, needed_bytes - (_disk_bytes([keep]) if keep.is_dir() else 0))
+    shared = [Path(root)/'_shared' for root in MODEL_ROOTS if (Path(root)/'_shared').is_dir()]
+    used = _disk_bytes([*_model_folders(), *shared])
+    candidates = sorted((f for f in _model_folders() if f.resolve() != keep), key=lambda f: f.stat().st_mtime)
+    removed = []
+    for folder in candidates:
+        if used + needed_bytes <= budget: break
+        shutil.rmtree(folder, ignore_errors=True); removed.append(folder.name)
+        for link_root in shared:
+            for path in link_root.iterdir():
+                try:
+                    if path.is_file() and path.stat().st_nlink == 1: path.unlink()
+                except OSError: pass
+        used = _disk_bytes([*_model_folders(), *shared])
+    if removed and notify: notify(removed)
+    return removed
+
+
 def repository_manifest(repo, session=None, revision=None):
     http = session or requests.Session()
     endpoint = 'https://huggingface.co/api/models/' + repo
@@ -126,6 +209,7 @@ def prepare_hf_assets(folder, http=None):
     if cached:
         emit_progress('cached','已找到完整模型缓存，无需重新下载。',total,total or None)
         return folder
+    release_model_disk(folder, total, notify=lambda names: emit_progress('cleanup', '正在清理较早使用的模型文件以释放磁盘：'+'、'.join(names)))
     done = 0; last = [0.0]
     for repo,revision,item,name in records:
         safe_relative(name)

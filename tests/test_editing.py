@@ -465,3 +465,55 @@ class FreeGpuTests(unittest.TestCase):
         torch=types.SimpleNamespace(cuda=cuda,_C=types.SimpleNamespace(_cuda_clearCublasWorkspaces=lambda:calls.append('cublas')))
         with patch.dict(sys.modules,{'torch':torch}):exec(FREE_GPU_CODE,{})
         self.assertEqual(calls,['cublas',('device',0),'empty',('device',1),'empty'])
+
+
+class DiskBudgetTests(unittest.TestCase):
+    def setUp(self):
+        import asset_manager
+        self.module=asset_manager
+        self.folder=tempfile.TemporaryDirectory();root=Path(self.folder.name)
+        self.images=root/'cc-media-models';self.video=root/'cc-media-video';self.qwen=root/'qwen-image-assets'
+        self.roots=patch.object(asset_manager,'MODEL_ROOTS',(str(self.images),str(self.video),str(self.qwen)))
+        self.roots.start()
+
+    def tearDown(self):self.roots.stop();self.folder.cleanup()
+
+    def write(self,folder,name,size,age):
+        folder.mkdir(parents=True,exist_ok=True);path=folder/name
+        path.write_bytes(os.urandom(size));os.utime(folder,(time.time()-age,)*2)
+        return path
+
+    def test_least_recently_used_unused_folders_are_removed_until_download_fits(self):
+        self.write(self.images/'z-image-turbo','w',200_000,300)
+        self.write(self.qwen,'transformer-q4.gguf',200_000,200)
+        self.write(self.images/'sdxl-lightning','w',200_000,100)
+        removed=self.module.release_model_disk(self.images/'sdxl-lightning',350_000,budget=700_000)
+        self.assertEqual(removed,['z-image-turbo'])  # oldest only; enough room afterwards
+        self.assertTrue(self.qwen.is_dir());self.assertTrue((self.images/'sdxl-lightning').is_dir())
+        removed=self.module.release_model_disk(self.images/'sdxl-lightning',10_000_000,budget=700_000)
+        self.assertEqual(removed,['qwen-image-assets'])  # never the folder being prepared
+        self.assertTrue((self.images/'sdxl-lightning'/'w').is_file())
+
+    def test_hardlinked_video_files_count_once_and_shared_copies_are_released(self):
+        model=self.write(self.video/'ltx-video-2b-distilled','ckpt',300_000,200)
+        (self.video/'_shared').mkdir();os.link(model,self.video/'_shared'/'abc')
+        self.write(self.video/'wan22-ti2v-5b','ckpt',100_000,10)
+        used=self.module._disk_bytes([self.video/'ltx-video-2b-distilled',self.video/'_shared'])
+        self.assertLess(used,2*300_000)  # one inode, counted once
+        self.assertEqual(self.module.release_model_disk(self.video/'wan22-ti2v-5b',350_000,budget=500_000),['ltx-video-2b-distilled'])
+        self.assertEqual(list((self.video/'_shared').iterdir()),[])
+        # Bytes already in the target folder are not counted as new.
+        self.assertEqual(self.module.release_model_disk(self.video/'wan22-ti2v-5b',100_000,budget=150_000),[])
+
+    def test_exception_chain_and_receipt_check(self):
+        try:
+            try:raise MemoryError('cannot map file')
+            except MemoryError:raise OSError('Unable to load weights')
+        except OSError as error:chain=self.module.exception_chain(error)
+        self.assertEqual(chain,'OSError: Unable to load weights <- MemoryError: cannot map file')
+        path=Path(self.folder.name)/'model.gguf';path.write_bytes(b'weights')
+        self.assertIsNone(self.module.file_matches_receipt(path))
+        import hashlib
+        path.with_name('model.gguf.verified.json').write_text(json.dumps({'size':7,'sha256':hashlib.sha256(b'weights').hexdigest()}))
+        self.assertTrue(self.module.file_matches_receipt(path))
+        path.write_bytes(b'weightz');self.assertFalse(self.module.file_matches_receipt(path))

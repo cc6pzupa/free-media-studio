@@ -52,7 +52,7 @@ function remember(id){active=id;save(key,id);controls()}
 function rememberPending(payload){pending=payload;save(pendingKey,payload?JSON.stringify(payload):null);controls()}
 function restorePending(payload){for(const id of ['model','prompt','steps','seed','frames'])$(id).value=payload[id==='model'?'model_id':id];selectModel();$('steps').value=payload.steps;$('negative').value=payload.negative_prompt||'';setFrame(typeof payload.image==='string'?payload.image:null);rememberPending(payload)}
 function showProgress(job){
- const labels=english()?{installing:'Installing video environment',encoding:'Encoding prompt',generating:'Generating video',decoding:'Decoding frames',exporting:'Saving MP4',complete:'Video ready'}:{installing:'正在安装视频环境',encoding:'正在编码提示词',generating:'正在生成视频',decoding:'正在解码画面',exporting:'正在保存 MP4',complete:'视频已完成'};
+ const labels=english()?{cleanup:'Freeing disk space',installing:'Installing video environment',encoding:'Encoding prompt',generating:'Generating video',decoding:'Decoding frames',exporting:'Saving MP4',complete:'Video ready'}:{cleanup:'正在清理磁盘空间',installing:'正在安装视频环境',encoding:'正在编码提示词',generating:'正在生成视频',decoding:'正在解码画面',exporting:'正在保存 MP4',complete:'视频已完成'};
  let label=labels[job.state==='complete'?'complete':job.phase]||job.message||job.phase||job.state,percent=job.percent||8;
  if(job.phase==='generating'&&job.steps>0){label+=` · ${job.step}/${job.steps}`;percent=100*job.step/job.steps}
  if(job.phase==='decoding'||job.phase==='exporting')percent=100;

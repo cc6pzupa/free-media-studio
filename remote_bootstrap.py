@@ -28,10 +28,33 @@ encoder = Qwen3VLForConditionalGeneration.from_pretrained(
     ASSET_DIR/'text_encoder', dtype=torch.float16, device_map={'': 1},
     attn_implementation='sdpa', local_files_only=True, **_encoder_options)
 print('Loading Q4 transformer on GPU 0...', flush=True)
-transformer = QwenImage21Transformer2DModel.from_single_file(
-    str(ASSET_DIR/'transformer-q4.gguf'), config=str(ASSET_DIR), subfolder='transformer',
-    quantization_config=GGUFQuantizationConfig(compute_dtype=torch.float16),
-    dtype=torch.float16, local_files_only=True).to('cuda:0')
+def _cc_load_transformer():
+    return QwenImage21Transformer2DModel.from_single_file(
+        str(ASSET_DIR/'transformer-q4.gguf'), config=str(ASSET_DIR), subfolder='transformer',
+        quantization_config=GGUFQuantizationConfig(compute_dtype=torch.float16),
+        dtype=torch.float16, local_files_only=True).to('cuda:0')
+try:
+    transformer = _cc_load_transformer()
+except Exception as _cc_error:
+    # Seen intermittently on Kaggle: the GGUF failed to load. Check the file
+    # against its download receipt, replace it if damaged, and retry once.
+    _cc_first_failure = exception_chain(_cc_error)
+    del _cc_error
+    print('CC_LOAD_RETRY: ' + _cc_first_failure, flush=True)
+    emit_progress('verify', '正在校验 Q4 权重并重试加载。')
+    _cc_gguf = ASSET_DIR/'transformer-q4.gguf'
+    if file_matches_receipt(_cc_gguf) is False:
+        _cc_gguf.unlink(missing_ok=True)
+        _cc_gguf.with_name(_cc_gguf.name + '.verified.json').unlink(missing_ok=True)
+        prepare_hf_assets(ASSET_DIR)
+    import gc
+    gc.collect(); torch.cuda.empty_cache()
+    try:
+        transformer = _cc_load_transformer()
+    except Exception as _cc_error:
+        _cc_second_failure = exception_chain(_cc_error)
+        del _cc_error
+        raise RuntimeError('Q4 transformer failed to load twice: ' + _cc_second_failure + ' | first: ' + _cc_first_failure) from None
 # Diffusers GGUFLinear handles packed matrices; custom RMSNorm vectors need
 # explicit decoding when a pre-converted GGUF stores them as BF16 bytes.
 from diffusers.quantizers.gguf.utils import dequantize_gguf_tensor

@@ -22,6 +22,10 @@
 - **首次使用预计耗时**：模型选择下方显示双 T4 实测的首次耗时与下载量，数据来自模型目录。
 - **画廊选择模式**：选择指定作品打包 ZIP 或批量删除。
 - **Notebook 形状蒙版**：用椭圆或矩形滑块生成蒙版并预览，无需另行上传。
+- **视频尺寸**：每个视频模型提供横向、竖向与方形。
+- **首尾帧（LTX）**：上传首帧与尾帧生成过渡视频。
+- **LTX 图生视频双卡**：只用首帧时走双卡序列并行，不再与文生视频来回重新加载。
+- **HTTP API `n`**：一次请求生成 1–8 张，种子递增。
 - 保存 Qwen 私有缓存前清理中断遗留的临时副本，并把副本所需空间计入 80 GB 磁盘预算。
 
 ### 修复（Kaggle 实测发现）
@@ -53,6 +57,10 @@
 - Measured first-use time and download size under each model, from the model catalog.
 - Gallery Select mode to download or delete chosen works.
 - Notebook shape masks: ellipse or rectangle from sliders with a live preview.
+- Video sizes: landscape, portrait and square per video model.
+- LTX first and last frame: a clip that moves from one frame to the other.
+- LTX image-to-video on both GPUs (context parallel), without reloading when switching with text-to-video.
+- HTTP API `n`: 1–8 images per request with incrementing seeds.
 - Before saving the Qwen private cache, leftover bundles from interrupted saves are removed and the copy's space counts toward the 80 GB disk budget.
 
 ### Fixed (found on Kaggle)

@@ -32,7 +32,7 @@ On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe
 | `get_job` | `job_id` | State, real progress, downloaded bytes, model reuse |
 | `get_image` | Completed `job_id` | PNG image content and usage metadata |
 | `cancel_job` | Queued `job_id` | Cancels an image or video task that has not started; a running task returns `cancelled: false` |
-| `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed` and `steps` | Video job ID |
+| `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed`, `steps`, `size`, `negative_prompt`, `image_path` / `image_base64` (first frame), `last_image_path` / `last_image_base64` (last frame, LTX only) | Video job ID |
 | `get_video` | Completed video job ID | Local MP4 path, URI, file size and usage |
 
 Call status, submit once, poll the job at least two seconds apart, then retrieve the image. Reuse a request ID only when retrying the same intended submission. A different payload with the same ID is rejected. Do not automatically resubmit errored or interrupted tasks; the remote task may still be running.

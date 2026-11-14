@@ -95,7 +95,7 @@ Use `--acceleration auto` for automatic acceleration. The Kaggle notebook has th
 
 ## Single images and queued tasks
 
-The HTTP image endpoint generates one PNG per request. MCP can submit separate tasks with unique `request_id` values to the shared serial queue. Poll and retrieve each image using its returned `job_id`; active models are reused.
+The HTTP image endpoint generates `n` PNGs per request (1–8, incrementing seeds). MCP can submit separate tasks with unique `request_id` values to the shared serial queue. Poll and retrieve each image using its returned `job_id`; active models are reused.
 
 The GUI supports batches (preview): 1–8 images per prompt, one prompt per line, incrementing seeds and a ZIP download. The gallery can also export its current list as a ZIP.
 

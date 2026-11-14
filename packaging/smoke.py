@@ -49,7 +49,7 @@ def check(executable):
             cli=Path(executable).with_name('cc-media-cli'+('.exe' if os.name=='nt' else ''))
             async with Client(StdioServerParameters(command=str(cli),args=['--mcp'],env=env)) as client:
                 tools=await client.list_tools()
-                assert len(tools.tools)==6
+                assert len(tools.tools)==7
         try:
             asyncio.run(asyncio.wait_for(mcp_check(),timeout=30))
             with (root/'gui-launch.log').open('wb') as output:

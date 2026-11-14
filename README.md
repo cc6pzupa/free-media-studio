@@ -158,6 +158,7 @@ git clone https://github.com/cc6pzupa/free-media-studio.git ComfyUI/custom_nodes
 | `generate_image` | 提交生图并返回任务编号 |
 | `get_job` | 查询生成进度 |
 | `get_image` | 取得完成后的 PNG |
+| `cancel_job` | 取消尚未开始的任务 |
 
 完整的三系统配置和调用步骤见 **[MCP 使用指南](docs/mcp.md)**。
 

@@ -76,19 +76,19 @@ def build_server(client=None):
     def generate_image(prompt:str,request_id:str,seed:int=42,steps:int|None=None,model_id:str="qwen-image-2.1",
                        size:str='512x512',negative_prompt:str|None=None,task:str='text',strength:float|None=None,
                        image_path:str|None=None,image_base64:str|None=None,
-                       mask_path:str|None=None,mask_base64:str|None=None) -> dict[str,Any]:
+                       mask_path:str|None=None,mask_base64:str|None=None,feather:int|None=None) -> dict[str,Any]:
         """Queue one PNG and return its job_id immediately. Models: qwen-image-2.1 (20 steps default),
         z-image-turbo (9 steps default), sdxl-lightning (exactly 4 steps). Omit steps for the model default. Use a unique request_id per intended image;
         reuse it when retrying the same submission. The saved acceleration preference defaults to auto (dual GPU preferred); get_job reports the actual parallel_strategy. First-time preparation may take many minutes.
         size: 512x512 (default), 768x768, 1024x1024, 768x512, 512x768, 1024x576 or 576x1024.
         negative_prompt: qwen-image-2.1 only (the other models run without CFG).
         task: text (default); img2img (reference image + strength, default 0.6) or inpaint (image + mask, white = repaint,
-        strength default 0.9) on z-image-turbo or sdxl-lightning. Pass images as image_path/mask_path (local PNG/JPEG/WebP
+        strength default 0.9; feather 0–64 px blends the repainted area into the original with a soft edge) on z-image-turbo or sdxl-lightning. Pass images as image_path/mask_path (local PNG/JPEG/WebP
         files, at most 8 MB) or as base64. Inputs are center-cropped to size. For batches, submit one task per image
         with distinct request_ids and seeds. Retrieve progress with get_job and the final image with get_image. No credentials are accepted here.
         """
         image=read_input(image_path,image_base64,'image');mask=read_input(mask_path,mask_base64,'mask')
-        return call(service.submit,prompt,seed,steps,request_id,model_id,size,negative_prompt,task,strength,image,mask)
+        return call(service.submit,prompt,seed,steps,request_id,model_id,size,negative_prompt,task,strength,image,mask,feather)
 
     @server.tool(structured_output=True)
     def get_job(job_id:str) -> dict[str,Any]:
@@ -96,6 +96,12 @@ def build_server(client=None):
         queued/running means keep waiting; complete means get_image is ready. Do not resubmit error/interrupted jobs automatically.
         """
         return call(service.get_job,job_id)
+
+    @server.tool(structured_output=True)
+    def cancel_job(job_id:str) -> dict[str,Any]:
+        """Cancel a queued image or video job before it starts. A job that is already running on Kaggle
+        is not interrupted; the result then has cancelled=false and the job keeps running."""
+        return call(service.cancel_job,job_id)
 
     @server.tool()
     def get_image(job_id:str) -> CallToolResult:

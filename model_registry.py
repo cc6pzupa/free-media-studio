@@ -52,7 +52,7 @@ def parse_size(size=None):
     return width,height
 
 
-def image_options(model_id,steps,size=None,negative_prompt=None,task=None,strength=None,image=False,mask=False):
+def image_options(model_id,steps,size=None,negative_prompt=None,task=None,strength=None,image=False,mask=False,feather=None):
     """Validate optional editing/size parameters; return only non-default values.
 
     Defaults are omitted so earlier text-to-image request IDs keep their
@@ -68,6 +68,7 @@ def image_options(model_id,steps,size=None,negative_prompt=None,task=None,streng
         if not isinstance(negative_prompt,str) or len(negative_prompt)>2000:raise ValueError('负面提示词最多 2000 字。')
         if not profile['negative_prompt']:raise ValueError(profile['name']+' 不使用负面提示词（无 CFG）；请清空该字段。')
         if negative_prompt.strip():result['negative_prompt']=negative_prompt
+    if feather not in (None,0) and task!='inpaint':raise ValueError('边缘羽化只用于局部编辑（inpaint）。')
     if task=='text':
         if image or mask or strength is not None:raise ValueError('文生图不接受参考图、蒙版或重绘强度；请选择 img2img 或 inpaint。')
         return result
@@ -80,4 +81,7 @@ def image_options(model_id,steps,size=None,negative_prompt=None,task=None,streng
     strength=round(float(strength),3)
     if int(steps*strength)<1:raise ValueError('步数 × 重绘强度至少为 1；请提高重绘强度。')
     result.update(task=task,strength=strength)
+    if feather not in (None,0):
+        if isinstance(feather,bool) or not isinstance(feather,int) or not 0<=feather<=64:raise ValueError('边缘羽化需要为 0–64 像素的整数。')
+        result['feather']=feather
     return result

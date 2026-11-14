@@ -44,7 +44,7 @@ class StudioClient:
         self.allow_job_inheritance=allow_job_inheritance
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -68,6 +68,7 @@ class StudioClient:
                 self.acceleration_supported=result.get('dual_cfg') is True
                 self.video_supported=result.get('video') is True
                 self.editing_supported=result.get('editing') is True
+                self.cancel_supported=result.get('cancel') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -139,7 +140,7 @@ class StudioClient:
         self.get_job(job_id)
         return self._request('POST','/history/'+job_id,body)
 
-    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None,size=None,negative_prompt=None,task=None,strength=None,image=None,mask=None):
+    def submit(self,prompt,seed=42,steps=None,request_id=None,model_id=None,size=None,negative_prompt=None,task=None,strength=None,image=None,mask=None,feather=None):
         if __package__:
             from .media_inputs import decode_image,encode
         else:
@@ -147,6 +148,7 @@ class StudioClient:
         # Defaults are not sent, so plain requests still work with an older worker.
         options={key:value for key,value in (('size',size),('negative_prompt',negative_prompt),('task',task),('strength',strength))
                  if value not in (None,'','512x512','text')}
+        if feather not in (None,0):options['feather']=feather
         if image not in (None,''):options['image']=encode(decode_image(image,'参考图'))
         if mask not in (None,''):options['mask']=encode(decode_image(mask,'蒙版'))
         self.status()
@@ -164,6 +166,12 @@ class StudioClient:
         if not isinstance(job_id,str) or not re.fullmatch(r'[a-f0-9]{32}',job_id):
             raise ValueError('任务 ID 格式不正确。')
         return self._request('GET','/jobs/'+job_id)
+
+    def cancel_job(self,job_id):
+        """Cancel a queued job. Returns the job with cancelled=False if it already started."""
+        self.get_job(job_id)
+        if not self.cancel_supported:raise RuntimeError('请重启本机后台以启用取消任务。 / Restart the worker to enable cancelling.')
+        return self._request('POST','/jobs/'+job_id+'/cancel',{})
 
     def get_image(self,job_id):
         self.get_job(job_id)
@@ -202,7 +210,7 @@ class StudioClient:
             if progress and job!=previous:progress(job)
             previous=job
             if job['state']=='complete':return (self.get_video(job_id) if job.get('media_type')=='video' else self.get_image(job_id)),job['usage']
-            if job['state'] in ('error','interrupted'):raise RuntimeError(job['message'])
+            if job['state'] in ('error','interrupted','cancelled'):raise RuntimeError(job['message'])
             time.sleep(.5)
         raise TimeoutError('等待超时；任务未取消，请使用原任务 ID 继续查询。')
 

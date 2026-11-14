@@ -31,6 +31,7 @@ On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe
 | `generate_image` | `prompt`, unique `request_id`, optional `seed=42`, `model_id`, `steps` (model default when omitted), `size`, `negative_prompt`, `task`, `strength`, `image_path` / `image_base64`, `mask_path` / `mask_base64` | Immediate durable `job_id` |
 | `get_job` | `job_id` | State, real progress, downloaded bytes, model reuse |
 | `get_image` | Completed `job_id` | PNG image content and usage metadata |
+| `cancel_job` | Queued `job_id` | Cancels an image or video task that has not started; a running task returns `cancelled: false` |
 | `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed` and `steps` | Video job ID |
 | `get_video` | Completed video job ID | Local MP4 path, URI, file size and usage |
 

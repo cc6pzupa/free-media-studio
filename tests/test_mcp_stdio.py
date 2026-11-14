@@ -70,7 +70,7 @@ class MCPStdioTest(unittest.TestCase):
             async def exercise():
                 async with Client(self.parameters(config_path)) as client:
                     tools=await client.list_tools()
-                    self.assertEqual({t.name for t in tools.tools},{'studio_status','generate_image','get_job','get_image','generate_video','get_video'})
+                    self.assertEqual({t.name for t in tools.tools},{'studio_status','generate_image','get_job','get_image','generate_video','get_video','cancel_job'})
                     for tool in tools.tools:
                         self.assertNotIn('token',json.dumps(tool.input_schema).lower())
                     status=await client.call_tool('studio_status',{})
@@ -169,6 +169,8 @@ class MCPStdioTest(unittest.TestCase):
                         image=await client.call_tool('get_image',{'job_id':selected})
                         self.assertEqual((image.structured_content['width'],image.structured_content['height']),(768,512))
                         self.assertEqual(image.structured_content['usage']['task'],'img2img')
+                        finished=await client.call_tool('cancel_job',{'job_id':selected})
+                        self.assertFalse(finished.structured_content['cancelled'])  # already complete
                         missing=await client.call_tool('generate_image',{'prompt':'hat','request_id':'mcp-missing','model_id':'z-image-turbo',
                             'task':'img2img','image_path':str(source)+'.absent'})
                         self.assertTrue(missing.is_error)

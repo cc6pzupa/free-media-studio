@@ -98,3 +98,19 @@ test('negative prompt is offered and sent only for CFG video models',async()=>{
  assert.equal(p.elements.get('negativeFields').hidden,true);
  assert.match(p.elements.get('frameHint').textContent,/居中裁剪为 768 × 448/);
 });
+test('a queued video can be cancelled and is then released',async()=>{
+ const calls=[],id='a'.repeat(32);let state='queued';
+ const p=page(async(url,options)=>{calls.push([url,options]);
+  if(url==='/video/models')return response({models});
+  if(url.endsWith('/cancel')){state='cancelled';return response({cancelled:true,state})}
+  return response({state,phase:state,message:'任务已取消，未在 Kaggle 上执行。'});
+ },id);
+ for(let i=0;i<6;i++)await tick();
+ assert.equal(p.elements.get('cancelVideo').hidden,false);
+ p.elements.get('randomSeed').onclick();assert.ok(Number(p.elements.get('seed').value)>=0);
+ await p.elements.get('cancelVideo').onclick();
+ for(let i=0;i<4;i++)await tick();
+ assert.ok(calls.some(([url,options])=>url==='/video/jobs/'+id+'/cancel'&&options.method==='POST'));
+ assert.equal(p.elements.get('cancelVideo').hidden,true);assert.equal(p.storage.size,0);
+ assert.match(p.elements.get('status').textContent,/已取消/);
+});

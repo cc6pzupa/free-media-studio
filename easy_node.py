@@ -92,13 +92,15 @@ class CCMediaImageEdit:
                             'model_id':(['z-image-turbo','sdxl-lightning'],),'task':(['img2img','inpaint'],),
                             'strength':('FLOAT',{'default':0.6,'min':0.05,'max':1.0,'step':0.05}),
                             'seed':('INT',{'default':42,'min':0,'max':2147483647}),'size':(list(SIZES),)},
-                'optional':{'mask':('MASK',),'steps':('INT',{'default':9,'min':1,'max':50}),'use_model_defaults':('BOOLEAN',{'default':True})}}
+                'optional':{'mask':('MASK',),'steps':('INT',{'default':9,'min':1,'max':50}),'use_model_defaults':('BOOLEAN',{'default':True}),
+                            'feather':('INT',{'default':0,'min':0,'max':64,'step':1})}}
     RETURN_TYPES=('IMAGE',)
     FUNCTION='edit'
     CATEGORY='CC Media Studio'
-    def edit(self,prompt,image,model_id,task,strength,seed,size,mask=None,steps=9,use_model_defaults=True):
+    def edit(self,prompt,image,model_id,task,strength,seed,size,mask=None,steps=9,use_model_defaults=True,feather=0):
         if task=='inpaint' and mask is None:raise RuntimeError('局部编辑需要连接 MASK（白色/1 为重绘区域）。')
         backend=shared_backend()
         raw,stats=backend.generate(prompt,seed,default_steps(model_id,steps,use_model_defaults),model_id=model_id,size=size,task=task,
-            strength=strength,image=tensor_png(image),mask=tensor_png(mask,'L') if task=='inpaint' else None)
+            strength=strength,image=tensor_png(image),mask=tensor_png(mask,'L') if task=='inpaint' else None,
+            **({'feather':feather} if task=='inpaint' and feather else {}))
         return (png_tensor(raw),)

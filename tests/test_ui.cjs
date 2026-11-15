@@ -188,3 +188,19 @@ test('random seed and cancelling a batch skip the queued tasks',async()=>{
     assert.match(p.elements.get('status').textContent,/已取消 2 张/);
     assert.equal(p.elements.get('cancelQueued').style.display,'none');
 });
+test('language matches the video and gallery pages: Chinese unless English was chosen',()=>{
+    const run=(saved,language)=>{
+        const storage=new Map(saved?[['cc-media-language',saved]]:[]);
+        const context=vm.createContext({fetch:async()=>{throw Error('offline')},Date,Promise,setTimeout:()=>0,
+            navigator:{language},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},
+            document:{getElementById(){return {style:{},value:'',disabled:false}}},
+            sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}}});
+        try{vm.runInContext(source,context)}catch{}
+        return vm.runInContext('uiLanguage',context);
+    };
+    // An English or unset system language (as on some Android WebViews) still opens in Chinese.
+    assert.equal(run(null,'en-US'),'zh');
+    assert.equal(run(null,''),'zh');
+    assert.equal(run('en','zh-CN'),'en');
+    assert.equal(run('zh','en-US'),'zh');
+});

@@ -229,6 +229,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
           pattern: installers-*
@@ -238,4 +239,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "CC Media Studio $GITHUB_REF_NAME" --generate-notes
+        shell: bash
+        run: |
+          # Tags such as v0.10.0-rc.1 are previews: publish them as prereleases.
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag "${flags[@]}" --title "CC Media Studio $GITHUB_REF_NAME" \
+            --notes-file packaging/release-notes.md --generate-notes

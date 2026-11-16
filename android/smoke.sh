@@ -20,17 +20,25 @@ collect() {
   adb logcat -d > "$out/logcat.txt" || true
 }
 if [ "$ok" != 1 ]; then collect; echo "Studio server did not start"; grep -iE "python|chaquopy|ccmedia|AndroidRuntime" "$out/logcat.txt" | tail -80; exit 1; fi
-curl -fsS http://127.0.0.1:8787/health | tee "$out/health.json" | grep -q '"qwen-studio"'
-page=$(curl -fsS http://127.0.0.1:8787/)
-grep -q 'CC Media Studio' <<<"$page"
-nonce=$(grep -o "const nonce='[^']*'" <<<"$page" | cut -d"'" -f2)
+# Save each response before searching it: "curl | grep -q" fails under
+# pipefail when grep exits early and curl cannot finish writing.
+fetch() { curl -fsS --max-time 20 "$@"; }
+fetch -o "$out/health.json" http://127.0.0.1:8787/health
+grep -q '"qwen-studio"' "$out/health.json"
+fetch -o "$out/index.html" http://127.0.0.1:8787/
+grep -q 'CC Media Studio' "$out/index.html"
+nonce=$(grep -o "const nonce='[^']*'" "$out/index.html" | cut -d"'" -f2)
 # Goes through StudioClient to the worker thread inside the app.
-curl -fsS -H "X-Local-Session: $nonce" http://127.0.0.1:8787/configuration | tee "$out/configuration.json" | grep -q '"configured"'
-curl -fsS http://127.0.0.1:8787/video | grep -q 'CC Media Studio'
-curl -fsS http://127.0.0.1:8787/gallery | grep -q 'CC Media Studio'
+fetch -o "$out/configuration.json" -H "X-Local-Session: $nonce" http://127.0.0.1:8787/configuration
+grep -q '"configured"' "$out/configuration.json"
+for page in video gallery; do
+  fetch -o "$out/$page.html" "http://127.0.0.1:8787/$page"
+  grep -q 'CC Media Studio' "$out/$page.html"
+done
 # The page itself must have loaded in the WebView (not the "starting" text).
 sleep 8
-adb shell dumpsys activity activities | grep -q "com.ccmedia.studio/.MainActivity"
+adb shell dumpsys activity activities > "$out/activities.txt"
+grep -q "com.ccmedia.studio/.MainActivity" "$out/activities.txt"
 collect
 if grep -q "FATAL EXCEPTION" "$out/logcat.txt"; then grep -A20 "FATAL EXCEPTION" "$out/logcat.txt"; exit 1; fi
 echo "Android smoke test passed"

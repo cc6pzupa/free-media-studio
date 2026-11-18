@@ -23,7 +23,10 @@ details.think{margin:0 0 8px;font-size:12px;color:var(--muted)}details.think div
 .meta{font-size:11px;color:var(--muted);margin-top:6px}.composer{border-top:1px solid var(--line);padding:14px 18px;display:flex;gap:10px;align-items:flex-end}
 .composer textarea{min-height:52px;max-height:200px}.empty{margin:auto;text-align:center;color:var(--muted);max-width:340px;line-height:1.8;font-size:14px}
 code.copy{display:flex;justify-content:space-between;gap:8px;background:#f7f6fc;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px;margin:5px 0;overflow-wrap:anywhere}
-code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}[hidden]{display:none!important}
+code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}
+.tools{display:grid;gap:8px;margin-top:8px}.tool{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.6}
+.tool b{font-size:13px}.tool .state{color:var(--muted)}.tool .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.tool button{padding:4px 10px;font-size:12px}
+.tool .ok{color:#2f8f6b}.log{max-height:180px;overflow:auto;background:#1d1b2b;color:#dcd8ef;font-size:11px;border-radius:8px;padding:8px;white-space:pre-wrap;overflow-wrap:anywhere}[hidden]{display:none!important}
 @media(max-width:900px){main{grid-template-columns:1fr;padding:0 14px;margin:16px auto}.chat{height:auto;min-height:70vh}.msg{max-width:96%}}
 </style></head><body>
 <header><h1>CC Media Studio <span class="tag">CHAT PREVIEW</span></h1>
@@ -55,6 +58,12 @@ code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}[hidden]{display:n
   <code class="copy"><span id="apiKey"></span><button class="secondary" data-copy="apiKey">复制</button></code>
   <code class="copy"><span id="apiModel"></span><button class="secondary" data-copy="apiModel">复制</button></code>
  </details>
+ <details id="toolsBox" style="margin-top:12px"><summary data-t="toolsTitle">本机 AI 工具</summary>
+  <p class="hint" data-t="toolsHint">自动查找这台电脑上能用 OpenAI 接口的工具，一键接入当前模型。只会新增设置，修改前备份原文件。</p>
+  <p class="hint warn" id="toolsWarn" hidden data-t="toolsWarn">账号未勾选“记住”：本机 Key 每次启动都会变，接入的工具在重启后需要重新接入。</p>
+  <div id="tools" class="tools"></div>
+  <pre id="toolLog" class="log" hidden></pre>
+ </details>
 </section>
 <section class="card chat" aria-label="Chat">
  <div class="messages" id="messages" aria-live="polite"><div class="empty" id="empty" data-t="empty">先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。</div></div>
@@ -64,9 +73,11 @@ code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}[hidden]{display:n
 </main>
 <script>
 // ---- Pure helpers (tested in tests/test_chat_ui.cjs) ----
-const TEXT={zh:{navImage:'图片',navVideo:'视频',navGallery:'画廊',modelTitle:'语言模型',nameLabel:'模型名称（Hugging Face）',nameHint:'自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。',contextLabel:'上下文长度',load:'查找并加载',altLabel:'其他版本',useAlt:'改用',settings:'对话设置',systemLabel:'系统提示（可选）',tempLabel:'温度',maxLabel:'最多生成',apiTitle:'在其他工具中调用（OpenAI 兼容）',apiHint:'Base URL、API Key 与模型名填入支持 OpenAI 接口的工具即可；请求里换一个模型名会自动改为加载该模型。',empty:'先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。',inputPlaceholder:'输入消息，Enter 发送，Shift+Enter 换行',send:'发送',clear:'清空',copy:'复制',copied:'已复制',
+const TEXT={zh:{navImage:'图片',navVideo:'视频',navGallery:'画廊',modelTitle:'语言模型',nameLabel:'模型名称（Hugging Face）',nameHint:'自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。',contextLabel:'上下文长度',load:'查找并加载',altLabel:'其他版本',useAlt:'改用',settings:'对话设置',systemLabel:'系统提示（可选）',tempLabel:'温度',maxLabel:'最多生成',apiTitle:'在其他工具中调用（OpenAI 兼容）',apiHint:'Base URL、API Key 与模型名填入支持 OpenAI 接口的工具即可；请求里换一个模型名会自动改为加载该模型。',empty:'先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。',toolsTitle:'本机 AI 工具',toolsHint:'自动查找这台电脑上能用 OpenAI 接口的工具，一键接入当前模型。只会新增设置，修改前备份原文件。',toolsWarn:'账号未勾选“记住”：本机 Key 每次启动都会变，接入的工具在重启后需要重新接入。',
+ tool:{installed:'已安装',missing:'未安装',connected:'已接入',connect:'一键接入',reconnect:'重新接入',install:'安装',launch:'启动',site:'官网',manual:'在该软件的模型设置中添加 OpenAI 兼容服务，填入上方 Base URL、API Key 和模型名。',done:'已接入：',backup:'原文件已备份：',run:'使用：',installing:'正在安装…',launched:'已启动：'},inputPlaceholder:'输入消息，Enter 发送，Shift+Enter 换行',send:'发送',clear:'清空',copy:'复制',copied:'已复制',
  placement:{gpu:'全部在 GPU',hybrid:'GPU + 内存',cpu:'仅 CPU'},thinking:'思考过程',noModel:'请先加载模型。',needName:'请输入模型名称。',loaded:'已加载',estimate:'预计',measured:'本次',slow:'预计速度很慢；纯 CPU 时建议改用混合专家模型（如 Qwen3-30B-A3B）。',waiting:'正在连接 Kaggle 会话…',notConfigured:'请先在图片页“账号与连接”中保存 Kaggle 账号（自动账号模式）。',apiKeyMissing:'（保存账号后显示）',failed:'失败：'},
- en:{navImage:'Images',navVideo:'Video',navGallery:'Gallery',modelTitle:'Language model',nameLabel:'Model name (Hugging Face)',nameHint:'Searches Hugging Face for GGUF builds and picks the highest-quality one that fits this session (dual T4 + RAM).',contextLabel:'Context length',load:'Find and load',altLabel:'Other builds',useAlt:'Use',settings:'Chat settings',systemLabel:'System prompt (optional)',tempLabel:'Temperature',maxLabel:'Max tokens',apiTitle:'Use from other tools (OpenAI-compatible)',apiHint:'Enter the base URL, API key and model name in any tool that speaks the OpenAI API. A request naming another model loads that model.',empty:'Load a model on the left, then start chatting. The model runs on your Kaggle session; chats are not sent to other services.',inputPlaceholder:'Message. Enter sends, Shift+Enter adds a line',send:'Send',clear:'Clear',copy:'Copy',copied:'Copied',
+ en:{navImage:'Images',navVideo:'Video',navGallery:'Gallery',modelTitle:'Language model',nameLabel:'Model name (Hugging Face)',nameHint:'Searches Hugging Face for GGUF builds and picks the highest-quality one that fits this session (dual T4 + RAM).',contextLabel:'Context length',load:'Find and load',altLabel:'Other builds',useAlt:'Use',settings:'Chat settings',systemLabel:'System prompt (optional)',tempLabel:'Temperature',maxLabel:'Max tokens',apiTitle:'Use from other tools (OpenAI-compatible)',apiHint:'Enter the base URL, API key and model name in any tool that speaks the OpenAI API. A request naming another model loads that model.',empty:'Load a model on the left, then start chatting. The model runs on your Kaggle session; chats are not sent to other services.',toolsTitle:'AI tools on this computer',toolsHint:'Finds tools on this computer that speak the OpenAI API and connects them to the current model. Settings are only added, and changed files are backed up first.',toolsWarn:'The account is not saved with Remember: the local key changes at every start, so connected tools must be connected again after a restart.',
+ tool:{installed:'Installed',missing:'Not installed',connected:'Connected',connect:'Connect',reconnect:'Connect again',install:'Install',launch:'Start',site:'Website',manual:'In its model settings, add an OpenAI-compatible service with the base URL, API key and model name above.',done:'Connected: ',backup:'Backup: ',run:'Use: ',installing:'Installing…',launched:'Started: '},inputPlaceholder:'Message. Enter sends, Shift+Enter adds a line',send:'Send',clear:'Clear',copy:'Copy',copied:'Copied',
  placement:{gpu:'all on GPU',hybrid:'GPU + RAM',cpu:'CPU only'},thinking:'Thinking',noModel:'Load a model first.',needName:'Enter a model name.',loaded:'Loaded',estimate:'Estimated',measured:'This reply',slow:'Expected to be slow; on CPU only, a mixture-of-experts model (such as Qwen3-30B-A3B) is faster.',waiting:'Connecting to the Kaggle session…',notConfigured:'Save your Kaggle account under Account & connection on the image page first (automatic account mode).',apiKeyMissing:'(shown after saving an account)',failed:'Failed: '}};
 function splitThinking(text){
  // Qwen3 and DeepSeek-R1 style <think>…</think>; an unclosed block is still being written.
@@ -182,6 +193,48 @@ async function send(){
  }catch(error){history.push({role:'error',content:tx().failed+error.message})}
  finally{setBusy(false);render();try{sessionStorage.setItem('cc.media.chat.history',JSON.stringify(history.slice(-60)))}catch{}}
 }
+async function loadTools(){
+ try{const r=await fetch('/harness',{headers:{'X-Local-Session':nonce}});if(r.ok)renderTools(await r.json())}catch{}
+}
+function toolLog(text){const log=$('toolLog');log.hidden=false;log.textContent+=text+'\n';log.scrollTop=log.scrollHeight}
+async function toolAction(action,tool){
+ const T=tx().tool;$('toolLog').textContent='';
+ try{
+  if(action==='install'){toolLog(T.installing);await postLines('/harness/install',{id:tool.id},e=>{if(e.type==='output')toolLog(e.line)});}
+  else{
+   const r=await fetch('/harness/'+action,{method:'POST',headers:{'X-Local-Session':nonce,'Content-Type':'application/json'},
+     body:JSON.stringify({id:tool.id,model:(model&&model.name)||$('name').value.trim()})});
+   const d=await r.json();if(!r.ok)throw new Error(d.error.message);
+   if(action==='launch'){toolLog(T.launched+d.url);window.open(d.url,'_blank')}
+   else{toolLog(T.done+d.files.join(', '));if(d.backup)toolLog(T.backup+d.backup);if(d.run)toolLog(T.run+d.run)}
+  }
+ }catch(error){toolLog(tx().failed+error.message)}
+ loadTools();
+}
+function renderTools(data){
+ const T=tx().tool,box=$('tools');box.replaceChildren();$('toolsWarn').hidden=!!data.remembered;
+ for(const tool of data.tools||[]){
+  const row=document.createElement('div');row.className='tool';
+  const name=document.createElement('b');name.textContent=tool.name;
+  const state=document.createElement('div');state.className='state';
+  state.textContent=(tool.installed?T.installed+(tool.version?' · '+tool.version:''):T.missing)+(tool.state&&tool.state.configured?' · ':'');
+  if(tool.state&&tool.state.configured){const ok=document.createElement('span');ok.className='ok';ok.textContent=T.connected;state.append(ok)}
+  row.append(name,state);
+  const actions=document.createElement('div');actions.className='actions';
+  const add=(label,fn,secondary)=>{const b=document.createElement('button');b.type='button';b.textContent=label;if(secondary)b.className='secondary';b.onclick=fn;actions.append(b)};
+  if(tool.unsupported){const note=document.createElement('div');note.className='state';note.textContent=tool.unsupported;row.append(note)}
+  else{
+   if(tool.configure&&(tool.installed||tool.id==='continue'))add(tool.state&&tool.state.configured?T.reconnect:T.connect,()=>toolAction('configure',tool));
+   if(tool.launch&&tool.installed)add(T.launch,()=>toolAction('launch',tool));
+   if(tool.can_install)add(T.install,()=>toolAction('install',tool),true);
+   if(tool.manual&&tool.installed){const note=document.createElement('div');note.className='state';note.textContent=T.manual;row.append(note)}
+   if(!tool.installed&&!tool.can_install&&tool.site){const a=document.createElement('a');a.href=tool.site;a.target='_blank';a.rel='noopener';a.textContent=T.site+' ↗';actions.append(a)}
+  }
+  if(tool.install_hint&&!tool.installed&&!tool.can_install){const hint=document.createElement('div');hint.className='state';hint.textContent=tool.install_hint;row.append(hint)}
+  if(actions.children.length)row.append(actions);
+  box.append(row);
+ }
+}
 async function init(){
  lang=readSaved('cc-media-language')==='en'?'en':'zh';$('lang').value=lang;
  $('lang').onchange=()=>{lang=$('lang').value;save('cc-media-language',lang);applyLanguage()};
@@ -201,6 +254,7 @@ async function init(){
   const status=await (await fetch('/llm/status',{headers:{'X-Local-Session':nonce}})).json();
   if(status.model){model=status.model;$('name').value=model.name;renderModel()}
  }catch{}
+ $('toolsBox').addEventListener('toggle',()=>{if($('toolsBox').open)loadTools()});
 }
 if(typeof window!=='undefined'&&typeof document!=='undefined'&&document.getElementById('messages'))init();
 </script></body></html>

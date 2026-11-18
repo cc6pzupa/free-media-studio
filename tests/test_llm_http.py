@@ -60,7 +60,9 @@ class LlmHttpTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
-        cls.env = mock.patch.dict(os.environ, {'EASY_CONFIG_PATH': str(Path(cls.temp.name) / 'settings.json')})
+        cls.env = mock.patch.dict(os.environ, {'EASY_CONFIG_PATH': str(Path(cls.temp.name) / 'settings.json'),
+                                               'CC_MEDIA_HOME': str(Path(cls.temp.name) / 'home'),
+                                               'XDG_CONFIG_HOME': str(Path(cls.temp.name) / 'home' / '.config')})
         cls.env.start()
         cls.fake = FakeLlmBackend()
         ready = threading.Event()
@@ -169,6 +171,22 @@ class LlmHttpTests(unittest.TestCase):
         self.assertIn('role', json.loads(data)['error']['message'])
         status, _, data = self.request('POST', '/llm/prepare', {'name': '../etc/passwd'}, self.ui())
         self.assertEqual(json.loads(data.splitlines()[-1])['type'], 'error')
+
+    def test_6_local_tools(self):
+        status, _, data = self.request('GET', '/harness', headers=self.ui())
+        listing = json.loads(data)
+        self.assertEqual(status, 200)
+        self.assertEqual(listing['base_url'], 'http://127.0.0.1:%d/v1' % self.port)
+        self.assertIn('aider', [t['id'] for t in listing['tools']])
+        status, _, data = self.request('POST', '/harness/configure', {'id': 'aider', 'model': 'Qwen3-8B'}, self.ui())
+        self.assertEqual(status, 200, data)
+        written = (Path(self.temp.name) / 'home' / '.aider.cc-media.conf.yml').read_text()
+        self.assertIn('openai-api-key: ' + KEY, written)
+        self.assertIn('openai-api-base: http://127.0.0.1:%d/v1' % self.port, written)
+        status, _, _ = self.request('POST', '/harness/configure', {'id': 'aider', 'model': 'x'}, {'X-Local-Session': 'wrong'})
+        self.assertEqual(status, 401)
+        status, _, data = self.request('POST', '/harness/install', {'id': 'continue'}, self.ui())
+        self.assertEqual(status, 400)
 
     def test_5_chat_keeps_the_session_from_idle_release(self):
         before = self.core.idle_since

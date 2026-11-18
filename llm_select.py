@@ -100,9 +100,9 @@ def active_fraction(config):
 def plan(bytes_, hardware, kv_per_token=None, context=8192, active=1.0):
     """Where a build of this size runs, and roughly how fast. None if it does not fit at all.
 
-    hardware: {'gpus': [MiB per GPU], 'ram_gib': system RAM, 'gpu_gbps': memory
-    bandwidth per GPU, 'cpu_gbps': system RAM bandwidth}. Decoding is limited
-    by memory bandwidth, so speed is estimated from the bytes read per token.
+    hardware: {'gpus': [MiB per GPU], 'ram_gib': system RAM, optional 'gpu_rate'
+    and 'cpu_rate' in effective bytes/s}. Decoding is limited by memory
+    bandwidth, so speed is estimated from the bytes read per token.
     """
     kv = (kv_per_token or 160 * 1024) * context
     gpus = hardware.get('gpus') or []
@@ -111,8 +111,10 @@ def plan(bytes_, hardware, kv_per_token=None, context=8192, active=1.0):
     usable_ram = max(0, (hardware.get('ram_gib', 0) - 7) * 2**30)  # the system and Python keep some
     need = bytes_ + kv
     per_token = bytes_ * active
-    gpu_rate = hardware.get('gpu_gbps', 300) * 1e9 * 0.55
-    cpu_rate = hardware.get('cpu_gbps', 20) * 1e9 * 0.55
+    # Effective bytes per second while decoding, measured on Kaggle (Qwen3-8B Q4_K_M):
+    # 37 tok/s with llama.cpp on two T4s, 3.6 tok/s on the session's 4 CPU cores.
+    gpu_rate = hardware.get('gpu_rate', 185e9)
+    cpu_rate = hardware.get('cpu_rate', 18e9)
     if gpus and need <= usable_gpu:
         # Layers are split across GPUs and run one after another, so one GPU's bandwidth applies.
         return {'placement': 'gpu', 'gpu_share': 1.0, 'tok_per_s': round(gpu_rate / per_token, 1), 'need_bytes': need}
@@ -140,11 +142,16 @@ def choose(builds, hardware, config=None, context=8192, min_tok_per_s=4.0):
         return None, []
     rank = {'gpu': 0, 'hybrid': 1, 'cpu': 1}
 
+    any_fast = any(o['tok_per_s'] >= min_tok_per_s and o['bits'] >= MIN_GOOD_BITS for o in options)
+
     def score(option):
         good = option['bits'] >= MIN_GOOD_BITS
         fast = option['tok_per_s'] >= min_tok_per_s
-        # Readable quality first, then fully on GPU, then usable speed, then more bits.
-        return (good and fast, rank[option['placement']] == 0, fast, min(option['bits'], 8.5), option['tok_per_s'])
+        if any_fast:
+            # Readable and usable builds first; among them fully on GPU, then the most bits.
+            return (good and fast, rank[option['placement']] == 0, min(option['bits'], 8.5), option['tok_per_s'])
+        # Nothing reaches a usable speed: readable quality, then the fastest.
+        return (good, rank[option['placement']] == 0, option['tok_per_s'], option['bits'])
     options.sort(key=score, reverse=True)
     return options[0], options
 
@@ -157,7 +164,8 @@ def _get(url, timeout=30):
 
 def search_repos(name, limit=20):
     """GGUF repositories for a model name, most downloaded first."""
-    query = urllib.parse.urlencode({'search': name, 'filter': 'gguf', 'sort': 'downloads', 'direction': -1, 'limit': limit})
+    # The hub's search matches repository names, which seldom contain the original organization.
+    query = urllib.parse.urlencode({'search': name.split('/')[-1], 'filter': 'gguf', 'sort': 'downloads', 'direction': -1, 'limit': limit})
     return [item['id'] for item in _get(HF + '/api/models?' + query)]
 
 
@@ -174,13 +182,36 @@ def base_config(name, repo):
     model = repo.split('/')[1]
     for suffix in ('-GGUF', '-gguf', '-Instruct-GGUF'):
         model = model.replace(suffix, '')
-    candidates += [owner + '/' + model, 'Qwen/' + model, 'meta-llama/' + model, 'mistralai/' + model, 'google/' + model]
+    original = name.split('/')[-1]
+    # The original first; public mirrors when it is gated (Llama, Gemma).
+    candidates += [owner + '/' + model, 'Qwen/' + original, 'unsloth/' + original, 'meta-llama/' + original,
+                   'mistralai/' + original, 'google/' + original, 'NousResearch/' + original]
     for candidate in dict.fromkeys(candidates):
         try:
             return _get(HF + '/%s/resolve/main/config.json' % candidate, 15)
         except Exception:
             continue
     return None
+
+
+KNOWN_ORGS = ('qwen', 'metallama', 'mistralai', 'google', 'microsoft', 'deepseekai', 'nvidia', 'ibmgranite', 'thudm', 'zaiorg', 'openai')
+
+
+def _norm(text):
+    return re.sub(r'[^a-z0-9]', '', text.lower())
+
+
+def same_model(name, repo):
+    """True when the repository converts exactly this model: not a fine-tune,
+    an "abliterated" or merged variant, or another model built on it."""
+    wanted = _norm(name.split('/')[-1]).replace('gguf', '')
+    owner = _norm(name.split('/')[0]) if '/' in name else None
+    model = _norm(re.sub(r'[-_.]?gguf$', '', repo.split('/')[-1], flags=re.I))
+    if not model.endswith(wanted):
+        return False
+    prefix = model[:-len(wanted)] if wanted else model
+    # bartowski writes "Qwen_Qwen3-32B", others "meta-llama.Llama-3.3-70B-Instruct".
+    return prefix == '' or prefix == owner or prefix in KNOWN_ORGS
 
 
 def rank_repos(name, repos):
@@ -200,7 +231,10 @@ def rank_repos(name, repos):
 
 def find(name, hardware, context=8192, max_repos=4):
     """Search Hugging Face and return the chosen build with its repository and alternatives."""
-    repos = [name] if name.lower().endswith('gguf') and '/' in name else rank_repos(name, search_repos(name))[:max_repos]
+    if name.lower().endswith('gguf') and '/' in name:
+        repos = [name]
+    else:
+        repos = rank_repos(name, [r for r in search_repos(name, 40) if same_model(name, r)])[:max_repos]
     best = None
     considered = []
     for repo in repos:

@@ -84,7 +84,42 @@ class Choosing(unittest.TestCase):
         self.assertEqual(s.choose(s.gguf_builds(huge), T4X2, {}, 8192), (None, []))
 
 
+class MeasuredOnKaggle(unittest.TestCase):
+    # Qwen3-8B Q4_K_M (5.0 GB): 37 tok/s on two T4s with llama.cpp, 3.6 tok/s on 4 CPU cores.
+    QWEN3_8B = {'num_hidden_layers': 36, 'num_attention_heads': 32, 'num_key_value_heads': 8, 'head_dim': 128}
+
+    def test_estimates_match_the_measurements(self):
+        gpu = s.plan(5.03 * GB, T4X2, s.kv_bytes_per_token(self.QWEN3_8B), 8192)
+        cpu = s.plan(5.03 * GB, CPU_SESSION, s.kv_bytes_per_token(self.QWEN3_8B), 8192)
+        self.assertEqual(gpu['placement'], 'gpu')
+        self.assertAlmostEqual(gpu['tok_per_s'], 37, delta=4)
+        self.assertEqual(cpu['placement'], 'cpu')
+        self.assertAlmostEqual(cpu['tok_per_s'], 3.6, delta=0.5)
+
+    def test_cpu_session_prefers_speed_when_nothing_is_fast(self):
+        builds = s.gguf_builds(files(('Qwen3-8B-Q4_K_M.gguf', 5.03 * GB), ('Qwen3-8B-Q5_K_M.gguf', 5.85 * GB),
+                                     ('Qwen3-8B-Q8_0.gguf', 8.71 * GB)))
+        chosen, _ = s.choose(builds, CPU_SESSION, self.QWEN3_8B, 8192)
+        self.assertEqual(chosen['quant'], 'Q4_K_M')
+        # With the GPUs, quality wins: Q8_0 still runs far above the usable speed.
+        chosen, _ = s.choose(builds, T4X2, self.QWEN3_8B, 8192)
+        self.assertEqual(chosen['quant'], 'Q8_0')
+
+
 class Repositories(unittest.TestCase):
+    def test_only_the_model_itself_and_plain_conversions(self):
+        keep = [('Qwen3-32B', 'Qwen/Qwen3-32B-GGUF'), ('Qwen3-32B', 'bartowski/Qwen_Qwen3-32B-GGUF'),
+                ('meta-llama/Llama-3.3-70B-Instruct', 'bartowski/Llama-3.3-70B-Instruct-GGUF'),
+                ('meta-llama/Llama-3.3-70B-Instruct', 'x/meta-llama.Llama-3.3-70B-Instruct-GGUF')]
+        drop = [('Qwen3-32B', 'mradermacher/Qwen3-32B-abliterated-GGUF'),
+                ('Qwen3-8B', 'unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF'),
+                ('Qwen3-30B-A3B', 'unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF'),
+                ('Qwen3-8B', 'someone/Qwen3-8B-Uncensored-GGUF')]
+        for name, repo in keep:
+            self.assertTrue(s.same_model(name, repo), repo)
+        for name, repo in drop:
+            self.assertFalse(s.same_model(name, repo), repo)
+
     def test_official_then_trusted_then_downloads(self):
         repos = ['someone/Qwen3-32B-GGUF', 'bartowski/Qwen_Qwen3-32B-GGUF', 'Qwen/Qwen3-32B-GGUF', 'unsloth/Qwen3-32B-GGUF', 'x/Other-GGUF']
         ranked = s.rank_repos('Qwen3-32B', repos)
@@ -115,6 +150,30 @@ class Repositories(unittest.TestCase):
         self.assertEqual(best['quant'], 'Q5_K_M')
         self.assertEqual(best['kv_bytes_per_token'], 262144)
         self.assertIn('search=Qwen3-32B', calls[0])
+
+    def test_search_drops_the_organization_and_variants(self):
+        calls = []
+        def get(url, timeout=30):
+            calls.append(url)
+            if '/api/models?' in url:
+                return [{'id': 'm/Llama-3.3-70B-Instruct-abliterated-GGUF'}, {'id': 'bartowski/Llama-3.3-70B-Instruct-GGUF'}]
+            if url.endswith('/tree/main?recursive=true'):
+                return files(('Llama-3.3-70B-Instruct-Q4_K_M.gguf', 42.5 * GB), ('Llama-3.3-70B-Instruct-Q2_K.gguf', 26.4 * GB))
+            if 'meta-llama/' in url:
+                raise OSError('gated')
+            if url.endswith('unsloth/Llama-3.3-70B-Instruct/resolve/main/config.json'):
+                return {'num_hidden_layers': 80, 'num_attention_heads': 64, 'num_key_value_heads': 8, 'hidden_size': 8192}
+            raise OSError(url)
+        original = s._get
+        s._get = get
+        try:
+            best, considered = s.find('meta-llama/Llama-3.3-70B-Instruct', T4X2)
+        finally:
+            s._get = original
+        self.assertIn('search=Llama-3.3-70B-Instruct', calls[0])
+        self.assertNotIn('meta-llama', calls[0])
+        self.assertEqual([c['repo'] for c in considered], ['bartowski/Llama-3.3-70B-Instruct-GGUF'])
+        self.assertEqual(best['kv_bytes_per_token'], 2 * 80 * 8 * 128 * 2)  # from the public mirror
 
 
 if __name__ == '__main__':

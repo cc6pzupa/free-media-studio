@@ -23,6 +23,8 @@
 
 从 [Releases](https://github.com/cc6pzupa/free-media-studio/releases) 下载 Windows、macOS Intel / Apple Silicon 或 Linux deb/rpm 安装包，内含 Python 运行环境。图片与视频工作台提供历史画廊，支持搜索、收藏、预览和下载。[安装与画廊说明](docs/installers.md)
 
+**语言模型、多账号与本机 AI 工具（预览）**：在 Kaggle 上运行大模型，自动从 Hugging Face 选择最合适的量化版本；聊天页与 OpenAI 兼容接口；保存多个账号并切换（不中断会话）；一键接入本机的 OpenCode、Aider、Continue 等工具。[说明](docs/llm.md)
+
 **安卓（预览）**：Android 10+ 64 位手机可安装 APK，界面与桌面版相同，生成仍在 Kaggle 上进行。[安卓说明](docs/android.md)
 
 ## 源码安装与启动

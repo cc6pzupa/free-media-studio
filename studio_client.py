@@ -53,7 +53,7 @@ class StudioClient:
         self.allow_job_inheritance=allow_job_inheritance
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False;self.video_options_supported=False;self.llm_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False;self.video_options_supported=False;self.llm_supported=False;self.accounts_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -80,6 +80,7 @@ class StudioClient:
                 self.cancel_supported=result.get('cancel') is True
                 self.video_options_supported=result.get('video_options') is True
                 self.llm_supported=result.get('llm') is True
+                self.accounts_supported=result.get('accounts') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -174,6 +175,17 @@ class StudioClient:
         if final is None:raise RuntimeError('语言模型请求中断。')
         if final['type']=='error':raise LlmError(final.get('message') or '语言模型请求失败。')
         return final
+
+    def accounts(self):
+        self.ensure()
+        if not self.accounts_supported:return {'accounts':[],'restart_required':True}
+        return self._request('GET','/accounts')
+
+    def account_action(self,action,user):
+        if action not in ('switch','release','forget'):raise ValueError('Unknown account action')
+        self.ensure()
+        if not self.accounts_supported:raise RuntimeError('请重启本机后台以启用多账号。 / Restart the local worker to enable accounts.')
+        return self._request('POST','/accounts/'+action,{'user':user})
 
     def llm_status(self):
         self.ensure()

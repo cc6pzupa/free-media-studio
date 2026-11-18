@@ -70,11 +70,39 @@ def normalize_config(config):
     return result
 
 
+def read_settings():
+    path=config_path()
+    try:return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
+    except (OSError,ValueError):return {}
+
+
+def saved_profiles(settings=None):
+    """Saved accounts by user name. Older files hold a single account at the top level."""
+    settings=read_settings() if settings is None else settings
+    profiles=settings.get('profiles')
+    if isinstance(profiles,dict):return {user:dict(config) for user,config in profiles.items() if isinstance(config,dict)}
+    if settings.get('user'):
+        return {settings['user']:{key:value for key,value in settings.items() if key not in ('api_key','profiles','active')}}
+    return {}
+
+
+def write_settings(profiles,active,api_key):
+    """Write every saved account; the active one is also copied to the top level for older versions."""
+    if not profiles:
+        config_path().unlink(missing_ok=True);return
+    data={'profiles':profiles,'active':active if active in profiles else None,'api_key':api_key}
+    if active in profiles:data.update(profiles[active])
+    private_write(config_path(),json.dumps(data,ensure_ascii=False).encode('utf-8'))
+
+
 def load_config():
     path = config_path()
     if path.is_file():
         try:
             saved=json.loads(path.read_text(encoding='utf-8'))
+            if isinstance(saved.get('profiles'),dict):
+                saved=dict(saved['profiles'].get(saved.get('active')) or {})
+                if not saved:return None
             saved.setdefault('mode','batch')
             return normalize_config(saved)
         except (OSError,ValueError,TypeError,AttributeError):return None
@@ -292,6 +320,10 @@ class JobStore:
         with self.lock:
             return self.db.execute("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running')").fetchone()[0]
 
+    def pending_for(self,config_hash):
+        with self.lock:
+            return self.db.execute("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running') AND config_hash=?",(config_hash,)).fetchone()[0]
+
     def active_id(self):
         with self.lock:
             row=self.db.execute("SELECT id FROM jobs WHERE state IN ('running','queued') ORDER BY CASE state WHEN 'running' THEN 0 ELSE 1 END,rowid LIMIT 1").fetchone()
@@ -394,6 +426,8 @@ class StudioCore:
         self.worker=None
         self.idle_since=None;self.session_state='not_started';self.releasing=False;self.release_retry_at=0
         self.llm_active=0  # chat or model preparation in progress: never release the session meanwhile
+        # Accounts switched away from keep their Kaggle session, queued jobs and idle timer.
+        self.parked={}
         self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=None
         self.quota_lock=threading.Lock()
         initial=load_config()
@@ -406,30 +440,139 @@ class StudioCore:
             if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
             changed=fingerprint!=self.fingerprint
             if not changed and 'keep_alive_minutes' not in config:normalized['keep_alive_minutes']=self.config['keep_alive_minutes']
-            if changed and self.backend is not None and self.store.pending():raise ValueError('队列尚有任务，请完成后再切换账号或连接配置。')
-            candidate=self.factory(normalized) if changed else self.backend
+            # Automatic-account sessions survive a switch; other connections cannot be kept.
+            keeps_sessions=callable(getattr(self.backend,'release_session',None))
+            if changed and self.backend is not None and self.store.pending() and not keeps_sessions:
+                raise ValueError('队列尚有任务，请完成后再切换账号或连接配置。')
+            parked=self.parked.pop(fingerprint,None) if changed else None
+            candidate=(parked['backend'] if parked else self.factory(normalized)) if changed else self.backend
             try:
                 if remember is True:
                     if not isinstance(api_key,str) or not api_key:raise ValueError('缺少本机 API 密钥。')
-                    private_write(config_path(),json.dumps(dict(normalized,api_key=api_key),ensure_ascii=False).encode('utf-8'))
+                    profiles=saved_profiles();profiles[normalized['user']]=normalized
+                    write_settings(profiles,normalized['user'],api_key)
                 elif remember is False:
-                    config_path().unlink(missing_ok=True)
+                    settings=read_settings();profiles=saved_profiles(settings);profiles.pop(normalized['user'],None)
+                    write_settings(profiles,None,settings.get('api_key'))
             except Exception:
-                if changed and candidate:
+                if parked:self.parked[fingerprint]=parked
+                elif changed and candidate:
                     try:candidate.close()
                     except Exception:pass
                 raise
             if not changed:
                 self.config=normalized
                 return
-            previous=self.backend
+            previous=(self.backend,self.config,self.fingerprint,self.idle_since,self.session_state)
             self.backend=candidate;self.config=normalized;self.fingerprint=fingerprint
-            self.idle_since=None;self.session_state='not_started'
+            if parked:
+                self.idle_since=parked['idle_since'];self.session_state=parked['session_state'];self.release_retry_at=0
+            else:
+                self.idle_since=None;self.session_state='not_started'
             self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=None
-            if previous:
-                try:previous.close()
-                except Exception:pass
+            self._park(*previous)
         self.wake.set()
+
+    def _park(self,backend,config,fingerprint,idle_since,session_state):
+        """Keep an account switched away from while its session or queued jobs need it."""
+        if backend is None:return
+        live=session_state in ('active','release_failed')
+        if callable(getattr(backend,'release_session',None)) and (live or self.store.pending_for(fingerprint)):
+            self.parked[fingerprint]={'backend':backend,'config':config,'idle_since':idle_since or time.monotonic(),
+                'session_state':session_state if live else 'not_started','release_retry_at':0,'releasing':False}
+            return
+        try:backend.close()
+        except Exception:pass
+
+    def _parked_remaining(self,entry):
+        minutes=entry['config'].get('keep_alive_minutes',15)
+        if not minutes or entry['session_state'] not in ('active','release_failed'):return None
+        return max(0,math.ceil(minutes*60-(time.monotonic()-entry['idle_since'])))
+
+    def accounts(self):
+        """Saved and running accounts with their session state; never their keys."""
+        with self.lock:
+            rows={user:{'user':user,'saved':True,'active':False,'session_state':'not_started','idle_remaining_seconds':None,'pending_jobs':0}
+                  for user in saved_profiles()}
+            for fingerprint,entry in self.parked.items():
+                user=entry['config']['user']
+                rows.setdefault(user,{'user':user,'saved':False,'active':False})
+                rows[user].update(session_state=entry['session_state'],idle_remaining_seconds=self._parked_remaining(entry),
+                                  pending_jobs=self.store.pending_for(fingerprint))
+            if self.config:
+                user=self.config['user']
+                rows.setdefault(user,{'user':user,'saved':False})
+                rows[user].update(active=True,session_state=self.session_state,idle_remaining_seconds=self.idle_remaining(),
+                                  pending_jobs=self.store.pending_for(self.fingerprint))
+            return {'accounts':sorted(rows.values(),key=lambda row:(not row['active'],row['user'].lower()))}
+
+    def switch_account(self,user):
+        settings=read_settings();profiles=saved_profiles(settings)
+        if user not in profiles:raise ValueError('没有保存这个账号。')
+        self.configure(profiles[user])
+        write_settings(profiles,user,settings.get('api_key'))
+        return self.accounts()
+
+    def forget_account(self,user):
+        """Remove a saved account's key. Its running session keeps its idle timer."""
+        settings=read_settings();profiles=saved_profiles(settings)
+        if user not in profiles:raise ValueError('没有保存这个账号。')
+        profiles.pop(user)
+        write_settings(profiles,settings.get('active') if settings.get('active')!=user else None,settings.get('api_key'))
+        return self.accounts()
+
+    def release_account(self,user):
+        """Release one account's Kaggle session now, active or parked."""
+        with self.lock:
+            if self.config and self.config['user']==user:
+                if self.store.pending_for(self.fingerprint) or self.llm_active:raise ValueError('该账号还有任务在运行，完成后再释放。')
+                target=('active',self.backend)
+            else:
+                found=[(fp,entry) for fp,entry in self.parked.items() if entry['config']['user']==user]
+                if not found:raise ValueError('这个账号没有运行中的会话。')
+                fingerprint,entry=found[0]
+                if self.store.pending_for(fingerprint):raise ValueError('该账号还有任务在运行，完成后再释放。')
+                entry['releasing']=True;target=('parked',entry)
+        kind,item=target
+        backend=item if kind=='active' else item['backend']
+        release=getattr(backend,'release_session',None)
+        if not callable(release):raise ValueError('这个连接方式由你自己管理会话。')
+        try:release()
+        except Exception:
+            if kind=='parked':
+                with self.lock:item['releasing']=False
+            raise RuntimeError('释放 Kaggle 会话失败，请稍后重试。') from None
+        with self.lock:
+            if kind=='active':self.session_state='released';self.idle_since=None
+            else:
+                self.parked={fp:e for fp,e in self.parked.items() if e is not item}
+                try:backend.close()
+                except Exception:pass
+        return self.accounts()
+
+    def _expire_parked(self):
+        due=[]
+        with self.lock:
+            now=time.monotonic()
+            for fingerprint,entry in list(self.parked.items()):
+                if entry['releasing'] or self.store.pending_for(fingerprint) or now<entry['release_retry_at']:continue
+                if entry['session_state'] not in ('active','release_failed'):
+                    # Nothing is held any more: drop the parked connection.
+                    self.parked.pop(fingerprint)
+                    try:entry['backend'].close()
+                    except Exception:pass
+                    continue
+                if self._parked_remaining(entry)==0:
+                    entry['releasing']=True;due.append((fingerprint,entry))
+        for fingerprint,entry in due:
+            try:
+                entry['backend'].release_session()
+                with self.lock:self.parked.pop(fingerprint,None)
+                try:entry['backend'].close()
+                except Exception:pass
+            except Exception:
+                with self.lock:
+                    entry['releasing']=False;entry['session_state']='release_failed';entry['release_retry_at']=time.monotonic()+60
 
     def start(self):
         self.worker=threading.Thread(target=self._work,daemon=True)
@@ -585,10 +728,13 @@ class StudioCore:
                     row=self.store.claim()
                 backend=self.backend
             if row is None:
-                self.expire_idle()
+                self.expire_idle();self._expire_parked()
                 self.wake.wait(.5);self.wake.clear();continue
             job_id=row['id']
-            if row['config_hash']!=self.fingerprint:
+            with self.lock:
+                entry=self.parked.get(row['config_hash']) if row['config_hash']!=self.fingerprint else None
+            if entry is not None:backend=entry['backend']
+            elif row['config_hash']!=self.fingerprint:
                 self.store.update(job_id,state='error',progress={'phase':'error','message':'账号配置已变化，该排队任务未执行。'})
                 continue
             try:
@@ -615,7 +761,10 @@ class StudioCore:
 
             finally:
                 with self.lock:
-                    self.idle_since=time.monotonic();self.session_state='active';self.release_retry_at=0
+                    if entry is not None:
+                        entry['idle_since']=time.monotonic();entry['session_state']='active';entry['release_retry_at']=0
+                    else:
+                        self.idle_since=time.monotonic();self.session_state='active';self.release_retry_at=0
 
     def close(self):
         self.stopping.set();self.wake.set()
@@ -623,6 +772,10 @@ class StudioCore:
         # Never close an active transport underneath a generation. Process exit
         # leaves running rows for recover() to mark interrupted on the next boot.
         if self.worker and self.worker.is_alive():return
+        # Detach every account; their Kaggle sessions keep running until their idle release.
+        for entry in list(self.parked.values()):
+            try:entry['backend'].close()
+            except Exception:pass
         if self.backend:
             try:self.backend.close()
             except Exception:pass

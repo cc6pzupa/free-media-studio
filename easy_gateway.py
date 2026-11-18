@@ -118,6 +118,12 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
             import llm_gateway
             if llm_gateway.handle_get(self,urlsplit(self.path).path,self.ui_auth,self.api_auth):return
+            if self.path=='/accounts':
+                if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient(allow_job_inheritance=True)
+                try:return self.send(200,client.accounts())
+                except RuntimeError as error:return self.send(503,{'error':{'message':str(error)}})
+                finally:client.close()
             if urlsplit(self.path).path=='/chat':
                 chat=Path(__file__).with_name('chat_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
                 return self.send(200,chat.encode(),'text/html; charset=utf-8')
@@ -216,6 +222,26 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
             import llm_gateway
             if llm_gateway.handle_post(self,self.path,self.ui_auth,self.api_auth):return
+            account=re.fullmatch(r'/accounts/(switch|release|forget)',self.path)
+            if account:
+                if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
+                client=StudioClient(allow_job_inheritance=True)
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=1024:raise ValueError('请求无效。')
+                    body=json.loads(self.rfile.read(length))
+                    result=client.account_action(account.group(1),body.get('user') if isinstance(body,dict) else None)
+                    if account.group(1)=='switch':
+                        # The page reads the active account from here: follow the worker.
+                        old=backend;backend=None;sync_shared_backend()
+                        if old is not None and old is not backend and callable(getattr(old,'close',None)):
+                            try:old.close()
+                            except Exception:pass
+                    return self.send(200,result)
+                except (ValueError,TypeError):return self.send(400,{'error':{'message':'请求无效。'}})
+                except StudioHTTPError as error:return self.send(error.status_code,{'error':{'message':str(error)}})
+                except RuntimeError as error:return self.send(503,{'error':{'message':str(error)}})
+                finally:client.close()
             if self.path.startswith('/gallery/items/'):
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
                 client=StudioClient(allow_job_inheritance=True)

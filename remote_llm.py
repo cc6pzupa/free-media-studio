@@ -150,10 +150,11 @@ class LlmRuntime:
             self.pull(tag)
             self.create(alias, tag, context)
             self._emit('loading', message='正在加载模型到显存。')
-            # Load through the endpoint chat uses, so the first reply does not load
-            # the model again with different settings.
-            with _request('/v1/chat/completions', {'model': alias, 'max_tokens': 1,
-                                                   'messages': [{'role': 'user', 'content': 'hi'}]}, timeout=1800):
+            # Load through the endpoint chat uses, and decode a few dozen tokens: on Kaggle
+            # the first full reply after loading ran at 10 tok/s and the next at 58 tok/s
+            # (Qwen3-30B-A3B), so the one-time GPU setup is paid here, not by the user.
+            with _request('/v1/chat/completions', {'model': alias, 'max_tokens': 64,
+                                                   'messages': [{'role': 'user', 'content': 'Count from one to twenty in words.'}]}, timeout=1800):
                 pass
             self.model = alias
         placement = self.placement(alias)

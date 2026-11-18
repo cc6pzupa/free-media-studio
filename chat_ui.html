@@ -1,0 +1,206 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CC Media Studio · Chat</title><style>
+:root{font-family:Inter,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;color:#24243b;background:#f6f5fb;--line:#e7e5ef;--accent:#6650d9;--muted:#77768b}
+*{box-sizing:border-box}body{margin:0}a{color:var(--accent);text-decoration:none}
+header{min-height:70px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 5vw}
+h1{font-size:20px;margin:0}.tag{color:var(--accent);font-size:11px;letter-spacing:.1em}nav{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px}
+main{max-width:1320px;margin:28px auto;padding:0 24px;display:grid;grid-template-columns:380px 1fr;gap:22px;align-items:start}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;min-width:0}
+h2{font-size:16px;margin:0 0 12px}label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
+input,textarea,select,button{font:inherit}input,textarea,select{width:100%;border:1px solid #dedbe9;border-radius:9px;padding:10px 12px;background:#fff;color:inherit}
+textarea{resize:vertical;line-height:1.6}button{border:0;border-radius:10px;background:#7055e8;color:#fff;padding:11px 16px;cursor:pointer;white-space:nowrap}
+button.secondary{background:#f1eefc;color:var(--accent)}button:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:10px;align-items:center}.row>*{flex:1}.hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.6}
+.track{height:6px;background:#eeebf7;border-radius:9px;overflow:hidden;margin:12px 0 4px}.track div{height:100%;width:0;background:#8065ed;transition:width .3s}
+.status{font-size:13px;color:var(--muted);min-height:20px;white-space:pre-wrap;overflow-wrap:anywhere}
+.model{margin-top:14px;padding:12px 14px;border-radius:12px;background:#faf9fd;border:1px solid var(--line);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.model b{font-weight:600}.warn{color:#b0573a}.chat{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:520px;padding:0}
+.messages{flex:1;overflow:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:88%;padding:11px 14px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;font-size:14px}
+.msg.user{align-self:flex-end;background:#7055e8;color:#fff;border-bottom-right-radius:4px}
+.msg.assistant{align-self:flex-start;background:#f4f2fb;border-bottom-left-radius:4px}
+.msg.error{align-self:center;background:#fdf0ed;color:#a2422a;font-size:13px}
+details.think{margin:0 0 8px;font-size:12px;color:var(--muted)}details.think div{white-space:pre-wrap;margin-top:6px;border-left:3px solid #ddd6f6;padding-left:8px}
+.meta{font-size:11px;color:var(--muted);margin-top:6px}.composer{border-top:1px solid var(--line);padding:14px 18px;display:flex;gap:10px;align-items:flex-end}
+.composer textarea{min-height:52px;max-height:200px}.empty{margin:auto;text-align:center;color:var(--muted);max-width:340px;line-height:1.8;font-size:14px}
+code.copy{display:flex;justify-content:space-between;gap:8px;background:#f7f6fc;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px;margin:5px 0;overflow-wrap:anywhere}
+code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}[hidden]{display:none!important}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:0 14px;margin:16px auto}.chat{height:auto;min-height:70vh}.msg{max-width:96%}}
+</style></head><body>
+<header><h1>CC Media Studio <span class="tag">CHAT PREVIEW</span></h1>
+<nav><a href="/" data-t="navImage">图片</a><a href="/video" data-t="navVideo">视频</a><a href="/gallery" data-t="navGallery">画廊</a>
+<select id="lang" aria-label="Language" style="width:auto"><option value="zh">中文</option><option value="en">English</option></select></nav></header>
+<main>
+<section class="card" aria-labelledby="modelTitle">
+ <h2 id="modelTitle" data-t="modelTitle">语言模型</h2>
+ <label for="name" data-t="nameLabel">模型名称（Hugging Face）</label>
+ <input id="name" list="suggestions" autocomplete="off" spellcheck="false" placeholder="Qwen3-8B">
+ <datalist id="suggestions"><option value="Qwen3-8B"><option value="Qwen3-14B"><option value="Qwen3-32B"><option value="Qwen3-30B-A3B"><option value="gemma-3-27b-it"><option value="meta-llama/Llama-3.3-70B-Instruct"><option value="mistralai/Mistral-Small-3.2-24B-Instruct-2506"><option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"></datalist>
+ <p class="hint" data-t="nameHint">自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。</p>
+ <label for="context" data-t="contextLabel">上下文长度</label>
+ <select id="context"><option>4096</option><option selected>8192</option><option>16384</option><option>32768</option></select>
+ <button id="load" style="width:100%;margin-top:16px" data-t="load">查找并加载</button>
+ <div class="track" id="track" hidden><div id="bar"></div></div>
+ <div class="status" id="prepareStatus" role="status"></div>
+ <div class="model" id="modelInfo" hidden></div>
+ <div id="altBox" hidden><label for="alternatives" data-t="altLabel">其他版本</label>
+  <div class="row"><select id="alternatives"></select><button class="secondary" id="useAlt" style="flex:0 0 auto" data-t="useAlt">改用</button></div></div>
+ <details style="margin-top:18px"><summary data-t="settings">对话设置</summary>
+  <label for="system" data-t="systemLabel">系统提示（可选）</label><textarea id="system" rows="3"></textarea>
+  <div class="row"><div><label for="temperature" data-t="tempLabel">温度</label><input id="temperature" type="number" min="0" max="2" step="0.1" value="0.7"></div>
+  <div><label for="maxTokens" data-t="maxLabel">最多生成</label><input id="maxTokens" type="number" min="16" max="32768" step="16" value="2048"></div></div>
+ </details>
+ <details style="margin-top:12px"><summary data-t="apiTitle">在其他工具中调用（OpenAI 兼容）</summary>
+  <p class="hint" data-t="apiHint">Base URL、API Key 与模型名填入支持 OpenAI 接口的工具即可；请求里换一个模型名会自动改为加载该模型。</p>
+  <code class="copy"><span id="apiBase"></span><button class="secondary" data-copy="apiBase">复制</button></code>
+  <code class="copy"><span id="apiKey"></span><button class="secondary" data-copy="apiKey">复制</button></code>
+  <code class="copy"><span id="apiModel"></span><button class="secondary" data-copy="apiModel">复制</button></code>
+ </details>
+</section>
+<section class="card chat" aria-label="Chat">
+ <div class="messages" id="messages" aria-live="polite"><div class="empty" id="empty" data-t="empty">先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。</div></div>
+ <div class="composer"><textarea id="input" rows="2" data-tp="inputPlaceholder" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+  <div style="display:flex;flex-direction:column;gap:6px"><button id="send" data-t="send">发送</button><button class="secondary" id="clear" data-t="clear">清空</button></div></div>
+</section>
+</main>
+<script>
+// ---- Pure helpers (tested in tests/test_chat_ui.cjs) ----
+const TEXT={zh:{navImage:'图片',navVideo:'视频',navGallery:'画廊',modelTitle:'语言模型',nameLabel:'模型名称（Hugging Face）',nameHint:'自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。',contextLabel:'上下文长度',load:'查找并加载',altLabel:'其他版本',useAlt:'改用',settings:'对话设置',systemLabel:'系统提示（可选）',tempLabel:'温度',maxLabel:'最多生成',apiTitle:'在其他工具中调用（OpenAI 兼容）',apiHint:'Base URL、API Key 与模型名填入支持 OpenAI 接口的工具即可；请求里换一个模型名会自动改为加载该模型。',empty:'先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。',inputPlaceholder:'输入消息，Enter 发送，Shift+Enter 换行',send:'发送',clear:'清空',copy:'复制',copied:'已复制',
+ placement:{gpu:'全部在 GPU',hybrid:'GPU + 内存',cpu:'仅 CPU'},thinking:'思考过程',noModel:'请先加载模型。',needName:'请输入模型名称。',loaded:'已加载',estimate:'预计',measured:'本次',slow:'预计速度很慢；纯 CPU 时建议改用混合专家模型（如 Qwen3-30B-A3B）。',waiting:'正在连接 Kaggle 会话…',notConfigured:'请先在图片页“账号与连接”中保存 Kaggle 账号（自动账号模式）。',apiKeyMissing:'（保存账号后显示）',failed:'失败：'},
+ en:{navImage:'Images',navVideo:'Video',navGallery:'Gallery',modelTitle:'Language model',nameLabel:'Model name (Hugging Face)',nameHint:'Searches Hugging Face for GGUF builds and picks the highest-quality one that fits this session (dual T4 + RAM).',contextLabel:'Context length',load:'Find and load',altLabel:'Other builds',useAlt:'Use',settings:'Chat settings',systemLabel:'System prompt (optional)',tempLabel:'Temperature',maxLabel:'Max tokens',apiTitle:'Use from other tools (OpenAI-compatible)',apiHint:'Enter the base URL, API key and model name in any tool that speaks the OpenAI API. A request naming another model loads that model.',empty:'Load a model on the left, then start chatting. The model runs on your Kaggle session; chats are not sent to other services.',inputPlaceholder:'Message. Enter sends, Shift+Enter adds a line',send:'Send',clear:'Clear',copy:'Copy',copied:'Copied',
+ placement:{gpu:'all on GPU',hybrid:'GPU + RAM',cpu:'CPU only'},thinking:'Thinking',noModel:'Load a model first.',needName:'Enter a model name.',loaded:'Loaded',estimate:'Estimated',measured:'This reply',slow:'Expected to be slow; on CPU only, a mixture-of-experts model (such as Qwen3-30B-A3B) is faster.',waiting:'Connecting to the Kaggle session…',notConfigured:'Save your Kaggle account under Account & connection on the image page first (automatic account mode).',apiKeyMissing:'(shown after saving an account)',failed:'Failed: '}};
+function splitThinking(text){
+ // Qwen3 and DeepSeek-R1 style <think>…</think>; an unclosed block is still being written.
+ const start=text.indexOf('<think>');
+ if(start<0)return {thinking:'',answer:text};
+ const end=text.indexOf('</think>',start);
+ if(end<0)return {thinking:text.slice(start+7),answer:text.slice(0,start)};
+ return {thinking:text.slice(start+7,end).trim(),answer:(text.slice(0,start)+text.slice(end+8)).replace(/^\s+/,'')};
+}
+function gb(bytes){return (bytes/1e9).toFixed(1)+' GB'}
+function lineReader(onLine){
+ // Split a byte stream of JSON lines; returns a feed(chunkText) function and a flush().
+ let rest='';
+ return {feed(text){rest+=text;const lines=rest.split('\n');rest=lines.pop();for(const line of lines)if(line.trim())onLine(JSON.parse(line))},
+  flush(){if(rest.trim())onLine(JSON.parse(rest));rest=''}};
+}
+function chatRequest(history,settings){
+ const messages=[];
+ if(settings.system&&settings.system.trim())messages.push({role:'system',content:settings.system.trim()});
+ for(const m of history)if(m.role==='user'||m.role==='assistant')messages.push({role:m.role,content:m.role==='assistant'?splitThinking(m.content).answer:m.content});
+ const body={messages};
+ const t=Number(settings.temperature);if(Number.isFinite(t)&&t>=0&&t<=2)body.temperature=t;
+ const n=Math.round(Number(settings.maxTokens));if(Number.isFinite(n)&&n>=1&&n<=32768)body.max_tokens=n;
+ return body;
+}
+// ---- Page ----
+const nonce='__NONCE__',$=id=>document.getElementById(id);
+let lang='zh',model=null,busy=false,history=[];
+const tx=()=>TEXT[lang];
+function readSaved(k){try{return localStorage.getItem(k)}catch{return null}}
+function save(k,v){try{localStorage.setItem(k,v)}catch{}}
+function applyLanguage(){
+ document.documentElement.lang=lang==='en'?'en':'zh-CN';
+ for(const node of document.querySelectorAll('[data-t]'))node.textContent=tx()[node.dataset.t];
+ for(const node of document.querySelectorAll('[data-tp]'))node.placeholder=tx()[node.dataset.tp];
+ for(const node of document.querySelectorAll('[data-copy]'))node.textContent=tx().copy;
+ renderModel();render();
+}
+async function postLines(path,body,onEvent){
+ const response=await fetch(path,{method:'POST',headers:{'X-Local-Session':nonce,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ if(!response.ok){let m='HTTP '+response.status;try{m=(await response.json()).error.message}catch{}throw new Error(m)}
+ const reader=response.body.getReader(),decoder=new TextDecoder();let final=null;
+ const lines=lineReader(event=>{if(event.type==='done'||event.type==='error')final=event;else onEvent(event)});
+ for(;;){const {done,value}=await reader.read();if(done)break;lines.feed(decoder.decode(value,{stream:true}))}
+ lines.flush();
+ if(!final)throw new Error('connection closed');
+ if(final.type==='error')throw new Error(final.message);
+ return final;
+}
+function setBusy(value){busy=value;for(const id of ['load','useAlt','send','name','context'])$(id).disabled=value}
+function progress(event){
+ const e=event.event||{};
+ $('prepareStatus').textContent=e.message||e.phase||'';
+ if(typeof e.percent==='number'){$('track').hidden=false;$('bar').style.width=e.percent+'%';
+  if(e.total_gb)$('prepareStatus').textContent=(e.message||'')+`\n${e.downloaded_gb} / ${e.total_gb} GB`}
+}
+async function load(choice){
+ const name=$('name').value.trim();
+ if(!name){$('prepareStatus').textContent=tx().needName;return}
+ setBusy(true);$('prepareStatus').textContent=tx().waiting;$('track').hidden=true;$('bar').style.width='0';
+ try{
+  const final=await postLines('/llm/prepare',{name,context:Number($('context').value),choice:choice||null},progress);
+  model=final.model;save('cc.media.chat.model',name);$('prepareStatus').textContent='';$('track').hidden=true;renderModel();
+ }catch(error){$('prepareStatus').textContent=tx().failed+error.message}
+ finally{setBusy(false)}
+}
+function renderModel(){
+ const box=$('modelInfo');
+ if(!model){box.hidden=true;$('altBox').hidden=true;$('apiModel').textContent='—';return}
+ const p=tx().placement[model.placement]||model.placement,loaded=model.loaded||{};
+ const share=typeof loaded.gpu_share==='number'?` · GPU ${Math.round(loaded.gpu_share*100)}%`:'';
+ box.hidden=false;
+ box.innerHTML='';
+ const rows=[[tx().loaded,model.name],['Hugging Face',model.repo],['GGUF',`${model.quant} · ${gb(model.bytes)} · ${p}${share}`],[tx().estimate,`≈ ${model.estimated_tok_per_s} tok/s · ctx ${model.context}`]];
+ for(const [k,v] of rows){const line=document.createElement('div');const b=document.createElement('b');b.textContent=k+'：';line.append(b,document.createTextNode(v));box.append(line)}
+ if(model.estimated_tok_per_s<2){const w=document.createElement('div');w.className='warn';w.textContent=tx().slow;box.append(w)}
+ const alts=(model.alternatives||[]).filter(a=>!(a.repo===model.repo&&a.first===model.file));
+ $('altBox').hidden=!alts.length;$('alternatives').innerHTML='';
+ for(const a of alts){const o=document.createElement('option');o.value=JSON.stringify({repo:a.repo,first:a.first});
+  o.textContent=`${a.quant} · ${gb(a.bytes)} · ${tx().placement[a.placement]||a.placement} · ≈${a.tok_per_s} tok/s · ${a.repo}`;$('alternatives').append(o)}
+ $('apiModel').textContent=model.name;
+}
+function render(){
+ const list=$('messages');list.querySelectorAll('.msg').forEach(n=>n.remove());$('empty').hidden=history.length>0;
+ for(const m of history){
+  const node=document.createElement('div');node.className='msg '+m.role;
+  if(m.role==='assistant'){
+   const parts=splitThinking(m.content);const thinking=(m.reasoning||'')+parts.thinking;
+   if(thinking){const d=document.createElement('details');d.className='think';const s=document.createElement('summary');s.textContent=tx().thinking;const body=document.createElement('div');body.textContent=thinking;d.append(s,body);node.append(d)}
+   node.append(document.createTextNode(parts.answer));
+   if(m.meta){const meta=document.createElement('div');meta.className='meta';meta.textContent=m.meta;node.append(meta)}
+  }else node.textContent=m.content;
+  list.append(node);
+ }
+ list.scrollTop=list.scrollHeight;
+}
+async function send(){
+ const text=$('input').value.trim();if(!text||busy)return;
+ if(!model){history.push({role:'error',content:tx().noModel});render();return}
+ history.push({role:'user',content:text});$('input').value='';
+ const reply={role:'assistant',content:'',reasoning:''};history.push(reply);render();setBusy(true);
+ const started=performance.now();let first=null,tokens=0,usage=null;
+ try{
+  const body=chatRequest(history.slice(0,-1),{system:$('system').value,temperature:$('temperature').value,maxTokens:$('maxTokens').value});
+  await postLines('/llm/chat',body,event=>{
+   if(event.type!=='chunk')return;const chunk=event.chunk;usage=chunk.usage||usage;
+   for(const c of chunk.choices||[]){const d=c.delta||{};const piece=(d.content||'');const r=d.reasoning||d.reasoning_content||'';
+    if(piece||r){first=first||performance.now();tokens++;reply.content+=piece;reply.reasoning+=r}}
+   render();
+  });
+  const seconds=(performance.now()-(first||started))/1000,count=(usage&&usage.completion_tokens)||tokens;
+  reply.meta=`${tx().measured} ${count} tok · ${seconds>0?(count/seconds).toFixed(1):'—'} tok/s`;
+ }catch(error){history.push({role:'error',content:tx().failed+error.message})}
+ finally{setBusy(false);render();try{sessionStorage.setItem('cc.media.chat.history',JSON.stringify(history.slice(-60)))}catch{}}
+}
+async function init(){
+ lang=readSaved('cc-media-language')==='en'?'en':'zh';$('lang').value=lang;
+ $('lang').onchange=()=>{lang=$('lang').value;save('cc-media-language',lang);applyLanguage()};
+ $('name').value=readSaved('cc.media.chat.model')||'Qwen3-8B';
+ try{history=JSON.parse(sessionStorage.getItem('cc.media.chat.history')||'[]')}catch{history=[]}
+ $('load').onclick=()=>load(null);
+ $('useAlt').onclick=()=>{try{load(JSON.parse($('alternatives').value))}catch{}};
+ $('send').onclick=send;$('clear').onclick=()=>{history=[];try{sessionStorage.removeItem('cc.media.chat.history')}catch{};render()};
+ $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send()}});
+ for(const b of document.querySelectorAll('[data-copy]'))b.onclick=async()=>{try{await navigator.clipboard.writeText($(b.dataset.copy).textContent);b.textContent=tx().copied;setTimeout(()=>b.textContent=tx().copy,1500)}catch{}};
+ $('apiBase').textContent=location.origin+'/v1';
+ applyLanguage();
+ try{
+  const config=await (await fetch('/configuration',{headers:{'X-Local-Session':nonce}})).json();
+  $('apiKey').textContent=config.api_key||tx().apiKeyMissing;
+  if(!config.configured||config.mode!=='account')$('prepareStatus').textContent=tx().notConfigured;
+  const status=await (await fetch('/llm/status',{headers:{'X-Local-Session':nonce}})).json();
+  if(status.model){model=status.model;$('name').value=model.name;renderModel()}
+ }catch{}
+}
+if(typeof window!=='undefined'&&typeof document!=='undefined'&&document.getElementById('messages'))init();
+</script></body></html>

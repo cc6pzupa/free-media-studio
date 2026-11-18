@@ -393,6 +393,7 @@ class StudioCore:
         self.wake=threading.Event();self.stopping=threading.Event()
         self.worker=None
         self.idle_since=None;self.session_state='not_started';self.releasing=False;self.release_retry_at=0
+        self.llm_active=0  # chat or model preparation in progress: never release the session meanwhile
         self.quota_cache={'available':False,'reason':'not_checked'};self.quota_checked_at=None
         self.quota_lock=threading.Lock()
         initial=load_config()
@@ -476,9 +477,41 @@ class StudioCore:
 
     def idle_remaining(self):
         minutes=(self.config or {}).get('keep_alive_minutes',15)
-        if not minutes or self.idle_since is None or self.store.pending() or self.session_state not in ('active','release_failed'):
+        if not minutes or self.idle_since is None or self.store.pending() or self.llm_active or self.session_state not in ('active','release_failed'):
             return None
         return max(0,math.ceil(minutes*60-(time.monotonic()-self.idle_since)))
+
+    def _llm_backend(self):
+        with self.lock:backend=self.backend
+        if backend is None:raise ValueError('请先在“账号与连接”中保存 Kaggle 账号。')
+        if not callable(getattr(backend,'llm_prepare',None)):raise ValueError('语言模型需要自动账号模式。')
+        return backend
+
+    def _llm_call(self,call):
+        backend=self._llm_backend()
+        with self.lock:
+            if self.releasing:raise ValueError('正在释放空闲会话，请稍后重试。')
+            self.llm_active+=1
+        try:return call(backend)
+        finally:
+            with self.lock:
+                self.llm_active-=1
+                self.idle_since=time.monotonic();self.session_state='active';self.release_retry_at=0
+
+    def llm_prepare(self,name,context=8192,choice=None,progress=None):
+        from llm_session import validate_choice,validate_context,validate_name
+        name,context,choice=validate_name(name),validate_context(context),validate_choice(choice)
+        return self._llm_call(lambda backend:backend.llm_prepare(name,context,choice,progress))
+
+    def llm_chat(self,body,on_chunk):
+        from llm_session import chat_body
+        body=chat_body(body)
+        return self._llm_call(lambda backend:backend.llm_chat(body,on_chunk))
+
+    def llm_status(self):
+        with self.lock:backend=self.backend
+        info=backend.llm_info() if callable(getattr(backend,'llm_info',None)) else None
+        return {'available':callable(getattr(backend,'llm_prepare',None)),'model':info,'busy':self.llm_active>0}
 
     def submit_video(self,prompt,seed=42,steps=None,request_id=None,model_id='wan21-t2v-1.3b',frames=None,image=None,negative_prompt=None,size=None,last_image=None):
         from video_registry import validate_video

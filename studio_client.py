@@ -23,6 +23,10 @@ else:
 worker_starter=None
 
 
+class LlmError(RuntimeError):
+    """A language-model request failed on the worker; the message is safe to show."""
+
+
 class StudioHTTPError(RuntimeError):
     def __init__(self,status_code,message):
         super().__init__(message);self.status_code=status_code
@@ -49,7 +53,7 @@ class StudioClient:
         self.allow_job_inheritance=allow_job_inheritance
         self.http=requests.Session()
         self.http.trust_env=False  # Never send the local bearer token through a proxy.
-        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False;self.video_options_supported=False
+        self.url=None;self.token=None;self.model_selection_supported=False;self.acceleration_supported=False;self.video_supported=False;self.editing_supported=False;self.cancel_supported=False;self.video_options_supported=False;self.llm_supported=False
         self.connect_lock=threading.Lock()
 
     def _read_connection(self):
@@ -75,6 +79,7 @@ class StudioClient:
                 self.editing_supported=result.get('editing') is True
                 self.cancel_supported=result.get('cancel') is True
                 self.video_options_supported=result.get('video_options') is True
+                self.llm_supported=result.get('llm') is True
                 return True
         except (requests.RequestException,ValueError):pass
         return False
@@ -142,6 +147,44 @@ class StudioClient:
         return result
 
     def quota(self):return self._request('GET','/quota')
+
+    def _stream(self,path,body,on_event):
+        """POST to a worker route that answers with JSON lines; return the final event."""
+        self.ensure()
+        if not self.llm_supported:raise RuntimeError('请重启本机后台以启用语言模型。 / Restart the local worker to enable language models.')
+        try:
+            # No read timeout: a first download can take many minutes between lines.
+            response=self.http.post(self.url+path,json=body,headers={'Authorization':'Bearer '+self.token},stream=True,timeout=(5,None))
+        except requests.RequestException:
+            raise RuntimeError('本机后台连接中断。') from None
+        with response:
+            if not response.ok:
+                try:message=response.json().get('error','本机后台请求失败。')
+                except ValueError:message='本机后台请求失败。'
+                raise StudioHTTPError(response.status_code,message)
+            final=None
+            try:
+                for line in response.iter_lines():
+                    if not line:continue
+                    event=json.loads(line)
+                    if event.get('type') in ('done','error'):final=event;break
+                    on_event(event)
+            except (requests.RequestException,ValueError):
+                raise RuntimeError('本机后台连接中断。') from None
+        if final is None:raise RuntimeError('语言模型请求中断。')
+        if final['type']=='error':raise LlmError(final.get('message') or '语言模型请求失败。')
+        return final
+
+    def llm_status(self):
+        self.ensure()
+        if not self.llm_supported:return {'available':False,'model':None,'busy':False,'restart_required':True}
+        return self._request('GET','/llm/status')
+
+    def llm_prepare(self,name,context=8192,choice=None,on_event=None):
+        return self._stream('/llm/prepare',{'name':name,'context':context,'choice':choice},on_event or (lambda event:None))['model']
+
+    def llm_chat(self,body,on_event):
+        return self._stream('/llm/chat',body,on_event)
 
     def history(self,query_string=''):
         return self._request('GET','/history'+('?' + query_string if query_string else ''))

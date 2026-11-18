@@ -72,6 +72,8 @@ if _CC_PREVIOUS_MODEL != _CC_REQUESTED_MODEL:
     # Do not retain aliases to an old pipeline or its GPU modules during collection.
     if globals().get('_CC_VIDEO_PROCESS') is not None:globals()['_CC_VIDEO_PROCESS'].close()
     if globals().get('_CC_VIDEO_RUNTIME') is not None:globals()['_CC_VIDEO_RUNTIME'].close()
+    # A language model served by Ollama holds GPU memory outside this process.
+    if globals().get('_CC_LLM') is not None:globals()['_CC_LLM'].stop()
     for _cc_key in ('pipe','encoder','transformer','vae','processor','scheduler','generate_image','_COMFY_QWEN_STATE','_CC_NEGATIVE_CACHE','_CC_PROMPT_CACHE','_CC_DUAL_STATE','_CC_VIDEO_RUNTIME','_CC_VIDEO_PROCESS','_CC_TASK_PIPES','_value','_module','_decoded'):
         globals().pop(_cc_key,None)
     exec(compile({RELEASE_FAILURE_CODE!r},'<cc-release-failure>','exec'),globals())

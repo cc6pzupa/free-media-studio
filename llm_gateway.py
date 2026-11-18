@@ -70,8 +70,27 @@ def _ensure_model(client, requested, on_event=None):
     return wanted
 
 
-def handle_get(handler, path, ui_ok, api_ok):
+def _base_url(handler):
+    return 'http://127.0.0.1:%d/v1' % handler.server.server_port
+
+
+def handle_get(handler, path, ui_ok, api_ok, api_key=None, remembered=None):
     """Return True when the request was a language-model route."""
+    if path == '/harness':
+        if not ui_ok():
+            handler.send(401, {'error': {'message': '访问密钥无效'}})
+            return True
+        import harness
+        client = StudioClient(allow_job_inheritance=True)
+        try:
+            model = loaded_name(client.llm_status())
+        except RuntimeError:
+            model = None
+        finally:
+            client.close()
+        handler.send(200, {'tools': harness.discover(), 'base_url': _base_url(handler), 'model': model,
+                           'remembered': bool(remembered and remembered())})
+        return True
     if path == '/llm/status':
         if not ui_ok():
             handler.send(401, {'error': {'message': '访问密钥无效'}})
@@ -101,7 +120,35 @@ def handle_get(handler, path, ui_ok, api_ok):
     return False
 
 
-def handle_post(handler, path, ui_ok, api_ok):
+def handle_post(handler, path, ui_ok, api_ok, api_key=None, remembered=None):
+    if path in ('/harness/configure', '/harness/install', '/harness/launch'):
+        if not ui_ok():
+            handler.send(401, {'error': {'message': '访问密钥无效'}})
+            return True
+        import harness
+        try:
+            body = _read_json(handler, 1024)
+            tool = body.get('id')
+            if path == '/harness/configure':
+                return handler.send(200, harness.configure(tool, _base_url(handler), api_key(), body.get('model'))) or True
+            if path == '/harness/launch':
+                if tool != 'open-webui':
+                    raise ValueError('这个工具不能从这里启动。')
+                return handler.send(200, harness.launch_open_webui(_base_url(handler), api_key())) or True
+            harness.install_command(tool)  # refuse before streaming starts
+        except (ValueError, TypeError) as error:
+            handler.send(400, {'error': {'message': str(error) if isinstance(error, ValueError) else '请求格式有误。'}})
+            return True
+        except OSError:
+            handler.send(500, {'error': {'message': '无法写入该工具的配置文件。'}})
+            return True
+        write = _start_stream(handler, 'application/x-ndjson; charset=utf-8')
+        emit = lambda event: write(json.dumps(event, ensure_ascii=False) + '\n')
+        try:
+            emit(dict(harness.install(tool, lambda event: emit(dict(event, type='output'))), type='done'))
+        except (RuntimeError, OSError, ValueError) as error:
+            emit({'type': 'error', 'message': str(error) if isinstance(error, (RuntimeError, ValueError)) else '无法运行安装命令。'})
+        return True
     if path in ('/llm/prepare', '/llm/chat'):
         if not ui_ok():
             handler.send(401, {'error': {'message': '访问密钥无效'}})

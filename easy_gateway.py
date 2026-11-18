@@ -117,7 +117,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         def do_GET(self):
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
             import llm_gateway
-            if llm_gateway.handle_get(self,urlsplit(self.path).path,self.ui_auth,self.api_auth):return
+            if llm_gateway.handle_get(self,urlsplit(self.path).path,self.ui_auth,self.api_auth,lambda:api_key,config_path.is_file):return
             if self.path=='/accounts':
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
                 client=StudioClient(allow_job_inheritance=True)
@@ -221,7 +221,7 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
             nonlocal backend, saved_user, saved_dataset
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
             import llm_gateway
-            if llm_gateway.handle_post(self,self.path,self.ui_auth,self.api_auth):return
+            if llm_gateway.handle_post(self,self.path,self.ui_auth,self.api_auth,lambda:api_key,config_path.is_file):return
             account=re.fullmatch(r'/accounts/(switch|release|forget)',self.path)
             if account:
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})

@@ -13,6 +13,37 @@ import time
 import traceback
 from pathlib import Path
 
+DIAGNOSE = r'''
+import json,subprocess
+def _sh(c):
+    try:return subprocess.run(c,shell=True,capture_output=True,text=True,timeout=60).stdout[-1500:]
+    except Exception as e:return repr(e)
+info={'free':_sh('free -m'),'ollama':_sh('ps -eo pid,rss,cmd | grep -i [o]llama'),'gpu':_sh('nvidia-smi --query-gpu=memory.used --format=csv'),
+      'disk':_sh('df -h /kaggle/temp /tmp'),'ld':_sh('cat /etc/ld.so.conf.d/* 2>/dev/null | head -20'),'dmesg':_sh('dmesg 2>/dev/null | tail -15')}
+import imageio_ffmpeg
+exe=imageio_ffmpeg.get_ffmpeg_exe()
+info['ffmpeg_version']=_sh(exe+' -version | head -2')
+info['ffmpeg_test']=_sh('head -c 3096576 /dev/zero | '+exe+' -y -f rawvideo -vcodec rawvideo -s 768x448 -pix_fmt rgb24 -r 16 -i - -an -vcodec libx264 -pix_fmt yuv420p -crf 25 /kaggle/temp/cc-ffmpeg-test.mp4 2>&1; echo exit=$?')
+print('CC_DIAG:'+json.dumps(info),flush=True)
+'''
+
+
+def diagnose(backend):
+    from session_runtime import JupyterTransport
+    url = backend._read().get('jupyter_url')
+    if not url:
+        return {'diagnose': 'no session'}
+    transport = JupyterTransport(url)
+    try:
+        transport.start()
+        lines = [l for l in transport.execute(DIAGNOSE, timeout=300).splitlines() if l.startswith('CC_DIAG:')]
+        return json.loads(lines[0][8:]) if lines else {'diagnose': 'no output'}
+    except Exception as error:
+        return {'diagnose_error': type(error).__name__ + ': ' + str(error)[:300]}
+    finally:
+        transport.close()
+
+
 PROMPT = [{'role': 'user', 'content': 'In three sentences, explain why lighthouses use Fresnel lenses.'}]
 
 
@@ -71,7 +102,8 @@ def run(user, token, output, only=None):
             traceback.print_exc()
             cause = error.__context__
             reports.append(dict(case=name, ok=False, wall_seconds=round(time.monotonic() - started, 1), error=type(error).__name__ + ': ' + str(error),
-                                **({'remote_error': (type(cause).__name__ + ': ' + str(cause))[:1500]} if cause is not None else {})))
+                                **({'remote_error': (type(cause).__name__ + ': ' + str(cause))[:4000]} if cause is not None else {})))
+            reports[-1]['diagnose'] = diagnose(backend)
         print('LLM_CHECK_RESULT ' + json.dumps(reports[-1], ensure_ascii=False), flush=True)
         (output / 'report.json').write_text(json.dumps(reports, indent=2, ensure_ascii=False), encoding='utf-8')
 

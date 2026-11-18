@@ -7,6 +7,10 @@
 
 ### 新增
 
+- **语言模型（预览）**：聊天页 `/chat` 与 OpenAI 兼容接口 `/v1/chat/completions`；在 Kaggle 上用 Ollama 运行，自动从 Hugging Face 选择能放进双 T4（及内存）的最佳 GGUF 量化版本。
+- **多个 Kaggle 账号**：保存多个账号并切换，切换不会结束其他账号的会话。
+- **本机 AI 工具**：自动发现 OpenCode、Aider、Continue、Open WebUI 等并一键接入；缺少时可一键安装。详见 [docs/llm.md](docs/llm.md)。
+
 - **安卓应用（预览）**：Android 10+ 64 位 APK，内置同一套本机程序与界面；保存的文件写入 下载/CC Media Studio，通知栏“退出”会先释放 Kaggle 会话。详见 [安卓说明](docs/android.md)。
 
 - **图生图与局部编辑**：Z-Image Turbo 与 SDXL-Lightning 支持参考图重绘（强度 0.05–1）和涂抹局部编辑；复用已加载模型，不额外下载权重。
@@ -44,6 +48,10 @@
 - Kaggle Notebook 根据当前运行时重新生成。
 
 ### Added
+
+- **Language models (preview):** a chat page `/chat` and an OpenAI-compatible `/v1/chat/completions`, run on Kaggle with Ollama; the best GGUF build that fits dual T4 (and RAM) is chosen from Hugging Face.
+- **Several Kaggle accounts:** save and switch accounts without ending the other sessions.
+- **Local AI tools:** OpenCode, Aider, Continue, Open WebUI and others are found and connected in one click, or installed. See [docs/llm.md](docs/llm.md).
 
 - **Android app (preview):** a 64-bit Android 10+ APK running the same local client and pages; saved files go to Downloads/CC Media Studio, and Exit in the notification releases the Kaggle session first. See [docs/android.md](docs/android.md).
 

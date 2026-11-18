@@ -23,6 +23,8 @@ Generate images with your own Kaggle GPU quota. Start the launcher, enter your K
 
 Download Windows, macOS Intel / Apple Silicon or Linux deb/rpm packages from [Releases](https://github.com/cc6pzupa/free-media-studio/releases). Python is bundled. The local image/video gallery supports search, favorites, preview and download. [Installation and gallery guide](docs/installers.md).
 
+**Language models, accounts and local AI tools (preview):** run LLMs on Kaggle with the best quantized build chosen from Hugging Face; a chat page and an OpenAI-compatible API; several saved accounts that switch without ending sessions; one-click connection for OpenCode, Aider, Continue and other local tools. [Guide](docs/llm.md)
+
 **Android (preview):** an APK for 64-bit Android 10+ phones with the same interface; generation still runs on Kaggle. [Android guide](docs/android.md)
 
 ## Run from source

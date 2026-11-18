@@ -185,7 +185,8 @@ class LlmRuntime:
         try:
             with _request('/api/ps', timeout=10) as response:
                 for model in json.load(response).get('models', []):
-                    if model.get('model') == tag or model.get('name') == tag:
+                    # Ollama lists local models with a ':latest' tag.
+                    if tag in (model.get('model'), model.get('name')) or (tag + ':latest') in (model.get('model'), model.get('name')):
                         size, vram = model.get('size') or 0, model.get('size_vram') or 0
                         return {'size_gb': round(size / 1e9, 2), 'vram_gb': round(vram / 1e9, 2),
                                 'gpu_share': round(vram / size, 2) if size else None}

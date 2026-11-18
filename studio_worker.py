@@ -67,10 +67,11 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True,'video_options':True,'llm':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True,'video_options':True,'llm':True,'accounts':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
                 if self.path=='/llm/status':return self.send(200,core.llm_status())
+                if self.path=='/accounts':return self.send(200,core.accounts())
                 if urlsplit(self.path).path=='/history':
                     q=parse_qs(urlsplit(self.path).query)
                     return self.send(200,core.store.history(q.get('media_type',['all'])[0],q.get('query',[''])[0],
@@ -132,6 +133,12 @@ def create_worker_server(core, token, port=0):
                         body.get('request_id'),body.get('model_id','wan21-t2v-1.3b'),body.get('frames'),
                         body.get('image'),body.get('negative_prompt'),body.get('size'),body.get('last_image'))
                     return self.send(202,job)
+                if self.path in ('/accounts/switch','/accounts/release','/accounts/forget'):
+                    user=body.get('user')
+                    if not isinstance(user,str) or not user:raise ValueError('请选择账号。')
+                    action={'/accounts/switch':core.switch_account,'/accounts/release':core.release_account,'/accounts/forget':core.forget_account}[self.path]
+                    try:return self.send(200,action(user))
+                    except RuntimeError as error:return self.send(502,{'error':str(error)})
                 if self.path=='/llm/prepare':
                     return self.stream(lambda emit:{'model':core.llm_prepare(body.get('name'),body.get('context',8192),body.get('choice'),
                         lambda event:emit({'type':'progress','event':event}))})

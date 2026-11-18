@@ -116,6 +116,11 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         def api_auth(self):return hmac.compare_digest(self.headers.get('Authorization',''),'Bearer '+api_key)
         def do_GET(self):
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
+            import llm_gateway
+            if llm_gateway.handle_get(self,urlsplit(self.path).path,self.ui_auth,self.api_auth):return
+            if urlsplit(self.path).path=='/chat':
+                chat=Path(__file__).with_name('chat_ui.html').read_text(encoding='utf-8').replace('__NONCE__',nonce)
+                return self.send(200,chat.encode(),'text/html; charset=utf-8')
             if self.path=='/models':
                 from model_registry import model_catalog
                 return self.send(200,{'models':model_catalog()})
@@ -209,6 +214,8 @@ def create_server(port=8787, backend_factory=BatchBackend, keep_alive_minutes=No
         def do_POST(self):
             nonlocal backend, saved_user, saved_dataset
             if not self.local():return self.send(403,{'error':{'message':'仅允许本机访问'}})
+            import llm_gateway
+            if llm_gateway.handle_post(self,self.path,self.ui_auth,self.api_auth):return
             if self.path.startswith('/gallery/items/'):
                 if not self.ui_auth():return self.send(401,{'error':{'message':'访问密钥无效'}})
                 client=StudioClient(allow_job_inheritance=True)

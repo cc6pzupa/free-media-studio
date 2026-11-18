@@ -229,8 +229,11 @@ def rank_repos(name, repos):
     return [repo for _, repo in sorted(enumerate(repos), key=key)]
 
 
-def find(name, hardware, context=8192, max_repos=4):
-    """Search Hugging Face and return the chosen build with its repository and alternatives."""
+def find(name, hardware, context=8192, max_repos=4, single_file=True):
+    """Search Hugging Face and return the chosen build with its repository and alternatives.
+
+    single_file: skip builds split across several files (Ollama pulls one GGUF file).
+    """
     if name.lower().endswith('gguf') and '/' in name:
         repos = [name]
     else:
@@ -242,11 +245,13 @@ def find(name, hardware, context=8192, max_repos=4):
             builds = gguf_builds(repo_files(repo))
         except Exception:
             continue
+        if single_file:
+            builds = {key: build for key, build in builds.items() if len(build['files']) == 1}
         if not builds:
             continue
         config = base_config(name, repo) or {}
         chosen, options = choose(builds, hardware, config, context)
-        considered.append({'repo': repo, 'options': [{k: o[k] for k in ('quant', 'bytes', 'placement', 'tok_per_s')} for o in options]})
+        considered.append({'repo': repo, 'options': [{k: o[k] for k in ('quant', 'first', 'bytes', 'placement', 'tok_per_s')} for o in options]})
         if chosen and best is None:
             best = dict(chosen, repo=repo, kv_bytes_per_token=kv_bytes_per_token(config), moe=active_fraction(config) < 1)
     return best, considered

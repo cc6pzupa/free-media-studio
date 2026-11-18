@@ -67,9 +67,10 @@ def create_worker_server(core, token, port=0):
         def do_GET(self):
             if not self.authorized():return
             try:
-                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True,'video_options':True})
+                if self.path=='/health':return self.send(200,{'app':'qwen-studio-worker','version':VERSION,'protocol':1,'model_selection':True,'dual_cfg':True,'video':True,'editing':True,'cancel':True,'video_options':True,'llm':True})
                 if self.path=='/quota':return self.send(200,core.quota())
                 if self.path=='/status':return self.send(200,core.status())
+                if self.path=='/llm/status':return self.send(200,core.llm_status())
                 if urlsplit(self.path).path=='/history':
                     q=parse_qs(urlsplit(self.path).query)
                     return self.send(200,core.store.history(q.get('media_type',['all'])[0],q.get('query',[''])[0],
@@ -87,12 +88,29 @@ def create_worker_server(core, token, port=0):
             except (KeyError,FileNotFoundError):return self.send(404,{'error':'任务或作品文件不存在。'})
             except ValueError:return self.send(409,{'error':'任务 ID 无效或图片尚未就绪，请先查询任务。'})
             except Exception:return self.send(500,{'error':'无法读取本机任务。'})
+        def stream(self,run):
+            """Answer with JSON lines while run(emit) works: progress and chat chunks, then done or error."""
+            self.send_response(200);self.send_header('Content-Type','application/x-ndjson; charset=utf-8')
+            self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.end_headers()
+            lock=threading.Lock();gone=[]
+            def emit(event):
+                if gone:return
+                try:
+                    with lock:
+                        self.wfile.write((json.dumps(event,ensure_ascii=False)+'\n').encode('utf-8'));self.wfile.flush()
+                except OSError:gone.append(True)  # the client left; the kernel finishes the request
+            try:emit(dict(run(emit) or {},type='done'))
+            except (ValueError,RuntimeError,TimeoutError) as error:
+                # Messages from this code base contain no connection URLs; anything else is generic.
+                message=str(error)
+                emit({'type':'error','message':message if 'http' not in message.lower() else '语言模型请求失败。'})
+            except Exception:emit({'type':'error','message':'语言模型请求失败。'})
         def do_POST(self):
             if not self.authorized():return
             try:
                 length=int(self.headers.get('Content-Length','0'))
                 # Job submissions may carry a reference image and mask.
-                limit=MAX_REQUEST_BYTES if self.path in ('/jobs','/video/jobs') else 65536
+                limit=MAX_REQUEST_BYTES if self.path in ('/jobs','/video/jobs','/llm/chat') else 65536
                 if not 0<length<=limit:raise ValueError('请求过大或为空。')
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict):raise ValueError('请求必须为 JSON 对象。')
@@ -114,6 +132,13 @@ def create_worker_server(core, token, port=0):
                         body.get('request_id'),body.get('model_id','wan21-t2v-1.3b'),body.get('frames'),
                         body.get('image'),body.get('negative_prompt'),body.get('size'),body.get('last_image'))
                     return self.send(202,job)
+                if self.path=='/llm/prepare':
+                    return self.stream(lambda emit:{'model':core.llm_prepare(body.get('name'),body.get('context',8192),body.get('choice'),
+                        lambda event:emit({'type':'progress','event':event}))})
+                if self.path=='/llm/chat':
+                    from llm_session import chat_body
+                    request=chat_body(body)  # reject a malformed request before streaming starts
+                    return self.stream(lambda emit:core.llm_chat(request,lambda chunk:emit({'type':'chunk','chunk':chunk})))
                 if self.path=='/shutdown':
                     with core.lock:
                         if core.store.pending():return self.send(409,{'error':'队列仍有任务，完成后再停止后台。'})

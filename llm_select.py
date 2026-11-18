@@ -107,7 +107,9 @@ def plan(bytes_, hardware, kv_per_token=None, context=8192, active=1.0):
     kv = (kv_per_token or 160 * 1024) * context
     gpus = hardware.get('gpus') or []
     # CUDA context, compute buffers and fragmentation per GPU.
-    usable_gpu = sum(max(0, mib * 2**20 - 1.6 * 2**30) for mib in gpus)
+    # Measured on Kaggle: Ollama's compute buffers take about 2 GB per GPU beyond weights
+    # and KV cache; a model left 1% short spilled to the CPU and ran at a quarter speed.
+    usable_gpu = sum(max(0, mib * 2**20 - 2.2 * 2**30) for mib in gpus)
     usable_ram = max(0, (hardware.get('ram_gib', 0) - 7) * 2**30)  # the system and Python keep some
     need = bytes_ + kv
     per_token = bytes_ * active

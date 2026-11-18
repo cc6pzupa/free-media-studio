@@ -11,6 +11,7 @@ Output lines for the local client:
     CC_LLM_READY:{json}     the loaded model after prepare()
     CC_LLM_SSE:{json}       one OpenAI chat-completion stream chunk
 """
+import hashlib
 import json
 import os
 import shutil
@@ -140,24 +141,44 @@ class LlmRuntime:
         if not best:
             raise ValueError('No build of this model fits this session (%d GPU, %.0f GB RAM)' % (len(hw['gpus']), hw['ram_gib']))
         tag = ollama_tag(best, best['repo'])
+        # Models pulled from Hugging Face bring their own default context (often 32K), which
+        # makes the KV cache larger than planned; a named variant fixes num_ctx.
+        alias = 'cc-' + hashlib.sha256(('%s|%d' % (tag, context)).encode()).hexdigest()[:12]
         self.install()
         self.serve(context)
-        if self.model != tag:
+        if self.model != alias:
             self.pull(tag)
+            self.create(alias, tag, context)
             self._emit('loading', message='正在加载模型到显存。')
             # Load through the endpoint chat uses, so the first reply does not load
             # the model again with different settings.
-            with _request('/v1/chat/completions', {'model': tag, 'max_tokens': 1,
+            with _request('/v1/chat/completions', {'model': alias, 'max_tokens': 1,
                                                    'messages': [{'role': 'user', 'content': 'hi'}]}, timeout=1800):
                 pass
-            self.model = tag
-        placement = self.placement(tag)
+            self.model = alias
+        placement = self.placement(alias)
         self.info = {'name': name, 'tag': tag, 'repo': best['repo'], 'quant': best['quant'], 'file': best['first'],
                      'bytes': best['bytes'], 'placement': best['placement'], 'estimated_tok_per_s': best['tok_per_s'],
                      'context': context, 'hardware': hw, 'loaded': placement,
                      'alternatives': [{k: o.get(k) for k in ('repo', 'first', 'quant', 'bytes', 'placement', 'tok_per_s')} for o in options[:12]]}
         print('CC_LLM_READY:' + json.dumps(self.info), flush=True)
         return self.info
+
+    def create(self, alias, tag, context):
+        """A variant of the pulled model with a fixed context length."""
+        try:
+            with _request('/api/create', {'model': alias, 'from': tag, 'parameters': {'num_ctx': context}, 'stream': False}, timeout=600):
+                return
+        except urllib.error.HTTPError:
+            pass
+        # Older servers: the same through a Modelfile.
+        modelfile = os.path.join(ROOT, alias + '.Modelfile')
+        with open(modelfile, 'w') as handle:
+            handle.write('FROM %s\nPARAMETER num_ctx %d\n' % (tag, context))
+        env = dict(os.environ, OLLAMA_HOST=HOST)
+        result = subprocess.run(['ollama', 'create', alias, '-f', modelfile], capture_output=True, text=True, timeout=600, env=env)
+        if result.returncode != 0:
+            raise RuntimeError('Could not set the context length: ' + (result.stdout + result.stderr)[-300:])
 
     def placement(self, tag):
         """How much of the loaded model Ollama put in GPU memory."""

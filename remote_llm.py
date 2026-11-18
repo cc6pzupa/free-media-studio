@@ -145,8 +145,10 @@ class LlmRuntime:
         if self.model != tag:
             self.pull(tag)
             self._emit('loading', message='正在加载模型到显存。')
-            # An empty prompt loads the model and keeps it resident.
-            with _request('/api/generate', {'model': tag, 'prompt': '', 'keep_alive': -1}, timeout=1800):
+            # Load through the endpoint chat uses, so the first reply does not load
+            # the model again with different settings.
+            with _request('/v1/chat/completions', {'model': tag, 'max_tokens': 1,
+                                                   'messages': [{'role': 'user', 'content': 'hi'}]}, timeout=1800):
                 pass
             self.model = tag
         placement = self.placement(tag)

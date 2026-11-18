@@ -24,7 +24,8 @@
 | Qwen3-8B Q8_0（自动选择） | GPU | 27 token/秒 |
 | Qwen3-8B Q4_K_M | GPU + 内存（一半层在 CPU） | 6.4 token/秒 |
 | Qwen3-8B Q4_K_M | 仅 CPU（4 核） | 3.6 token/秒 |
-| Qwen3-30B-A3B Q6_K（自动选择） | GPU | 9–10 token/秒（正在排查，见下） |
+| Qwen3-30B-A3B Q6_K（自动选择，混合专家） | GPU | 57–58 token/秒 |
+| Qwen3-30B-A3B Q4_K_M | GPU | 63–66 token/秒 |
 
 首次加载包括下载：Qwen3-8B Q8_0 约 4 分钟，Qwen3-30B-A3B Q6_K（25 GB）约 7–11 分钟；同一会话内再次使用直接复用。
 
@@ -71,7 +72,7 @@ Authorization: Bearer <本机 API Key>
 
 ## English
 
-**Language models.** Open `/chat`, enter a model name (`Qwen3-8B`, `Qwen3-32B`, `Qwen3-30B-A3B`) or a GGUF repository, and select **Find and load**. The Kaggle session searches Hugging Face for GGUF builds of that model, estimates GPU and RAM needs from the file sizes and context length, and loads the highest-quality build that fits: all on the GPUs if possible, otherwise split with RAM, or CPU only. Only the original model and plain conversions are considered. Ollama runs the model and spreads it across both T4s and RAM. Measured on dual T4: Qwen3-8B 27 tok/s at Q8_0 and 33–37 tok/s at Q4_K_M on GPU, 6.4 tok/s half on CPU, 3.6 tok/s CPU only. Language, image and video models replace each other on one session.
+**Language models.** Open `/chat`, enter a model name (`Qwen3-8B`, `Qwen3-32B`, `Qwen3-30B-A3B`) or a GGUF repository, and select **Find and load**. The Kaggle session searches Hugging Face for GGUF builds of that model, estimates GPU and RAM needs from the file sizes and context length, and loads the highest-quality build that fits: all on the GPUs if possible, otherwise split with RAM, or CPU only. Only the original model and plain conversions are considered. Ollama runs the model and spreads it across both T4s and RAM. Measured on dual T4: Qwen3-8B 27 tok/s at Q8_0 and 33–37 tok/s at Q4_K_M on GPU, 6.4 tok/s half on CPU, 3.6 tok/s CPU only; the mixture-of-experts Qwen3-30B-A3B 57–58 tok/s at Q6_K and 63–66 tok/s at Q4_K_M. Language, image and video models replace each other on one session.
 
 **OpenAI-compatible API.** `POST /v1/chat/completions` (streaming or not) and `GET /v1/models` with the local API key. Naming another model in `model` loads it first. Tool calls and image input are not supported yet. The key stays the same only when the account is saved with Remember.
 

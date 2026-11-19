@@ -16,6 +16,7 @@
 ## 使用
 
 - 图片、视频、画廊、批量、图生图与局部编辑与桌面版相同。涂抹蒙版支持手指操作。
+- 聊天页（语言模型）同样可用：在图片页左侧或视频页顶部进入。“本机 AI 工具”只在电脑上有意义，手机上会显示为未安装。
 - 上传参考图、首帧时使用系统文件选择器。
 - 保存图片、视频与 ZIP 会写入 **下载/CC Media Studio**。
 - 应用切到后台后，通知栏会显示“运行中”，任务与 15 分钟空闲释放继续进行。有任务排队或 Kaggle 会话占用时，应用会保持 CPU 唤醒；空闲时不会。
@@ -63,7 +64,7 @@ The Android app runs the same local client and pages as the desktop app; generat
 
 - **Requirements:** Android 10 or later on a 64-bit (arm64) phone, plus a Kaggle username and API key.
 - **Install:** download `CC-Media-Studio-<version>-android.apk` from Releases (preview builds: the `installers-android` artifact of the “Desktop installers” workflow), allow installing unknown apps, then enter your Kaggle username and key under Account & connection.
-- **Use:** images, video, the gallery, batches, image-to-image and inpainting work as on the desktop; the mask brush works with touch. Uploads use the system file picker. Saved images, videos and ZIP files go to **Downloads/CC Media Studio**.
+- **Use:** images, video, the gallery, batches, image-to-image and inpainting work as on the desktop; the mask brush works with touch. The chat page (language models) works too; the local AI tools list is meant for computers and shows nothing installed on a phone. Uploads use the system file picker. Saved images, videos and ZIP files go to **Downloads/CC Media Studio**.
 - **Background:** a notification keeps jobs and the 15-minute idle release running. The app keeps the CPU awake only while jobs are queued or a Kaggle session is held. Use **Exit** in the notification to release the Kaggle session and close the app; swiping the app away does not stop the service.
 - **Limits:** automatic account mode only (batch mode needs the `kaggle` command line). MCP and ComfyUI are desktop-only. 32-bit phones are not supported. Builds signed with a temporary debug key change signature each time, so uninstall the old version before updating; that removes the in-app gallery and settings.
 - **Build:** JDK 17, Android SDK (API 35) and Python 3.12, then `cd android && ./gradlew assembleRelease`. Python on the phone comes from Chaquopy; the worker and GUI server run as threads in the app.

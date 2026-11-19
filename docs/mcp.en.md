@@ -35,6 +35,8 @@ On Windows use `C:/absolute/path/free-media-studio/.easy-venv/Scripts/python.exe
 | `generate_video` | `prompt`, `request_id`; optional `model_id`, `frames`, `seed`, `steps`, `size`, `negative_prompt`, `image_path` / `image_base64` (first frame), `last_image_path` / `last_image_base64` (last frame, LTX only) | Video job ID |
 | `get_video` | Completed video job ID | Local MP4 path, URI, file size and usage |
 
+Language models (chat) are not exposed through MCP: clients that speak the OpenAI API can use `http://127.0.0.1:8787/v1/chat/completions` with the local API key directly. See [docs/llm.md](llm.md).
+
 Call status, submit once, poll the job at least two seconds apart, then retrieve the image. Reuse a request ID only when retrying the same intended submission. A different payload with the same ID is rejected. Do not automatically resubmit errored or interrupted tasks; the remote task may still be running.
 
 The local worker survives GUI closure and MCP disconnection. Completed images persist in `~/.kaggle-qwen-client/studio/images/`; SQLite holds task metadata without Kaggle keys. Private local connection records authenticate the localhost-only worker. Different accounts should use different `EASY_CONFIG_PATH` values, and account changes are rejected while tasks are pending.

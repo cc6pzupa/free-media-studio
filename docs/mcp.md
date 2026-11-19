@@ -97,6 +97,8 @@ macOS / Linux 可由 MCP 自动启动独立后台。
 | `generate_video` | `prompt`、`request_id`；可选 `model_id`、`frames`、`seed=42`、`steps`、`size`、`negative_prompt`、`image_path` / `image_base64`（首帧）、`last_image_path` / `last_image_base64`（尾帧，仅 LTX） | 立即返回视频任务 ID |
 | `get_video` | 已完成的视频 `job_id` | 本机 MP4 路径、文件 URI、文件大小与耗时 |
 
+语言模型（聊天）不通过 MCP 提供：支持 OpenAI 接口的 AI 客户端可直接使用 `http://127.0.0.1:8787/v1/chat/completions` 和本机 API Key，见 [语言模型说明](llm.md)。
+
 每个图片任务输出一张 PNG（默认 512×512，可用 `size` 选择最大 1024 的尺寸；图生图与局部编辑见 [图片编辑说明](editing.md)）；视频任务输出一个 MP4。`request_id` 是 AI 客户端为每次预期生成分配的唯一编号，例如 `fox-20261109-001`。同一提交重试时复用该编号，会取回原任务；相同编号搭配不同参数会报错，避免静默生成第二张。
 
 `studio_status` 不申请 GPU。`last_usage` 是历史信息，不保证 Kaggle 当前仍存活；实际生成时后端会重新检查会话和模型。

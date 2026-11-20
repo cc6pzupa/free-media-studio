@@ -300,11 +300,21 @@ class LlmSessionBackend:
     def prepare(self, name, context=8192, choice=None, progress=None):
         name, context, choice = validate_name(name), validate_context(context), validate_choice(choice)
         notify = progress or (lambda event: None)
-        try:
-            output = self._run(prepare_code(name, context, choice), 7200,
-                               lambda kind, data: notify(data) if kind == 'progress' else None)
-        except Exception:
-            raise RuntimeError('准备语言模型失败，请查看专用 Notebook 日志。') from None
+        output = None
+        for attempt in range(2):
+            try:
+                output = self._run(prepare_code(name, context, choice), 7200,
+                                   lambda kind, data: notify(data) if kind == 'progress' else None)
+                break
+            except Exception as error:
+                # A dropped connection leaves the kernel running; reconnect once. Ollama
+                # resumes a partial download, so preparing again is safe.
+                lost = 'WebSocket' in type(error).__name__ or 'Connection' in type(error).__name__ or 'closed' in str(error).lower()
+                if attempt == 0 and lost:
+                    notify({'phase': 'reconnecting', 'message': '与 Kaggle 的连接中断，正在重新连接并继续。', 'media_type': 'text'})
+                    self.session.close()
+                    continue
+                raise RuntimeError('准备语言模型失败，请查看专用 Notebook 日志。') from None
         for line in output.splitlines():
             if line.startswith('CC_LLM_ERROR:'):
                 raise ValueError('找不到能在本会话运行的版本：' + json.loads(line.split(':', 1)[1])[:200])

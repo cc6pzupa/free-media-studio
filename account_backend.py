@@ -22,11 +22,13 @@ class KaggleApiError(RuntimeError):
 class AccountBackend:
     mode='account'
 
-    def __init__(self,user,token,dataset=None,notebook_slug='qwen-image-studio',cache_dir=None,http=None,acceleration='auto'):
+    def __init__(self,user,token,dataset=None,notebook_slug='qwen-image-studio',cache_dir=None,http=None,acceleration='auto',machine='gpu'):
         if not re.fullmatch(r'[A-Za-z0-9_-]+',user):raise ValueError('请填写 Kaggle 账号用户名')
         if not isinstance(token,str) or not token.strip():raise ValueError('请填写 Kaggle API Key / Token')
         if not re.fullmatch(r'[A-Za-z0-9_-]+',notebook_slug):raise ValueError('Invalid notebook slug')
         if acceleration not in ('auto','split'):raise ValueError('Invalid acceleration mode')
+        if machine not in ('gpu','cpu'):raise ValueError('Invalid machine')
+        self.machine=machine;self.cache_dir=cache_dir
         self.acceleration=acceleration
         self.user,self.token=user,token.strip()
         self.dataset=dataset or user+'/qwen-image-t4-assets'
@@ -38,6 +40,8 @@ class AccountBackend:
         directory=Path(cache_dir) if cache_dir else Path(os.environ.get('EASY_CONFIG_PATH',str(Path.home()/'.kaggle-qwen-client/settings.json'))).parent/'sessions'
         self.cache_file=directory/(user+'-'+notebook_slug+'.json')
         self.backend=None;self.video_backend=None;self.llm_backend=None;self.lock=threading.Lock()
+        # A CPU-only session (no GPU quota) for language models, in its own notebook.
+        self.cpu=None;self.llm_target='gpu'
 
     def _call(self,service,method,body,timeout=(20,90)):
         try:
@@ -146,7 +150,10 @@ class AccountBackend:
             if operation:self._save({'operation':operation})
         if not operation:
             progress({'phase':'starting','message':'正在申请双 T4 会话，首次启动可能需要排队。'})
-            result=self._call('kernels.KernelsApiService','CreateKernelSession',{'slug':self.slug,'language':'python','kernelType':'notebook','machineShape':'NvidiaTeslaT4','enableInternet':True})
+            request={'slug':self.slug,'language':'python','kernelType':'notebook','enableInternet':True}
+            # Without a machine shape Kaggle starts a CPU session, which uses no GPU quota.
+            if self.machine=='gpu':request['machineShape']='NvidiaTeslaT4'
+            result=self._call('kernels.KernelsApiService','CreateKernelSession',request)
             operation=result.get('name')
             if not operation:raise RuntimeError('Kaggle 未返回启动任务编号。')
             self._save({'operation':operation})
@@ -224,30 +231,49 @@ class AccountBackend:
             self.llm_backend=LlmSessionBackend(url)
         return self.llm_backend
 
-    def llm_prepare(self,name,context=8192,choice=None,progress=None):
-        """Find, download and load the best build of a language model on this session."""
+    def _cpu(self):
+        if self.cpu is None:
+            self.cpu=AccountBackend(self.user,self.token,self.dataset,notebook_slug='cc-media-cpu',cache_dir=self.cache_dir,machine='cpu')
+        return self.cpu
+
+    def llm_prepare(self,name,context=8192,choice=None,progress=None,target='gpu'):
+        """Find, download and load the best build of a language model, on the GPU
+        session or (target='cpu') on a CPU-only session that uses no GPU quota."""
+        if target not in ('gpu','cpu'):raise ValueError('target 需为 gpu 或 cpu。')
+        if target=='cpu' and self.machine=='gpu':
+            # Its own lock: a CPU chat never waits for an image or video job.
+            info=self._cpu().llm_prepare(name,context,choice,progress)
+            self.llm_target='cpu'
+            return info
         notify=progress or (lambda event:None)
         with self.lock:
             started=time.monotonic()
             info=self._llm(notify).prepare(name,context,choice,notify)
-            return dict(info,request_seconds=round(time.monotonic()-started,2))
+            self.llm_target='gpu'
+            return dict(info,request_seconds=round(time.monotonic()-started,2),target=self.machine)
 
     def llm_chat(self,body,on_chunk):
         """Stream one chat completion from the loaded model."""
+        if self.llm_target=='cpu' and self.cpu is not None:return self.cpu.llm_chat(body,on_chunk)
         with self.lock:
             if self.llm_backend is None or not self.llm_backend.info:
                 raise ValueError('请先选择并加载语言模型。')
             return self.llm_backend.chat(body,on_chunk)
 
     def llm_info(self):
+        if self.llm_target=='cpu' and self.cpu is not None:return self.cpu.llm_info()
         backend=self.llm_backend
-        return backend.info if backend is not None else None
+        return dict(backend.info,target=self.machine) if backend is not None and backend.info else None
 
     def quota(self):
         from usage_stats import normalize_quota
         return normalize_quota(self._call('kernels.KernelsApiService','GetAcceleratorQuotaStatistics',{},timeout=(3,8)))
 
     def release_session(self):
+        if self.cpu is not None:
+            try:self.cpu.release_session()
+            except Exception:pass
+            self.llm_target='gpu'
         # Cancel only the exact interactive session this client connected to.
         with self.lock:
             cached=self._read();url=cached.get('jupyter_url','')
@@ -271,4 +297,5 @@ class AccountBackend:
             if self.backend:self.backend.close()
             if self.video_backend:self.video_backend.close()
             if self.llm_backend:self.llm_backend.close()
+            if self.cpu is not None:self.cpu.close()
             self.http.close()

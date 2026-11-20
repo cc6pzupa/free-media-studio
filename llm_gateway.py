@@ -163,7 +163,7 @@ def handle_post(handler, path, ui_ok, api_ok, api_key=None, remembered=None):
         client = StudioClient(allow_job_inheritance=True)
         try:
             if path == '/llm/prepare':
-                model = client.llm_prepare(body.get('name'), body.get('context', 8192), body.get('choice'), emit)
+                model = client.llm_prepare(body.get('name'), body.get('context', 8192), body.get('choice'), emit, body.get('target', 'gpu'))
                 emit({'type': 'done', 'model': model})
             else:
                 final = client.llm_chat(body, emit)
@@ -209,6 +209,7 @@ def _openai_chat(handler, body):
             return
         name = _ensure_model(client, body.get('model'))
         content, reasoning, finish, usage, ident = [], [], None, None, None
+        calls = {}  # tool calls arrive in pieces keyed by index
 
         def collect(event):
             nonlocal finish, usage, ident
@@ -221,9 +222,18 @@ def _openai_chat(handler, body):
                 delta = choice.get('delta') or {}
                 content.append(delta.get('content') or '')
                 reasoning.append(delta.get('reasoning') or delta.get('reasoning_content') or '')
+                for piece in delta.get('tool_calls') or []:
+                    call = calls.setdefault(piece.get('index', len(calls)), {'id': None, 'type': 'function', 'function': {'name': '', 'arguments': ''}})
+                    call['id'] = piece.get('id') or call['id']
+                    function = piece.get('function') or {}
+                    call['function']['name'] += function.get('name') or ''
+                    call['function']['arguments'] += function.get('arguments') or ''
                 finish = choice.get('finish_reason') or finish
         client.llm_chat(body, collect)
         message = {'role': 'assistant', 'content': ''.join(content)}
+        if calls:
+            message['tool_calls'] = [dict(call, id=call['id'] or 'call_%d' % index) for index, call in sorted(calls.items())]
+            finish = finish if finish in ('tool_calls', 'stop') else 'tool_calls'
         if ''.join(reasoning):
             message['reasoning_content'] = ''.join(reasoning)
         handler.send(200, {'id': ident or 'chatcmpl-kaggle', 'object': 'chat.completion', 'created': created, 'model': name,

@@ -93,13 +93,49 @@ class Validation(unittest.TestCase):
             llm_session.validate_choice({'repo': 'x/y', 'first': '../../etc/passwd'})
 
     def test_chat_body_keeps_only_known_fields(self):
-        body = chat_body({'model': 'x', 'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': 'a'}, {'type': 'image_url'}]}],
-                          'temperature': 0.5, 'max_tokens': 100, 'stop': 'END', 'tools': [{}], 'stream': True})
+        body = chat_body({'model': 'x', 'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': 'a'}]}],
+                          'temperature': 0.5, 'max_completion_tokens': 100, 'stop': 'END', 'stream': True, 'logprobs': True})
         self.assertEqual(body, {'messages': [{'role': 'user', 'content': 'a'}], 'temperature': 0.5, 'max_tokens': 100, 'stop': ['END']})
         for bad in ({'messages': []}, {'messages': [{'role': 'tool', 'content': 'x'}]}, {'messages': [{'role': 'user', 'content': 'x'}], 'temperature': 5},
-                    {'messages': [{'role': 'user', 'content': 'x'}], 'max_tokens': True}):
+                    {'messages': [{'role': 'user', 'content': 'x'}], 'max_tokens': True}, {'messages': [{'role': 'robot', 'content': 'x'}]}):
             with self.assertRaises(ValueError):
                 chat_body(bad)
+
+    def test_tools_and_a_tool_call_round_trip(self):
+        weather = {'type': 'function', 'function': {'name': 'get_weather', 'description': 'Weather for a city',
+                   'parameters': {'type': 'object', 'properties': {'city': {'type': 'string'}}, 'required': ['city']}, 'strict': True}}
+        body = chat_body({'messages': [
+            {'role': 'user', 'content': 'Weather in Oslo?'},
+            {'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'call_1', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': {'city': 'Oslo'}}}]},
+            {'role': 'tool', 'tool_call_id': 'call_1', 'content': '{"temp": 3}'}],
+            'tools': [weather], 'tool_choice': 'auto', 'parallel_tool_calls': False, 'response_format': {'type': 'json_object'}})
+        self.assertEqual(body['tools'], [{'type': 'function', 'function': {'name': 'get_weather', 'description': 'Weather for a city',
+                                          'parameters': weather['function']['parameters']}}])
+        self.assertEqual(body['messages'][1], {'role': 'assistant', 'content': '', 'tool_calls': [
+            {'id': 'call_1', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': '{"city": "Oslo"}'}}]})
+        self.assertEqual(body['messages'][2], {'role': 'tool', 'content': '{"temp": 3}', 'tool_call_id': 'call_1'})
+        self.assertEqual((body['tool_choice'], body['parallel_tool_calls'], body['response_format']), ('auto', False, {'type': 'json_object'}))
+        for bad in ([{'type': 'function', 'function': {'name': 'rm -rf'}}], [{'type': 'function', 'function': {'name': 'x', 'parameters': 'no'}}]):
+            with self.assertRaises(ValueError):
+                chat_body({'messages': [{'role': 'user', 'content': 'x'}], 'tools': bad})
+        with self.assertRaises(ValueError):
+            chat_body({'messages': [{'role': 'user', 'content': 'x'}], 'tools': [weather], 'tool_choice': 'sometimes'})
+
+    def test_images_are_checked_data_urls(self):
+        import base64
+        png = base64.b64encode(b'\x89PNG\r\n\x1a\n' + b'\x00' * 64).decode()
+        body = chat_body({'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': 'What is this?'},
+                                                                      {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + png}}]}]})
+        self.assertEqual(body['messages'][0]['content'][0], {'type': 'text', 'text': 'What is this?'})
+        self.assertTrue(body['messages'][0]['content'][1]['image_url']['url'].startswith('data:image/png;base64,'))
+        for url in ('https://example.com/cat.png', 'data:image/png;base64,' + base64.b64encode(b'GIF89a not allowed').decode()):
+            with self.assertRaises(ValueError):
+                chat_body({'messages': [{'role': 'user', 'content': [{'type': 'image_url', 'image_url': {'url': url}}]}]})
+        with self.assertRaises(ValueError):  # images only in user messages
+            chat_body({'messages': [{'role': 'assistant', 'content': [{'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + png}}]}]})
+        nine = [{'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + png}}] * 9
+        with self.assertRaises(ValueError):
+            chat_body({'messages': [{'role': 'user', 'content': nine}]})
 
 
 class KernelCode(unittest.TestCase):

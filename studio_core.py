@@ -641,10 +641,11 @@ class StudioCore:
                 self.llm_active-=1
                 self.idle_since=time.monotonic();self.session_state='active';self.release_retry_at=0
 
-    def llm_prepare(self,name,context=8192,choice=None,progress=None):
+    def llm_prepare(self,name,context=8192,choice=None,progress=None,target='gpu'):
         from llm_session import validate_choice,validate_context,validate_name
         name,context,choice=validate_name(name),validate_context(context),validate_choice(choice)
-        return self._llm_call(lambda backend:backend.llm_prepare(name,context,choice,progress))
+        if target not in ('gpu','cpu'):raise ValueError('运行位置需为 gpu 或 cpu。')
+        return self._llm_call(lambda backend:backend.llm_prepare(name,context,choice,progress,target))
 
     def llm_chat(self,body,on_chunk):
         from llm_session import chat_body

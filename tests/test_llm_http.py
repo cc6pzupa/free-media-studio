@@ -30,7 +30,8 @@ class FakeLlmBackend:
         self.prepared = []
         self.chats = []
 
-    def llm_prepare(self, name, context=8192, choice=None, progress=None):
+    def llm_prepare(self, name, context=8192, choice=None, progress=None, target='gpu'):
+        self.target = target
         progress({'phase': 'download', 'percent': 50.0, 'message': 'downloading'})
         self.prepared.append((name, context, choice))
         self.info = {'name': name, 'tag': 'hf.co/x/%s-GGUF:Q4_K_M' % name, 'repo': 'x/%s-GGUF' % name, 'quant': 'Q4_K_M',
@@ -43,6 +44,13 @@ class FakeLlmBackend:
             raise ValueError('请先选择并加载语言模型。')
         body = chat_body(body)
         self.chats.append(body)
+        if body.get('tools'):
+            # A tool call streamed in pieces, as Ollama sends it.
+            for piece in ({'index': 0, 'id': 'call_9', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': ''}},
+                          {'index': 0, 'function': {'arguments': '{"city": '}}, {'index': 0, 'function': {'arguments': '"Oslo"}'}}):
+                on_chunk({'id': 'c2', 'choices': [{'index': 0, 'delta': {'tool_calls': [piece]}, 'finish_reason': None}]})
+            on_chunk({'id': 'c2', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'tool_calls'}]})
+            return {'seconds': 0.1}
         for piece in ('<think>hm</think>', 'Hello', ' there'):
             on_chunk({'id': 'c1', 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {'content': piece}, 'finish_reason': None}]})
         on_chunk({'id': 'c1', 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}],
@@ -154,6 +162,17 @@ class LlmHttpTests(unittest.TestCase):
         self.assertTrue(all(c['model'] == 'Qwen3-8B' for c in chunks))
         self.assertEqual(len(self.fake.prepared), 1)  # the loaded model was reused
 
+    def test_7_tool_calls_without_streaming(self):
+        tools = [{'type': 'function', 'function': {'name': 'get_weather', 'parameters': {'type': 'object', 'properties': {}}}}]
+        status, _, data = self.request('POST', '/v1/chat/completions',
+                                       {'model': 'default', 'messages': [{'role': 'user', 'content': 'Oslo?'}], 'tools': tools}, self.api())
+        reply = json.loads(data)['choices'][0]
+        self.assertEqual(status, 200)
+        self.assertEqual(reply['finish_reason'], 'tool_calls')
+        self.assertEqual(reply['message']['tool_calls'], [{'id': 'call_9', 'type': 'function',
+                                                           'function': {'name': 'get_weather', 'arguments': '{"city": "Oslo"}'}}])
+        self.assertEqual(self.fake.chats[-1]['tools'][0]['function']['name'], 'get_weather')
+
     def test_3_a_new_model_name_loads_that_model(self):
         status, _, data = self.request('POST', '/v1/chat/completions',
                                        {'model': 'Qwen3-14B', 'messages': [{'role': 'user', 'content': 'hi'}]}, self.api())
@@ -166,7 +185,7 @@ class LlmHttpTests(unittest.TestCase):
         self.assertEqual(status, 401)
         status, _, _ = self.request('POST', '/llm/chat', {'messages': []}, {'X-Local-Session': 'wrong'})
         self.assertEqual(status, 401)
-        status, _, data = self.request('POST', '/v1/chat/completions', {'model': 'default', 'messages': [{'role': 'tool', 'content': 'x'}]}, self.api())
+        status, _, data = self.request('POST', '/v1/chat/completions', {'model': 'default', 'messages': [{'role': 'robot', 'content': 'x'}]}, self.api())
         self.assertEqual(status, 400)
         self.assertIn('role', json.loads(data)['error']['message'])
         status, _, data = self.request('POST', '/llm/prepare', {'name': '../etc/passwd'}, self.ui())

@@ -141,7 +141,7 @@ def create_worker_server(core, token, port=0):
                     except RuntimeError as error:return self.send(502,{'error':str(error)})
                 if self.path=='/llm/prepare':
                     return self.stream(lambda emit:{'model':core.llm_prepare(body.get('name'),body.get('context',8192),body.get('choice'),
-                        lambda event:emit({'type':'progress','event':event}))})
+                        lambda event:emit({'type':'progress','event':event}),body.get('target','gpu'))})
                 if self.path=='/llm/chat':
                     from llm_session import chat_body
                     request=chat_body(body)  # reject a malformed request before streaming starts

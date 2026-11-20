@@ -1,5 +1,6 @@
 """Language-model session adapter: prepares a model on the Kaggle kernel and
 streams chat completions back through the Jupyter connection."""
+import base64
 import json
 import re
 import threading
@@ -12,7 +13,7 @@ LLM_FILES = ('llm_select.py', 'remote_llm.py')
 LLM_MODEL_ID = 'language-model'
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$')
 CONTEXTS = (2048, 4096, 8192, 16384, 32768)
-ROLES = ('system', 'user', 'assistant')
+ROLES = ('system', 'user', 'assistant', 'tool')
 # OpenAI chat parameters passed through to the model; everything else is dropped.
 NUMBERS = {'temperature': (0, 2), 'top_p': (0, 1), 'presence_penalty': (-2, 2), 'frequency_penalty': (-2, 2),
            'max_tokens': (1, 32768), 'seed': (0, 2**31 - 1)}
@@ -42,8 +43,64 @@ def validate_choice(choice):
     return {'repo': choice['repo'], 'first': choice['first']}
 
 
+TOOL_NAME = re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
+MAX_IMAGES = 8
+MAX_IMAGE_BYTES_TOTAL = 16 * 1024 * 1024
+MAX_TOOLS_JSON = 256 * 1024
+
+
+def _image_part(part):
+    """An OpenAI image_url part as a checked base64 data URL (PNG, JPEG or WebP)."""
+    from media_inputs import decode_image, image_kind
+    value = part.get('image_url')
+    url = value.get('url') if isinstance(value, dict) else value
+    if not isinstance(url, str) or not url.startswith('data:image/'):
+        raise ValueError('图片需为 base64 data URL（data:image/png;base64,...），不支持网址。')
+    raw = decode_image(url, '图片')
+    return raw, {'type': 'image_url', 'image_url': {'url': 'data:image/%s;base64,%s' % (image_kind(raw), base64.b64encode(raw).decode('ascii'))}}
+
+
+def _tool_calls(calls):
+    if not isinstance(calls, list) or not calls or len(calls) > 64:
+        raise ValueError('tool_calls 无效。')
+    clean = []
+    for call in calls:
+        function = call.get('function') if isinstance(call, dict) else None
+        if not isinstance(function, dict) or not TOOL_NAME.match(str(function.get('name', ''))):
+            raise ValueError('tool_calls 中的函数名无效。')
+        arguments = function.get('arguments', '')
+        if not isinstance(arguments, str):
+            arguments = json.dumps(arguments, ensure_ascii=False)
+        ident = call.get('id')
+        clean.append({'id': ident if isinstance(ident, str) and len(ident) <= 128 else 'call_%d' % len(clean), 'type': 'function',
+                      'function': {'name': function['name'], 'arguments': arguments}})
+    return clean
+
+
+def _tools(tools):
+    if not isinstance(tools, list) or not tools or len(tools) > 128:
+        raise ValueError('tools 需为 1–128 个函数。')
+    clean = []
+    for tool in tools:
+        function = tool.get('function') if isinstance(tool, dict) and tool.get('type', 'function') == 'function' else None
+        if not isinstance(function, dict) or not TOOL_NAME.match(str(function.get('name', ''))):
+            raise ValueError('tools 中的函数名无效。')
+        entry = {'name': function['name']}
+        if isinstance(function.get('description'), str):
+            entry['description'] = function['description'][:4000]
+        if function.get('parameters') is not None:
+            if not isinstance(function['parameters'], dict):
+                raise ValueError('tools 的 parameters 需为 JSON Schema 对象。')
+            entry['parameters'] = function['parameters']
+        clean.append({'type': 'function', 'function': entry})
+    if len(json.dumps(clean, ensure_ascii=False)) > MAX_TOOLS_JSON:
+        raise ValueError('tools 定义过大。')
+    return clean
+
+
 def chat_body(body):
-    """A clean OpenAI chat request: messages plus known numeric options."""
+    """A clean OpenAI chat request: messages (text, images, tool calls and results),
+    tools, and known options. Everything else is dropped."""
     if not isinstance(body, dict):
         raise ValueError('请求格式无效。')
     messages = body.get('messages')
@@ -51,19 +108,49 @@ def chat_body(body):
         raise ValueError('messages 需为非空列表。')
     clean = []
     total = 0
+    images = 0
+    image_bytes = 0
     for message in messages:
         if not isinstance(message, dict) or message.get('role') not in ROLES:
-            raise ValueError('每条消息需有 role（system、user 或 assistant）。')
+            raise ValueError('每条消息需有 role（system、user、assistant 或 tool）。')
+        role = message['role']
         content = message.get('content')
+        entry = {'role': role}
         if isinstance(content, list):
-            # OpenAI content parts: keep the text parts.
-            content = ''.join(part.get('text', '') for part in content if isinstance(part, dict) and part.get('type') == 'text')
-        if not isinstance(content, str):
+            texts, parts = [], []
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                if part.get('type') == 'text':
+                    texts.append(str(part.get('text', '')))
+                elif part.get('type') == 'image_url':
+                    if role != 'user':
+                        raise ValueError('只有 user 消息可以带图片。')
+                    raw, image = _image_part(part)
+                    images += 1
+                    image_bytes += len(raw)
+                    parts.append(image)
+            text = ''.join(texts)
+            content = ([{'type': 'text', 'text': text}] if text else []) + parts if parts else text
+        elif content is None and role == 'assistant' and message.get('tool_calls'):
+            content = ''
+        elif not isinstance(content, str):
             raise ValueError('消息内容需为文本。')
-        total += len(content)
-        clean.append({'role': message['role'], 'content': content})
+        entry['content'] = content
+        total += len(content) if isinstance(content, str) else sum(len(p.get('text', '')) for p in content)
+        if role == 'assistant' and message.get('tool_calls') is not None:
+            entry['tool_calls'] = _tool_calls(message['tool_calls'])
+            total += sum(len(c['function']['arguments']) for c in entry['tool_calls'])
+        if role == 'tool':
+            ident = message.get('tool_call_id')
+            if not isinstance(ident, str) or not 0 < len(ident) <= 128:
+                raise ValueError('tool 消息需有 tool_call_id。')
+            entry['tool_call_id'] = ident
+        clean.append(entry)
     if total > MAX_PROMPT_CHARS:
         raise ValueError('对话内容过长。')
+    if images > MAX_IMAGES or image_bytes > MAX_IMAGE_BYTES_TOTAL:
+        raise ValueError('每次最多 %d 张图片，总计不超过 16 MB。' % MAX_IMAGES)
     result = {'messages': clean}
     for key, (low, high) in NUMBERS.items():
         value = body.get(key)
@@ -72,12 +159,32 @@ def chat_body(body):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
             raise ValueError('%s 超出范围。' % key)
         result[key] = int(value) if key in ('max_tokens', 'seed') else float(value)
+    if body.get('max_completion_tokens') is not None and 'max_tokens' not in result:
+        value = body['max_completion_tokens']
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 32768:
+            raise ValueError('max_completion_tokens 超出范围。')
+        result['max_tokens'] = value
     stop = body.get('stop')
     if stop is not None:
         stops = [stop] if isinstance(stop, str) else stop
         if not isinstance(stops, list) or len(stops) > 4 or not all(isinstance(s, str) and 0 < len(s) <= 64 for s in stops):
             raise ValueError('stop 无效。')
         result['stop'] = stops
+    if body.get('tools'):
+        result['tools'] = _tools(body['tools'])
+        choice = body.get('tool_choice')
+        if choice is not None:
+            if choice in ('auto', 'none', 'required'):
+                result['tool_choice'] = choice
+            elif isinstance(choice, dict) and isinstance(choice.get('function'), dict) and TOOL_NAME.match(str(choice['function'].get('name', ''))):
+                result['tool_choice'] = {'type': 'function', 'function': {'name': choice['function']['name']}}
+            else:
+                raise ValueError('tool_choice 无效。')
+        if isinstance(body.get('parallel_tool_calls'), bool):
+            result['parallel_tool_calls'] = body['parallel_tool_calls']
+    form = body.get('response_format')
+    if isinstance(form, dict) and form.get('type') in ('text', 'json_object'):
+        result['response_format'] = {'type': form['type']}
     return result
 
 

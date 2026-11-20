@@ -192,8 +192,8 @@ class StudioClient:
         if not self.llm_supported:return {'available':False,'model':None,'busy':False,'restart_required':True}
         return self._request('GET','/llm/status')
 
-    def llm_prepare(self,name,context=8192,choice=None,on_event=None):
-        return self._stream('/llm/prepare',{'name':name,'context':context,'choice':choice},on_event or (lambda event:None))['model']
+    def llm_prepare(self,name,context=8192,choice=None,on_event=None,target='gpu'):
+        return self._stream('/llm/prepare',{'name':name,'context':context,'choice':choice,'target':target},on_event or (lambda event:None))['model']
 
     def llm_chat(self,body,on_event):
         return self._stream('/llm/chat',body,on_event)

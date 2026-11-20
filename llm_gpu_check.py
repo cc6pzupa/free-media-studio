@@ -47,6 +47,37 @@ def diagnose(backend):
 PROMPT = [{'role': 'user', 'content': 'In three sentences, explain why lighthouses use Fresnel lenses.'}]
 
 
+WEATHER = {'type': 'function', 'function': {'name': 'get_weather', 'description': 'Current weather for a city',
+           'parameters': {'type': 'object', 'properties': {'city': {'type': 'string'}}, 'required': ['city']}}}
+
+
+def collect(backend, body):
+    """Run one request; return the text and the assembled tool calls."""
+    text, calls = [], {}
+
+    def on_chunk(chunk):
+        for choice in chunk.get('choices') or []:
+            delta = choice.get('delta') or {}
+            text.append(delta.get('content') or '')
+            for piece in delta.get('tool_calls') or []:
+                call = calls.setdefault(piece.get('index', 0), {'id': None, 'name': '', 'arguments': ''})
+                call['id'] = piece.get('id') or call['id']
+                call['name'] += (piece.get('function') or {}).get('name') or ''
+                call['arguments'] += (piece.get('function') or {}).get('arguments') or ''
+    backend.llm_chat(body, on_chunk)
+    return ''.join(text), [calls[i] for i in sorted(calls)]
+
+
+def red_circle_png():
+    import io
+    from PIL import Image, ImageDraw
+    image = Image.new('RGB', (256, 256), 'white')
+    ImageDraw.Draw(image).ellipse((48, 48, 208, 208), fill=(220, 20, 20))
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    return buffer.getvalue()
+
+
 def chat(backend, max_tokens=256):
     pieces = []
     started = time.monotonic()
@@ -135,6 +166,41 @@ def run(user, token, output, only=None):
             (output / 'after-llm.mp4').write_bytes(raw)
             return {k: stats.get(k) for k in ('generation_seconds', 'peak_gpu_gib', 'parallel_strategy')}
         case('video-after-llm', video)
+
+        def tools():
+            info = prepare('Qwen3-8B')
+            messages = [{'role': 'user', 'content': 'What is the weather in Oslo right now? Use the tool.'}]
+            text, calls = collect(backend, {'messages': messages, 'tools': [WEATHER], 'max_tokens': 512})
+            if not calls or calls[0]['name'] != 'get_weather' or 'oslo' not in calls[0]['arguments'].lower():
+                raise RuntimeError('No get_weather(Oslo) call: %r %r' % (calls, text[-200:]))
+            messages += [{'role': 'assistant', 'content': None, 'tool_calls': [{'id': calls[0]['id'] or 'call_0', 'type': 'function',
+                          'function': {'name': 'get_weather', 'arguments': calls[0]['arguments']}}]},
+                         {'role': 'tool', 'tool_call_id': calls[0]['id'] or 'call_0', 'content': '{"temperature_c": 3, "sky": "snow"}'}]
+            answer, _ = collect(backend, {'messages': messages, 'tools': [WEATHER], 'max_tokens': 512})
+            if 'snow' not in answer.lower() and '3' not in answer:
+                raise RuntimeError('The answer ignored the tool result: ' + answer[-200:])
+            return dict(info, call=calls[0], answer=answer[-200:])
+        case('tool-call', tools)
+
+        def vision():
+            import base64
+            info = prepare('gemma-3-4b-it')
+            url = 'data:image/png;base64,' + base64.b64encode(red_circle_png()).decode()
+            text, _ = collect(backend, {'max_tokens': 128, 'messages': [{'role': 'user', 'content': [
+                {'type': 'text', 'text': 'What shape and colour is shown? Answer in a few words.'},
+                {'type': 'image_url', 'image_url': {'url': url}}]}]})
+            if 'red' not in text.lower():
+                raise RuntimeError('The model did not see the red circle: ' + text[-200:])
+            return dict(info, answer=text[-200:])
+        case('image-input', vision)
+
+        def cpu():
+            started = time.monotonic()
+            info = backend.llm_prepare('Qwen3-30B-A3B', 8192, None, progress('cpu'), target='cpu')
+            state['info'] = info
+            result = {k: info.get(k) for k in ('repo', 'quant', 'bytes', 'placement', 'estimated_tok_per_s', 'loaded', 'target', 'hardware')}
+            return dict(result, prepare_seconds=round(time.monotonic() - started, 1), chat=chat(backend, 128))
+        case('cpu-session', cpu)
     finally:
         try:
             backend.release_session()

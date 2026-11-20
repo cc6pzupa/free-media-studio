@@ -67,6 +67,19 @@ class SessionBackend(unittest.TestCase):
         self.assertEqual(backend.chat({'messages': [{'role': 'user', 'content': 'hi'}]}, got.append), {'seconds': 0.5})
         self.assertEqual(got, [chunk])
 
+    def test_prepare_reconnects_once_after_a_dropped_connection(self):
+        class WebSocketConnectionClosedException(Exception):
+            pass
+        backend, transport = backend_with([WebSocketConnectionClosedException('Connection to remote host was lost.'),
+                                           'CC_LLM_READY:' + json.dumps(INFO) + '\n'])
+        events = []
+        self.assertEqual(backend.prepare('Qwen3-8B', 8192, None, events.append)['quant'], 'Q8_0')
+        self.assertEqual(events[0]['phase'], 'reconnecting')
+        # A second drop is reported, not retried forever.
+        backend, _ = backend_with([WebSocketConnectionClosedException('lost'), WebSocketConnectionClosedException('lost')])
+        with self.assertRaises(RuntimeError):
+            backend.prepare('Qwen3-8B')
+
     def test_errors(self):
         backend, _ = backend_with(['CC_LLM_ERROR:"No build of this model fits this session (2 GPU, 31 GB RAM)"\n'])
         with self.assertRaisesRegex(ValueError, 'No build'):

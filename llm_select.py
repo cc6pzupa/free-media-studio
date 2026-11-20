@@ -124,7 +124,9 @@ def plan(bytes_, hardware, kv_per_token=None, context=8192, active=1.0):
         share = max(0.0, min(1.0, (usable_gpu - kv) / bytes_))
         seconds = per_token * share / gpu_rate + per_token * (1 - share) / cpu_rate
         return {'placement': 'hybrid', 'gpu_share': round(share, 2), 'tok_per_s': round(1 / seconds, 1), 'need_bytes': need}
-    if not gpus and need <= usable_ram:
+    # A CPU session holds the whole model in RAM; Kaggle caps it at 30 GiB, and the
+    # notebook, Ollama and the file cache need room beside it.
+    if not gpus and need <= max(0, (hardware.get('ram_gib', 0) - 10) * 2**30):
         return {'placement': 'cpu', 'gpu_share': 0.0, 'tok_per_s': round(cpu_rate / per_token, 1), 'need_bytes': need}
     return None
 

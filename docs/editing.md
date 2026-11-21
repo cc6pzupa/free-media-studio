@@ -21,6 +21,8 @@ Qwen-Image 2.1 暂不支持图生图和局部编辑：diffusers 没有它的编�
 
 参考图、蒙版和首帧会在云端按目标尺寸**居中裁剪**。步数 × 重绘强度至少为 1，例如 SDXL-Lightning 的 4 步需要强度不低于 0.25。
 
+![原图、图生图、局部编辑与羽化局部编辑（Z-Image Turbo，Kaggle 实测）](guide-assets/edit-strip.jpg)
+
 ## Kaggle 双 T4 实测（2026-11-13）
 
 由 `edit_gpu_check.py` 经 GUI 相同的自动账号路径完成。耗时为模型就绪后的云端生成时间；首次下载与加载另计。

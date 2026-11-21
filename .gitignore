@@ -36,6 +36,7 @@ Thumbs.db
 
 # Shared background service state (normally outside the checkout)
 studio/
+!android/app/src/main/java/com/ccmedia/studio/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
@@ -43,3 +44,9 @@ worker.log
 
 # Installer output
 release/
+
+# Android build state and signing keys
+android/.gradle/
+android/local.properties
+*.jks
+*.keystore

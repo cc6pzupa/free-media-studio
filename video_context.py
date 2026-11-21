@@ -53,10 +53,14 @@ class LTXContextRunner:
                     self.progress(json.loads(line.split(':',1)[1]))
             self.offset=source.tell()
 
-    def generate(self,positive,mask,params):
+    def generate(self,positive,mask,params,latents=None):
+        """Sample on both GPUs. `latents` (first-frame conditioned, packed) selects
+        image-to-video; without them the workers sample text-to-video."""
         import torch
         job=uuid.uuid4().hex
-        torch.save({'positive':positive.cpu(),'mask':mask.cpu()},self.directory/(job+'.input.pt'))
+        inputs={'positive':positive.cpu(),'mask':mask.cpu()}
+        if latents is not None:inputs['latents']=latents.cpu()
+        torch.save(inputs,self.directory/(job+'.input.pt'))
         temporary=self.directory/'request.tmp'
         temporary.write_text(json.dumps(dict(params,job=job)),encoding='utf-8')
         temporary.replace(self.directory/'request.json')
@@ -94,8 +98,9 @@ def worker(directory):
     import torch
     import torch.distributed as dist
     from accelerate import init_empty_weights
-    from diffusers import (LTXPipeline,LTXVideoTransformer3DModel,AutoencoderKLLTXVideo,
+    from diffusers import (LTXPipeline,LTXImageToVideoPipeline,LTXVideoTransformer3DModel,AutoencoderKLLTXVideo,
                            ContextParallelConfig)
+    from diffusers.models._modeling_parallel import ContextParallelInput
     from video_schedule import ltx_distilled_scheduler
     rank=int(os.environ['LOCAL_RANK']);device=torch.device(f'cuda:{rank}')
     torch.cuda.set_device(device)
@@ -105,14 +110,24 @@ def worker(directory):
         torch_dtype=torch.float16,device_map={'':rank},low_cpu_mem_usage=True,local_files_only=True)
     from video_attention import enable_ltx_parallel_mask_broadcast
     enable_ltx_parallel_mask_broadcast()
+    # Image-to-video gives every token its own timestep (B, sequence). Split it
+    # with the hidden states; a text-to-video timestep (B,) has one dimension and
+    # is left whole, as before.
+    plan={key:dict(value) if isinstance(value,dict) else value for key,value in type(transformer)._cp_plan.items()}
+    plan['']['timestep']=ContextParallelInput(split_dim=1,expected_dims=2,split_output=False)
+    transformer._cp_plan=plan
     transformer.enable_parallelism(config=ContextParallelConfig(ulysses_degree=2))
     transformer.set_attention_backend('native')
     with init_empty_weights():vae=AutoencoderKLLTXVideo.from_config(config['vae'])
     class DevicePipeline(LTXPipeline):
         @property
         def _execution_device(self):return device
-    pipeline=DevicePipeline(transformer=transformer,vae=vae,text_encoder=None,tokenizer=None,
-        scheduler=ltx_distilled_scheduler(config['scheduler'],p['sigmas']))
+    class DeviceImagePipeline(LTXImageToVideoPipeline):
+        @property
+        def _execution_device(self):return device
+    scheduler=ltx_distilled_scheduler(config['scheduler'],p['sigmas'])
+    pipeline=DevicePipeline(transformer=transformer,vae=vae,text_encoder=None,tokenizer=None,scheduler=scheduler)
+    image_pipeline=DeviceImagePipeline(transformer=transformer,vae=vae,text_encoder=None,tokenizer=None,scheduler=scheduler)
     resident_gpu_gib=torch.cuda.memory_allocated(device)/2**30
     (directory/f'ready-{rank}').touch();previous=None
     try:
@@ -129,11 +144,15 @@ def worker(directory):
                 if rank==0:print('CC_CONTEXT_PROGRESS:'+json.dumps({'phase':'generating','step':index+1,'steps':params['steps']}),flush=True)
                 return kwargs
             generator=torch.Generator(device=device).manual_seed(params['seed'])
-            result=pipeline(prompt_embeds=inputs['positive'].to(device),
+            common=dict(prompt_embeds=inputs['positive'].to(device),
                 prompt_attention_mask=inputs['mask'].to(device),guidance_scale=1,
-                height=p['height'],width=p['width'],num_frames=params['frames'],
+                height=params.get('height',p['height']),width=params.get('width',p['width']),num_frames=params['frames'],
                 frame_rate=p['fps'],num_inference_steps=params['steps'],generator=generator,
-                callback_on_step_end=progress,output_type='latent').frames
+                callback_on_step_end=progress,output_type='latent')
+            if 'latents' in inputs:
+                # The parent encoded the first frame; both ranks start from it.
+                result=image_pipeline(image=None,latents=inputs['latents'].to(device),**common).frames
+            else:result=pipeline(**common).frames
             torch.cuda.synchronize(device)
             (directory/f'{job}.rank-{rank}.json').write_text(json.dumps({'peak_gpu_gib':torch.cuda.max_memory_allocated(device)/2**30,'resident_gpu_gib':resident_gpu_gib}))
             dist.barrier()

@@ -1,0 +1,221 @@
+"""Run the language-model preview on a real Kaggle dual-T4 session.
+
+Uses the same AccountBackend path as the GUI: automatic build selection,
+download, streamed chat, switching builds, and switching between language,
+image and video models on one session. The session is released at the end.
+
+    KAGGLE_USERNAME=... KAGGLE_API_TOKEN=... python llm_gpu_check.py --output results
+"""
+import argparse
+import json
+import os
+import time
+import traceback
+from pathlib import Path
+
+DIAGNOSE = r'''
+import json,subprocess
+def _sh(c):
+    try:return subprocess.run(c,shell=True,capture_output=True,text=True,timeout=60).stdout[-1500:]
+    except Exception as e:return repr(e)
+info={'free':_sh('free -m'),'ollama':_sh('ps -eo pid,rss,cmd | grep -i [o]llama'),'gpu':_sh('nvidia-smi --query-gpu=memory.used --format=csv'),
+      'disk':_sh('df -h /kaggle/temp /tmp'),'ld':_sh('cat /etc/ld.so.conf.d/* 2>/dev/null | head -20'),'dmesg':_sh('dmesg 2>/dev/null | tail -15')}
+import imageio_ffmpeg
+exe=imageio_ffmpeg.get_ffmpeg_exe()
+info['ffmpeg_version']=_sh(exe+' -version | head -2')
+info['ffmpeg_test']=_sh('head -c 3096576 /dev/zero | '+exe+' -y -f rawvideo -vcodec rawvideo -s 768x448 -pix_fmt rgb24 -r 16 -i - -an -vcodec libx264 -pix_fmt yuv420p -crf 25 /kaggle/temp/cc-ffmpeg-test.mp4 2>&1; echo exit=$?')
+print('CC_DIAG:'+json.dumps(info),flush=True)
+'''
+
+
+def diagnose(backend):
+    from session_runtime import JupyterTransport
+    url = backend._read().get('jupyter_url')
+    if not url:
+        return {'diagnose': 'no session'}
+    transport = JupyterTransport(url)
+    try:
+        transport.start()
+        lines = [l for l in transport.execute(DIAGNOSE, timeout=300).splitlines() if l.startswith('CC_DIAG:')]
+        return json.loads(lines[0][8:]) if lines else {'diagnose': 'no output'}
+    except Exception as error:
+        return {'diagnose_error': type(error).__name__ + ': ' + str(error)[:300]}
+    finally:
+        transport.close()
+
+
+PROMPT = [{'role': 'user', 'content': 'In three sentences, explain why lighthouses use Fresnel lenses.'}]
+
+
+WEATHER = {'type': 'function', 'function': {'name': 'get_weather', 'description': 'Current weather for a city',
+           'parameters': {'type': 'object', 'properties': {'city': {'type': 'string'}}, 'required': ['city']}}}
+
+
+def collect(backend, body):
+    """Run one request; return the text and the assembled tool calls."""
+    text, calls = [], {}
+
+    def on_chunk(chunk):
+        for choice in chunk.get('choices') or []:
+            delta = choice.get('delta') or {}
+            text.append(delta.get('content') or '')
+            for piece in delta.get('tool_calls') or []:
+                call = calls.setdefault(piece.get('index', 0), {'id': None, 'name': '', 'arguments': ''})
+                call['id'] = piece.get('id') or call['id']
+                call['name'] += (piece.get('function') or {}).get('name') or ''
+                call['arguments'] += (piece.get('function') or {}).get('arguments') or ''
+    backend.llm_chat(body, on_chunk)
+    return ''.join(text), [calls[i] for i in sorted(calls)]
+
+
+def red_circle_png():
+    import io
+    from PIL import Image, ImageDraw
+    image = Image.new('RGB', (256, 256), 'white')
+    ImageDraw.Draw(image).ellipse((48, 48, 208, 208), fill=(220, 20, 20))
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    return buffer.getvalue()
+
+
+def chat(backend, max_tokens=256):
+    pieces = []
+    started = time.monotonic()
+    first = [None]
+
+    def on_chunk(chunk):
+        for choice in chunk.get('choices') or []:
+            delta = choice.get('delta') or {}
+            text = (delta.get('content') or '') + (delta.get('reasoning') or '')
+            if text:
+                first[0] = first[0] or time.monotonic()
+                pieces.append(text)
+        if chunk.get('usage'):
+            pieces_usage.append(chunk['usage'])
+    pieces_usage = []
+    backend.llm_chat({'messages': PROMPT, 'max_tokens': max_tokens, 'temperature': 0.6}, on_chunk)
+    end = time.monotonic()
+    tokens = (pieces_usage[-1] if pieces_usage else {}).get('completion_tokens') or len(pieces)
+    decode = end - (first[0] or end)
+    text = ''.join(pieces)
+    if not text.strip():
+        raise RuntimeError('Empty reply')
+    return {'tokens': tokens, 'ttft_s': round((first[0] or end) - started, 2), 'tok_per_s': round(tokens / decode, 1) if decode else None,
+            'reply': text[-300:]}
+
+
+def run(user, token, output, only=None):
+    from account_backend import AccountBackend
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    backend = AccountBackend(user, token, cache_dir=output / 'sessions')
+    reports = []
+    last = [0.0]
+
+    def progress(name):
+        def report(event):
+            now = time.monotonic()
+            if event.get('phase') == 'download' and now - last[0] < 20:
+                return
+            last[0] = now
+            print('LLM_CHECK_PROGRESS ' + name + ' ' + json.dumps({k: event.get(k) for k in ('phase', 'message', 'percent', 'downloaded_gb', 'total_gb') if event.get(k) is not None}, ensure_ascii=False), flush=True)
+        return report
+
+    def case(name, step):
+        if only and name not in only:
+            return
+        started = time.monotonic()
+        print('LLM_CHECK_START ' + name, flush=True)
+        try:
+            result = step()
+            reports.append(dict(case=name, ok=True, wall_seconds=round(time.monotonic() - started, 1), **result))
+        except Exception as error:
+            traceback.print_exc()
+            cause = error.__context__
+            reports.append(dict(case=name, ok=False, wall_seconds=round(time.monotonic() - started, 1), error=type(error).__name__ + ': ' + str(error),
+                                **({'remote_error': (type(cause).__name__ + ': ' + str(cause))[:4000]} if cause is not None else {})))
+            reports[-1]['diagnose'] = diagnose(backend)
+        print('LLM_CHECK_RESULT ' + json.dumps(reports[-1], ensure_ascii=False), flush=True)
+        (output / 'report.json').write_text(json.dumps(reports, indent=2, ensure_ascii=False), encoding='utf-8')
+
+    state = {}
+
+    def prepare(name, choice=None, context=8192):
+        info = backend.llm_prepare(name, context, choice, progress(name))
+        state['info'] = info
+        return {k: info.get(k) for k in ('repo', 'quant', 'file', 'bytes', 'placement', 'estimated_tok_per_s', 'loaded', 'request_seconds')}
+
+    try:
+        case('qwen3-8b-auto', lambda: dict(prepare('Qwen3-8B'), chat=chat(backend)))
+        def alternative():
+            alts = [a for a in state['info']['alternatives'] if a['first'] != state['info']['file'] and a['placement'] == 'gpu']
+            if not alts:
+                raise RuntimeError('No alternative build listed')
+            pick = min(alts, key=lambda a: a['bytes'])
+            return dict(prepare('Qwen3-8B', {'repo': pick['repo'], 'first': pick['first']}), chat=chat(backend))
+        case('qwen3-8b-alternative', alternative)
+        def image():
+            raw, stats = backend.generate_with_progress('A lighthouse on a cliff at dusk, watercolor', 42, None, progress('image'), model_id='z-image-turbo')
+            (output / 'after-llm.png').write_bytes(raw)
+            return {k: stats.get(k) for k in ('generation_seconds', 'peak_gpu_gib', 'model_reused')}
+        case('image-after-llm', image)
+        case('qwen3-30b-a3b-auto', lambda: dict(prepare('Qwen3-30B-A3B'), chat=chat(backend)))
+        def video():
+            raw, stats = backend.generate_video_with_progress('Waves breaking below a lighthouse, slow camera pan', 42, None,
+                                                              model_id='ltx-video-2b-distilled', frames=33, progress=progress('video'))
+            (output / 'after-llm.mp4').write_bytes(raw)
+            return {k: stats.get(k) for k in ('generation_seconds', 'peak_gpu_gib', 'parallel_strategy')}
+        case('video-after-llm', video)
+
+        def tools():
+            info = prepare('Qwen3-8B')
+            messages = [{'role': 'user', 'content': 'What is the weather in Oslo right now? Use the tool.'}]
+            text, calls = collect(backend, {'messages': messages, 'tools': [WEATHER], 'max_tokens': 512})
+            if not calls or calls[0]['name'] != 'get_weather' or 'oslo' not in calls[0]['arguments'].lower():
+                raise RuntimeError('No get_weather(Oslo) call: %r %r' % (calls, text[-200:]))
+            messages += [{'role': 'assistant', 'content': None, 'tool_calls': [{'id': calls[0]['id'] or 'call_0', 'type': 'function',
+                          'function': {'name': 'get_weather', 'arguments': calls[0]['arguments']}}]},
+                         {'role': 'tool', 'tool_call_id': calls[0]['id'] or 'call_0', 'content': '{"temperature_c": 3, "sky": "snow"}'}]
+            answer, _ = collect(backend, {'messages': messages, 'tools': [WEATHER], 'max_tokens': 512})
+            if 'snow' not in answer.lower() and '3' not in answer:
+                raise RuntimeError('The answer ignored the tool result: ' + answer[-200:])
+            return dict(info, call=calls[0], answer=answer[-200:])
+        case('tool-call', tools)
+
+        def vision():
+            import base64
+            info = prepare('gemma-3-4b-it')
+            url = 'data:image/png;base64,' + base64.b64encode(red_circle_png()).decode()
+            text, _ = collect(backend, {'max_tokens': 128, 'messages': [{'role': 'user', 'content': [
+                {'type': 'text', 'text': 'What shape and colour is shown? Answer in a few words.'},
+                {'type': 'image_url', 'image_url': {'url': url}}]}]})
+            if 'red' not in text.lower():
+                raise RuntimeError('The model did not see the red circle: ' + text[-200:])
+            return dict(info, answer=text[-200:])
+        case('image-input', vision)
+
+        def cpu():
+            started = time.monotonic()
+            info = backend.llm_prepare('Qwen3-30B-A3B', 8192, None, progress('cpu'), target='cpu')
+            state['info'] = info
+            result = {k: info.get(k) for k in ('repo', 'quant', 'bytes', 'placement', 'estimated_tok_per_s', 'loaded', 'target', 'hardware')}
+            return dict(result, prepare_seconds=round(time.monotonic() - started, 1), chat=chat(backend, 128))
+        case('cpu-session', cpu)
+    finally:
+        try:
+            backend.release_session()
+            print('LLM_CHECK_RELEASED', flush=True)
+        except Exception as error:
+            print('LLM_CHECK_RELEASE_FAILED ' + type(error).__name__, flush=True)
+        backend.close()
+    return reports
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('--output', default='llm-check-results')
+    parser.add_argument('--only', nargs='*')
+    args = parser.parse_args()
+    reports = run(os.environ['KAGGLE_USERNAME'], os.environ.get('KAGGLE_API_TOKEN') or os.environ['KAGGLE_KEY'], args.output, args.only)
+    print('LLM_CHECK_FINISHED %d/%d passed' % (sum(r['ok'] for r in reports), len(reports)), flush=True)
+    raise SystemExit(0 if reports and all(r['ok'] for r in reports) else 1)

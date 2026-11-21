@@ -41,4 +41,20 @@ adb shell dumpsys activity activities > "$out/activities.txt"
 grep -q "com.ccmedia.studio/.MainActivity" "$out/activities.txt"
 collect
 if grep -q "FATAL EXCEPTION" "$out/logcat.txt"; then grep -A20 "FATAL EXCEPTION" "$out/logcat.txt"; exit 1; fi
+# Screenshots of each page for the guide, printed into the log as small JPEGs.
+for page in image chat video gallery; do
+  adb shell am start -n com.ccmedia.studio/.MainActivity --es page "$page" >/dev/null
+  sleep 8
+  adb exec-out screencap -p > "$out/page-$page.png"
+done
+python3 - "$out" <<'PY' || true
+import base64, io, sys
+from pathlib import Path
+from PIL import Image
+for path in sorted(Path(sys.argv[1]).glob('page-*.png')):
+    image = Image.open(path).convert('RGB')
+    image = image.resize((540, round(image.height * 540 / image.width)), Image.LANCZOS)
+    buffer = io.BytesIO(); image.save(buffer, format='JPEG', quality=80, optimize=True)
+    print('CC_SHOT %s %s' % (path.stem, base64.b64encode(buffer.getvalue()).decode()))
+PY
 echo "Android smoke test passed"

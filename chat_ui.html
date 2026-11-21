@@ -28,6 +28,7 @@ code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}
 .attachments button{position:absolute;top:-6px;right:-6px;padding:0 6px;border-radius:50%;font-size:11px;line-height:18px}
 .attach{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:#f1eefc;cursor:pointer;flex-shrink:0;font-size:18px}
 .msg img{max-width:220px;max-height:220px;border-radius:8px;display:block;margin:6px 0}
+.suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chip{background:#f1eefc;color:var(--accent);border-radius:999px;padding:5px 11px;font-size:12px}.chip:disabled{opacity:.5}
 .tools{display:grid;gap:8px;margin-top:8px}.tool{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.6}
 .tool b{font-size:13px}.tool .state{color:var(--muted)}.tool .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.tool button{padding:4px 10px;font-size:12px}
 .tool .ok{color:#2f8f6b}.log{max-height:180px;overflow:auto;background:#1d1b2b;color:#dcd8ef;font-size:11px;border-radius:8px;padding:8px;white-space:pre-wrap;overflow-wrap:anywhere}[hidden]{display:none!important}
@@ -40,8 +41,8 @@ code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}
 <section class="card" aria-labelledby="modelTitle">
  <h2 id="modelTitle" data-t="modelTitle">语言模型</h2>
  <label for="name" data-t="nameLabel">模型名称（Hugging Face）</label>
- <input id="name" list="suggestions" autocomplete="off" spellcheck="false" placeholder="Qwen3-8B">
- <datalist id="suggestions"><option value="Qwen3-8B"><option value="Qwen3-14B"><option value="Qwen3-32B"><option value="Qwen3-30B-A3B"><option value="gemma-3-27b-it"><option value="meta-llama/Llama-3.3-70B-Instruct"><option value="mistralai/Mistral-Small-3.2-24B-Instruct-2506"><option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"></datalist>
+ <input id="name" autocomplete="off" spellcheck="false" placeholder="Qwen3-8B">
+ <div class="suggestions" id="suggestions" role="group" aria-label="Suggested models"><button type="button" class="chip" data-model="Qwen3-8B">Qwen3-8B</button><button type="button" class="chip" data-model="Qwen3-14B">Qwen3-14B</button><button type="button" class="chip" data-model="Qwen3-32B">Qwen3-32B</button><button type="button" class="chip" data-model="Qwen3-30B-A3B">Qwen3-30B-A3B</button><button type="button" class="chip" data-model="gemma-3-27b-it">gemma-3-27b-it</button><button type="button" class="chip" data-model="meta-llama/Llama-3.3-70B-Instruct">Llama-3.3-70B-Instruct</button><button type="button" class="chip" data-model="mistralai/Mistral-Small-3.2-24B-Instruct-2506">Mistral-Small-3.2-24B-Instruct-2506</button><button type="button" class="chip" data-model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B">DeepSeek-R1-Distill-Qwen-32B</button></div>
  <p class="hint" data-t="nameHint">自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。</p>
  <label for="target" data-t="targetLabel">运行位置</label>
  <select id="target"><option value="gpu" data-t="targetGpu">GPU 会话（双 T4）</option><option value="cpu" data-t="targetCpu">CPU 会话（不占 GPU 额度，较慢）</option></select>
@@ -262,6 +263,7 @@ async function init(){
  $('name').value=readSaved('cc.media.chat.model')||'Qwen3-8B';
  try{history=JSON.parse(sessionStorage.getItem('cc.media.chat.history')||'[]')}catch{history=[]}
  $('load').onclick=()=>load(null);
+ for(const chip of document.querySelectorAll('#suggestions .chip'))chip.onclick=()=>{if(!busy){$('name').value=chip.dataset.model;$('name').focus()}};
  $('useAlt').onclick=()=>{try{load(JSON.parse($('alternatives').value))}catch{}};
  $('send').onclick=send;
  $('imageInput').onchange=async()=>{

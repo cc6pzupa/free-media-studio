@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_name">工作室服务</string>
+    <string name="running">运行中。点“退出”会释放 Kaggle 会话。</string>
+    <string name="releasing">正在释放 Kaggle 会话…</string>
+    <string name="exit">退出</string>
+    <string name="starting">正在启动 CC Media Studio…</string>
+    <string name="start_failed">启动失败：%1$s</string>
+    <string name="saved">已保存到 下载/%1$s</string>
+    <string name="save_failed">保存失败：%1$s</string>
+</resources>

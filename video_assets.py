@@ -44,6 +44,8 @@ def prepare_video_assets(profile,folder,progress=None):
         sizes=[int(i.get('size') or i.get('lfs',{}).get('size') or 0) for _,_,i in records]
         if any(size<=0 for size in sizes):raise RuntimeError('Missing video file size')
         total=sum(sizes);done=0;last=[0.0]
+        from asset_manager import release_model_disk
+        release_model_disk(folder,total,notify=lambda names:notify({'phase':'cleanup','file':', '.join(names)}))
         for (repo,revision,item),size in zip(records,sizes):
             name=item['rfilename'];start=done
             def report(value,start=start,name=name,size=size):

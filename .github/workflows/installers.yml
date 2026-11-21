@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Publish a release with this new tag (e.g. v0.10.0-rc.1) on the selected commit; leave empty to only build'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -94,12 +99,12 @@ jobs:
           architecture=arm64
           if [ '${{ matrix.target }}' = 'macos-intel' ]; then architecture=x86_64; fi
           lipo 'dist/CC Media Studio.app/Contents/MacOS/cc-media-studio' -verify_arch "$architecture"
-          productbuild --component 'dist/CC Media Studio.app' /Applications 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.pkg'
-          pkgutil --payload-files 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.pkg' > build/pkg-contents.txt
+          productbuild --component 'dist/CC Media Studio.app' /Applications 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.pkg'
+          pkgutil --payload-files 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.pkg' > build/pkg-contents.txt
           cp -R 'dist/CC Media Studio.app' build/dmg/
           ln -s /Applications build/dmg/Applications
-          hdiutil create -volname 'CC Media Studio' -srcfolder build/dmg -ov -format UDZO 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.dmg'
-          hdiutil verify 'release/CC-Media-Studio-0.9.0-${{ matrix.target }}.dmg'
+          hdiutil create -volname 'CC Media Studio' -srcfolder build/dmg -ov -format UDZO 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.dmg'
+          hdiutil verify 'release/CC-Media-Studio-0.10.0-${{ matrix.target }}.dmg'
       - name: Linux deb and rpm installers
         if: runner.os == 'Linux'
         shell: bash
@@ -127,6 +132,82 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  android:
+    if: github.event_name != 'pull_request' || github.head_ref != 'feature/installers-gallery'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      # Chaquopy installs the app's Python packages with a matching build Python.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Test the Android entry and download bridge
+        run: |
+          python -m pip install -r requirements.txt pillow
+          python -m unittest tests.test_android_entry -v
+          node --test tests/test_android_bridge.cjs
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::notice::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with a temporary debug key."
+          fi
+      - name: Build APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Collect APK
+        shell: bash
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release.apk release/CC-Media-Studio-0.10.0-android.apk
+          (cd release && sha256sum CC-Media-Studio-0.10.0-android.apk > SHA256SUMS-android.txt)
+          ls -l release
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Smoke test on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          # A phone-sized screen for the page screenshots (the default is 320x640).
+          profile: pixel_6
+          disable-animations: true
+          script: bash android/smoke.sh release/CC-Media-Studio-0.10.0-android.apk android-smoke
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-smoke
+          path: android-smoke/*
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-android
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
+
   preview-release:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/feature/installers-gallery'
@@ -149,12 +230,13 @@ jobs:
           gh release create "$tag" release/* --target "$GITHUB_SHA" --prerelease --title 'CC Media Studio 0.9.0 preview' --notes 'Windows x64 setup, separate macOS Intel and Apple Silicon dmg/pkg, and Linux x86_64 deb/rpm. Includes a local image/video gallery with search, favorites, playback and download. Python is bundled. Windows/macOS packages are unsigned; Apple notarization and trusted publisher signing are not configured.'
 
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, android]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
           pattern: installers-*
@@ -164,4 +246,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "CC Media Studio $GITHUB_REF_NAME" --generate-notes
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag=$GITHUB_REF_NAME; flags=(--verify-tag)
+          else
+            # A manual run creates the tag on the commit it built.
+            tag=$REQUESTED_TAG; flags=(--target "$GITHUB_SHA")
+            if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then echo "::error::Invalid release tag: $tag"; exit 1; fi
+          fi
+          # Tags such as v0.10.0-rc.1 are previews: publish them as prereleases.
+          if [[ "$tag" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$tag" release/* "${flags[@]}" --title "CC Media Studio $tag" \
+            --notes-file packaging/release-notes.md --generate-notes

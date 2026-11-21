@@ -1,0 +1,287 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CC Media Studio · Chat</title><style>
+:root{font-family:Inter,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;color:#24243b;background:#f6f5fb;--line:#e7e5ef;--accent:#6650d9;--muted:#77768b}
+*{box-sizing:border-box}body{margin:0}a{color:var(--accent);text-decoration:none}
+header{min-height:70px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 5vw}
+h1{font-size:20px;margin:0}.tag{color:var(--accent);font-size:11px;letter-spacing:.1em}nav{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px}
+main{max-width:1320px;margin:28px auto;padding:0 24px;display:grid;grid-template-columns:380px 1fr;gap:22px;align-items:start}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;min-width:0}
+h2{font-size:16px;margin:0 0 12px}label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
+input,textarea,select,button{font:inherit}input,textarea,select{width:100%;border:1px solid #dedbe9;border-radius:9px;padding:10px 12px;background:#fff;color:inherit}
+textarea{resize:vertical;line-height:1.6}button{border:0;border-radius:10px;background:#7055e8;color:#fff;padding:11px 16px;cursor:pointer;white-space:nowrap}
+button.secondary{background:#f1eefc;color:var(--accent)}button:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:10px;align-items:center}.row>*{flex:1}.hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.6}
+.track{height:6px;background:#eeebf7;border-radius:9px;overflow:hidden;margin:12px 0 4px}.track div{height:100%;width:0;background:#8065ed;transition:width .3s}
+.status{font-size:13px;color:var(--muted);min-height:20px;white-space:pre-wrap;overflow-wrap:anywhere}
+.model{margin-top:14px;padding:12px 14px;border-radius:12px;background:#faf9fd;border:1px solid var(--line);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.model b{font-weight:600}.warn{color:#b0573a}.chat{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:520px;padding:0}
+.messages{flex:1;overflow:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:88%;padding:11px 14px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;font-size:14px}
+.msg.user{align-self:flex-end;background:#7055e8;color:#fff;border-bottom-right-radius:4px}
+.msg.assistant{align-self:flex-start;background:#f4f2fb;border-bottom-left-radius:4px}
+.msg.error{align-self:center;background:#fdf0ed;color:#a2422a;font-size:13px}
+details.think{margin:0 0 8px;font-size:12px;color:var(--muted)}details.think div{white-space:pre-wrap;margin-top:6px;border-left:3px solid #ddd6f6;padding-left:8px}
+.meta{font-size:11px;color:var(--muted);margin-top:6px}.composer{border-top:1px solid var(--line);padding:14px 18px;display:flex;gap:10px;align-items:flex-end}
+.composer textarea{min-height:52px;max-height:200px}.empty{margin:auto;text-align:center;color:var(--muted);max-width:340px;line-height:1.8;font-size:14px}
+code.copy{display:flex;justify-content:space-between;gap:8px;background:#f7f6fc;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px;margin:5px 0;overflow-wrap:anywhere}
+code.copy button{padding:2px 8px;font-size:11px;flex-shrink:0}
+.attachments{display:flex;gap:8px;flex-wrap:wrap;padding:8px 18px 0}.attachments figure{margin:0;position:relative}.attachments img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.attachments button{position:absolute;top:-6px;right:-6px;padding:0 6px;border-radius:50%;font-size:11px;line-height:18px}
+.attach{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:#f1eefc;cursor:pointer;flex-shrink:0;font-size:18px}
+.msg img{max-width:220px;max-height:220px;border-radius:8px;display:block;margin:6px 0}
+.suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chip{background:#f1eefc;color:var(--accent);border-radius:999px;padding:5px 11px;font-size:12px}.chip:disabled{opacity:.5}
+.tools{display:grid;gap:8px;margin-top:8px}.tool{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.6}
+.tool b{font-size:13px}.tool .state{color:var(--muted)}.tool .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.tool button{padding:4px 10px;font-size:12px}
+.tool .ok{color:#2f8f6b}.log{max-height:180px;overflow:auto;background:#1d1b2b;color:#dcd8ef;font-size:11px;border-radius:8px;padding:8px;white-space:pre-wrap;overflow-wrap:anywhere}[hidden]{display:none!important}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:0 14px;margin:16px auto}.chat{height:auto;min-height:70vh}.msg{max-width:96%}}
+</style></head><body>
+<header><h1>CC Media Studio <span class="tag">CHAT PREVIEW</span></h1>
+<nav><a href="/" data-t="navImage">图片</a><a href="/video" data-t="navVideo">视频</a><a href="/gallery" data-t="navGallery">画廊</a>
+<select id="lang" aria-label="Language" style="width:auto"><option value="zh">中文</option><option value="en">English</option></select></nav></header>
+<main>
+<section class="card" aria-labelledby="modelTitle">
+ <h2 id="modelTitle" data-t="modelTitle">语言模型</h2>
+ <label for="name" data-t="nameLabel">模型名称（Hugging Face）</label>
+ <input id="name" autocomplete="off" spellcheck="false" placeholder="Qwen3-8B">
+ <div class="suggestions" id="suggestions" role="group" aria-label="Suggested models"><button type="button" class="chip" data-model="Qwen3-8B">Qwen3-8B</button><button type="button" class="chip" data-model="Qwen3-14B">Qwen3-14B</button><button type="button" class="chip" data-model="Qwen3-32B">Qwen3-32B</button><button type="button" class="chip" data-model="Qwen3-30B-A3B">Qwen3-30B-A3B</button><button type="button" class="chip" data-model="gemma-3-27b-it">gemma-3-27b-it</button><button type="button" class="chip" data-model="meta-llama/Llama-3.3-70B-Instruct">Llama-3.3-70B-Instruct</button><button type="button" class="chip" data-model="mistralai/Mistral-Small-3.2-24B-Instruct-2506">Mistral-Small-3.2-24B-Instruct-2506</button><button type="button" class="chip" data-model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B">DeepSeek-R1-Distill-Qwen-32B</button></div>
+ <p class="hint" data-t="nameHint">自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。</p>
+ <label for="target" data-t="targetLabel">运行位置</label>
+ <select id="target"><option value="gpu" data-t="targetGpu">GPU 会话（双 T4）</option><option value="cpu" data-t="targetCpu">CPU 会话（不占 GPU 额度，较慢）</option></select>
+ <label for="context" data-t="contextLabel">上下文长度</label>
+ <select id="context"><option>4096</option><option selected>8192</option><option>16384</option><option>32768</option></select>
+ <button id="load" style="width:100%;margin-top:16px" data-t="load">查找并加载</button>
+ <div class="track" id="track" hidden><div id="bar"></div></div>
+ <div class="status" id="prepareStatus" role="status"></div>
+ <div class="model" id="modelInfo" hidden></div>
+ <div id="altBox" hidden><label for="alternatives" data-t="altLabel">其他版本</label>
+  <div class="row"><select id="alternatives"></select><button class="secondary" id="useAlt" style="flex:0 0 auto" data-t="useAlt">改用</button></div></div>
+ <details style="margin-top:18px"><summary data-t="settings">对话设置</summary>
+  <label for="system" data-t="systemLabel">系统提示（可选）</label><textarea id="system" rows="3"></textarea>
+  <div class="row"><div><label for="temperature" data-t="tempLabel">温度</label><input id="temperature" type="number" min="0" max="2" step="0.1" value="0.7"></div>
+  <div><label for="maxTokens" data-t="maxLabel">最多生成</label><input id="maxTokens" type="number" min="16" max="32768" step="16" value="2048"></div></div>
+ </details>
+ <details style="margin-top:12px"><summary data-t="apiTitle">在其他工具中调用（OpenAI 兼容）</summary>
+  <p class="hint" data-t="apiHint">Base URL、API Key 与模型名填入支持 OpenAI 接口的工具即可；请求里换一个模型名会自动改为加载该模型。</p>
+  <code class="copy"><span id="apiBase"></span><button class="secondary" data-copy="apiBase">复制</button></code>
+  <code class="copy"><span id="apiKey"></span><button class="secondary" data-copy="apiKey">复制</button></code>
+  <code class="copy"><span id="apiModel"></span><button class="secondary" data-copy="apiModel">复制</button></code>
+ </details>
+ <details id="toolsBox" style="margin-top:12px"><summary data-t="toolsTitle">本机 AI 工具</summary>
+  <p class="hint" data-t="toolsHint">自动查找这台电脑上能用 OpenAI 接口的工具，一键接入当前模型。只会新增设置，修改前备份原文件。</p>
+  <p class="hint warn" id="toolsWarn" hidden data-t="toolsWarn">账号未勾选“记住”：本机 Key 每次启动都会变，接入的工具在重启后需要重新接入。</p>
+  <div id="tools" class="tools"></div>
+  <pre id="toolLog" class="log" hidden></pre>
+ </details>
+</section>
+<section class="card chat" aria-label="Chat">
+ <div class="messages" id="messages" aria-live="polite"><div class="empty" id="empty" data-t="empty">先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。</div></div>
+ <div id="attachments" class="attachments" hidden></div>
+ <div class="composer"><label class="attach secondary" title="图片" data-tt="attachTitle"><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>🖼</label><textarea id="input" rows="2" data-tp="inputPlaceholder" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+  <div style="display:flex;flex-direction:column;gap:6px"><button id="send" data-t="send">发送</button><button class="secondary" id="clear" data-t="clear">清空</button></div></div>
+</section>
+</main>
+<script>
+// ---- Pure helpers (tested in tests/test_chat_ui.cjs) ----
+const TEXT={zh:{navImage:'图片',navVideo:'视频',navGallery:'画廊',modelTitle:'语言模型',nameLabel:'模型名称（Hugging Face）',nameHint:'自动在 Hugging Face 查找 GGUF 量化版本，选出能放进本会话（双 T4 + 内存）且质量最高的一个。',contextLabel:'上下文长度',targetLabel:'运行位置',targetGpu:'GPU 会话（双 T4）',targetCpu:'CPU 会话（不占 GPU 额度，较慢）',attachTitle:'附加图片（需支持图片的模型）',imageTooBig:'图片需为 PNG、JPEG 或 WebP，每张不超过 8 MB，最多 8 张。',onCpu:'CPU 会话',onGpu:'GPU 会话',load:'查找并加载',altLabel:'其他版本',useAlt:'改用',settings:'对话设置',systemLabel:'系统提示（可选）',tempLabel:'温度',maxLabel:'最多生成',apiTitle:'在其他工具中调用（OpenAI 兼容）',apiHint:'Base URL、API Key 与模型名填入支持 OpenAI 接口的工具即可；请求里换一个模型名会自动改为加载该模型。',empty:'先在左侧加载一个模型，然后开始对话。模型运行在你的 Kaggle 会话上，对话不会发送到其他服务。',toolsTitle:'本机 AI 工具',toolsHint:'自动查找这台电脑上能用 OpenAI 接口的工具，一键接入当前模型。只会新增设置，修改前备份原文件。',toolsWarn:'账号未勾选“记住”：本机 Key 每次启动都会变，接入的工具在重启后需要重新接入。',
+ tool:{installed:'已安装',missing:'未安装',connected:'已接入',connect:'一键接入',reconnect:'重新接入',install:'安装',launch:'启动',site:'官网',manual:'在该软件的模型设置中添加 OpenAI 兼容服务，填入上方 Base URL、API Key 和模型名。',done:'已接入：',backup:'原文件已备份：',run:'使用：',installing:'正在安装…',launched:'已启动：'},inputPlaceholder:'输入消息，Enter 发送，Shift+Enter 换行',send:'发送',clear:'清空',copy:'复制',copied:'已复制',
+ placement:{gpu:'全部在 GPU',hybrid:'GPU + 内存',cpu:'仅 CPU'},thinking:'思考过程',noModel:'请先加载模型。',needName:'请输入模型名称。',loaded:'已加载',estimate:'预计',measured:'本次',slow:'预计速度很慢；纯 CPU 时建议改用混合专家模型（如 Qwen3-30B-A3B）。',waiting:'正在连接 Kaggle 会话…',notConfigured:'请先在图片页“账号与连接”中保存 Kaggle 账号（自动账号模式）。',apiKeyMissing:'（保存账号后显示）',failed:'失败：'},
+ en:{navImage:'Images',navVideo:'Video',navGallery:'Gallery',modelTitle:'Language model',nameLabel:'Model name (Hugging Face)',nameHint:'Searches Hugging Face for GGUF builds and picks the highest-quality one that fits this session (dual T4 + RAM).',contextLabel:'Context length',targetLabel:'Run on',targetGpu:'GPU session (dual T4)',targetCpu:'CPU session (no GPU quota, slower)',attachTitle:'Attach images (vision models only)',imageTooBig:'Images must be PNG, JPEG or WebP, at most 8 MB each and 8 per message.',onCpu:'CPU session',onGpu:'GPU session',load:'Find and load',altLabel:'Other builds',useAlt:'Use',settings:'Chat settings',systemLabel:'System prompt (optional)',tempLabel:'Temperature',maxLabel:'Max tokens',apiTitle:'Use from other tools (OpenAI-compatible)',apiHint:'Enter the base URL, API key and model name in any tool that speaks the OpenAI API. A request naming another model loads that model.',empty:'Load a model on the left, then start chatting. The model runs on your Kaggle session; chats are not sent to other services.',toolsTitle:'AI tools on this computer',toolsHint:'Finds tools on this computer that speak the OpenAI API and connects them to the current model. Settings are only added, and changed files are backed up first.',toolsWarn:'The account is not saved with Remember: the local key changes at every start, so connected tools must be connected again after a restart.',
+ tool:{installed:'Installed',missing:'Not installed',connected:'Connected',connect:'Connect',reconnect:'Connect again',install:'Install',launch:'Start',site:'Website',manual:'In its model settings, add an OpenAI-compatible service with the base URL, API key and model name above.',done:'Connected: ',backup:'Backup: ',run:'Use: ',installing:'Installing…',launched:'Started: '},inputPlaceholder:'Message. Enter sends, Shift+Enter adds a line',send:'Send',clear:'Clear',copy:'Copy',copied:'Copied',
+ placement:{gpu:'all on GPU',hybrid:'GPU + RAM',cpu:'CPU only'},thinking:'Thinking',noModel:'Load a model first.',needName:'Enter a model name.',loaded:'Loaded',estimate:'Estimated',measured:'This reply',slow:'Expected to be slow; on CPU only, a mixture-of-experts model (such as Qwen3-30B-A3B) is faster.',waiting:'Connecting to the Kaggle session…',notConfigured:'Save your Kaggle account under Account & connection on the image page first (automatic account mode).',apiKeyMissing:'(shown after saving an account)',failed:'Failed: '}};
+function splitThinking(text){
+ // Qwen3 and DeepSeek-R1 style <think>…</think>; an unclosed block is still being written.
+ const start=text.indexOf('<think>');
+ if(start<0)return {thinking:'',answer:text};
+ const end=text.indexOf('</think>',start);
+ if(end<0)return {thinking:text.slice(start+7),answer:text.slice(0,start)};
+ return {thinking:text.slice(start+7,end).trim(),answer:(text.slice(0,start)+text.slice(end+8)).replace(/^\s+/,'')};
+}
+function gb(bytes){return (bytes/1e9).toFixed(1)+' GB'}
+function lineReader(onLine){
+ // Split a byte stream of JSON lines; returns a feed(chunkText) function and a flush().
+ let rest='';
+ return {feed(text){rest+=text;const lines=rest.split('\n');rest=lines.pop();for(const line of lines)if(line.trim())onLine(JSON.parse(line))},
+  flush(){if(rest.trim())onLine(JSON.parse(rest));rest=''}};
+}
+function chatRequest(history,settings){
+ const messages=[];
+ if(settings.system&&settings.system.trim())messages.push({role:'system',content:settings.system.trim()});
+ for(const m of history){
+  if(m.role==='assistant')messages.push({role:'assistant',content:splitThinking(m.content).answer});
+  else if(m.role==='user')messages.push({role:'user',content:m.images&&m.images.length?[{type:'text',text:m.content},...m.images.map(url=>({type:'image_url',image_url:{url}}))]:m.content});
+ }
+ const body={messages};
+ const t=Number(settings.temperature);if(Number.isFinite(t)&&t>=0&&t<=2)body.temperature=t;
+ const n=Math.round(Number(settings.maxTokens));if(Number.isFinite(n)&&n>=1&&n<=32768)body.max_tokens=n;
+ return body;
+}
+// ---- Page ----
+const nonce='__NONCE__',$=id=>document.getElementById(id);
+let lang='zh',model=null,busy=false,history=[];
+const tx=()=>TEXT[lang];
+function readSaved(k){try{return localStorage.getItem(k)}catch{return null}}
+function save(k,v){try{localStorage.setItem(k,v)}catch{}}
+function applyLanguage(){
+ document.documentElement.lang=lang==='en'?'en':'zh-CN';
+ for(const node of document.querySelectorAll('[data-t]'))node.textContent=tx()[node.dataset.t];
+ for(const node of document.querySelectorAll('[data-tp]'))node.placeholder=tx()[node.dataset.tp];
+ for(const node of document.querySelectorAll('[data-tt]'))node.title=tx()[node.dataset.tt];
+ for(const node of document.querySelectorAll('[data-copy]'))node.textContent=tx().copy;
+ renderModel();render();
+}
+async function postLines(path,body,onEvent){
+ const response=await fetch(path,{method:'POST',headers:{'X-Local-Session':nonce,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ if(!response.ok){let m='HTTP '+response.status;try{m=(await response.json()).error.message}catch{}throw new Error(m)}
+ const reader=response.body.getReader(),decoder=new TextDecoder();let final=null;
+ const lines=lineReader(event=>{if(event.type==='done'||event.type==='error')final=event;else onEvent(event)});
+ for(;;){const {done,value}=await reader.read();if(done)break;lines.feed(decoder.decode(value,{stream:true}))}
+ lines.flush();
+ if(!final)throw new Error('connection closed');
+ if(final.type==='error')throw new Error(final.message);
+ return final;
+}
+function setBusy(value){busy=value;for(const id of ['load','useAlt','send','name','context','target'])$(id).disabled=value}
+function progress(event){
+ const e=event.event||{};
+ $('prepareStatus').textContent=e.message||e.phase||'';
+ if(typeof e.percent==='number'){$('track').hidden=false;$('bar').style.width=e.percent+'%';
+  if(e.total_gb)$('prepareStatus').textContent=(e.message||'')+`\n${e.downloaded_gb} / ${e.total_gb} GB`}
+}
+async function load(choice){
+ const name=$('name').value.trim();
+ if(!name){$('prepareStatus').textContent=tx().needName;return}
+ setBusy(true);$('prepareStatus').textContent=tx().waiting;$('track').hidden=true;$('bar').style.width='0';
+ try{
+  const final=await postLines('/llm/prepare',{name,context:Number($('context').value),choice:choice||null,target:$('target').value},progress);
+  model=final.model;save('cc.media.chat.model',name);$('prepareStatus').textContent='';$('track').hidden=true;renderModel();
+ }catch(error){$('prepareStatus').textContent=tx().failed+error.message}
+ finally{setBusy(false)}
+}
+function renderModel(){
+ const box=$('modelInfo');
+ if(!model){box.hidden=true;$('altBox').hidden=true;$('apiModel').textContent='—';return}
+ const p=tx().placement[model.placement]||model.placement,loaded=model.loaded||{};
+ const share=typeof loaded.gpu_share==='number'?` · GPU ${Math.round(loaded.gpu_share*100)}%`:'';
+ box.hidden=false;
+ box.innerHTML='';
+ const rows=[[tx().loaded,model.name+' · '+(model.target==='cpu'?tx().onCpu:tx().onGpu)],['Hugging Face',model.repo],['GGUF',`${model.quant} · ${gb(model.bytes)} · ${p}${share}`],[tx().estimate,`≈ ${model.estimated_tok_per_s} tok/s · ctx ${model.context}`]];
+ for(const [k,v] of rows){const line=document.createElement('div');const b=document.createElement('b');b.textContent=k+'：';line.append(b,document.createTextNode(v));box.append(line)}
+ if(model.estimated_tok_per_s<2){const w=document.createElement('div');w.className='warn';w.textContent=tx().slow;box.append(w)}
+ const alts=(model.alternatives||[]).filter(a=>!(a.repo===model.repo&&a.first===model.file));
+ $('altBox').hidden=!alts.length;$('alternatives').innerHTML='';
+ for(const a of alts){const o=document.createElement('option');o.value=JSON.stringify({repo:a.repo,first:a.first});
+  o.textContent=`${a.quant} · ${gb(a.bytes)} · ${tx().placement[a.placement]||a.placement} · ≈${a.tok_per_s} tok/s · ${a.repo}`;$('alternatives').append(o)}
+ $('apiModel').textContent=model.name;
+}
+let pending=[];
+function readImage(file){return new Promise((resolve,reject)=>{
+ if(!/^image\/(png|jpeg|webp)$/.test(file.type)||file.size>8*1024*1024)return reject(new Error(tx().imageTooBig));
+ const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file)})}
+function renderAttachments(){
+ const box=$('attachments');box.replaceChildren();box.hidden=!pending.length;
+ pending.forEach((url,i)=>{const f=document.createElement('figure');const img=document.createElement('img');img.src=url;img.alt='';
+  const x=document.createElement('button');x.type='button';x.className='secondary';x.textContent='×';x.onclick=()=>{pending.splice(i,1);renderAttachments()};f.append(img,x);box.append(f)})}
+function render(){
+ const list=$('messages');list.querySelectorAll('.msg').forEach(n=>n.remove());$('empty').hidden=history.length>0;
+ for(const m of history){
+  const node=document.createElement('div');node.className='msg '+m.role;
+  if(m.role==='assistant'){
+   const parts=splitThinking(m.content);const thinking=(m.reasoning||'')+parts.thinking;
+   if(thinking){const d=document.createElement('details');d.className='think';const s=document.createElement('summary');s.textContent=tx().thinking;const body=document.createElement('div');body.textContent=thinking;d.append(s,body);node.append(d)}
+   node.append(document.createTextNode(parts.answer));
+   if(m.meta){const meta=document.createElement('div');meta.className='meta';meta.textContent=m.meta;node.append(meta)}
+  }else{node.textContent=m.content;for(const url of m.images||[]){const img=document.createElement('img');img.src=url;img.alt='';node.append(img)}}
+  list.append(node);
+ }
+ list.scrollTop=list.scrollHeight;
+}
+async function send(){
+ const text=$('input').value.trim();if(!text||busy)return;
+ if(!model){history.push({role:'error',content:tx().noModel});render();return}
+ history.push({role:'user',content:text,images:pending.slice()});$('input').value='';pending=[];renderAttachments();
+ const reply={role:'assistant',content:'',reasoning:''};history.push(reply);render();setBusy(true);
+ const started=performance.now();let first=null,tokens=0,usage=null;
+ try{
+  const body=chatRequest(history.slice(0,-1),{system:$('system').value,temperature:$('temperature').value,maxTokens:$('maxTokens').value});
+  await postLines('/llm/chat',body,event=>{
+   if(event.type!=='chunk')return;const chunk=event.chunk;usage=chunk.usage||usage;
+   for(const c of chunk.choices||[]){const d=c.delta||{};const piece=(d.content||'');const r=d.reasoning||d.reasoning_content||'';
+    if(piece||r){first=first||performance.now();tokens++;reply.content+=piece;reply.reasoning+=r}}
+   render();
+  });
+  const seconds=(performance.now()-(first||started))/1000,count=(usage&&usage.completion_tokens)||tokens;
+  reply.meta=`${tx().measured} ${count} tok · ${seconds>0?(count/seconds).toFixed(1):'—'} tok/s`;
+ }catch(error){history.push({role:'error',content:tx().failed+error.message})}
+ finally{setBusy(false);render();
+  // Images stay out of the stored history (sessionStorage is small).
+  try{sessionStorage.setItem('cc.media.chat.history',JSON.stringify(history.slice(-60).map(m=>({...m,images:undefined}))))}catch{}}
+}
+async function loadTools(){
+ try{const r=await fetch('/harness',{headers:{'X-Local-Session':nonce}});if(r.ok)renderTools(await r.json())}catch{}
+}
+function toolLog(text){const log=$('toolLog');log.hidden=false;log.textContent+=text+'\n';log.scrollTop=log.scrollHeight}
+async function toolAction(action,tool){
+ const T=tx().tool;$('toolLog').textContent='';
+ try{
+  if(action==='install'){toolLog(T.installing);await postLines('/harness/install',{id:tool.id},e=>{if(e.type==='output')toolLog(e.line)});}
+  else{
+   const r=await fetch('/harness/'+action,{method:'POST',headers:{'X-Local-Session':nonce,'Content-Type':'application/json'},
+     body:JSON.stringify({id:tool.id,model:(model&&model.name)||$('name').value.trim()})});
+   const d=await r.json();if(!r.ok)throw new Error(d.error.message);
+   if(action==='launch'){toolLog(T.launched+d.url);window.open(d.url,'_blank')}
+   else{toolLog(T.done+d.files.join(', '));if(d.backup)toolLog(T.backup+d.backup);if(d.run)toolLog(T.run+d.run)}
+  }
+ }catch(error){toolLog(tx().failed+error.message)}
+ loadTools();
+}
+function renderTools(data){
+ const T=tx().tool,box=$('tools');box.replaceChildren();$('toolsWarn').hidden=!!data.remembered;
+ for(const tool of data.tools||[]){
+  const row=document.createElement('div');row.className='tool';
+  const name=document.createElement('b');name.textContent=tool.name;
+  const state=document.createElement('div');state.className='state';
+  state.textContent=(tool.installed?T.installed+(tool.version?' · '+tool.version:''):T.missing)+(tool.state&&tool.state.configured?' · ':'');
+  if(tool.state&&tool.state.configured){const ok=document.createElement('span');ok.className='ok';ok.textContent=T.connected;state.append(ok)}
+  row.append(name,state);
+  const actions=document.createElement('div');actions.className='actions';
+  const add=(label,fn,secondary)=>{const b=document.createElement('button');b.type='button';b.textContent=label;if(secondary)b.className='secondary';b.onclick=fn;actions.append(b)};
+  if(tool.unsupported){const note=document.createElement('div');note.className='state';note.textContent=tool.unsupported;row.append(note)}
+  else{
+   if(tool.configure&&(tool.installed||tool.id==='continue'))add(tool.state&&tool.state.configured?T.reconnect:T.connect,()=>toolAction('configure',tool));
+   if(tool.launch&&tool.installed)add(T.launch,()=>toolAction('launch',tool));
+   if(tool.can_install)add(T.install,()=>toolAction('install',tool),true);
+   if(tool.manual&&tool.installed){const note=document.createElement('div');note.className='state';note.textContent=T.manual;row.append(note)}
+   if(!tool.installed&&!tool.can_install&&tool.site){const a=document.createElement('a');a.href=tool.site;a.target='_blank';a.rel='noopener';a.textContent=T.site+' ↗';actions.append(a)}
+  }
+  if(tool.install_hint&&!tool.installed&&!tool.can_install){const hint=document.createElement('div');hint.className='state';hint.textContent=tool.install_hint;row.append(hint)}
+  if(actions.children.length)row.append(actions);
+  box.append(row);
+ }
+}
+async function init(){
+ lang=readSaved('cc-media-language')==='en'?'en':'zh';$('lang').value=lang;
+ $('lang').onchange=()=>{lang=$('lang').value;save('cc-media-language',lang);applyLanguage()};
+ $('name').value=readSaved('cc.media.chat.model')||'Qwen3-8B';
+ try{history=JSON.parse(sessionStorage.getItem('cc.media.chat.history')||'[]')}catch{history=[]}
+ $('load').onclick=()=>load(null);
+ for(const chip of document.querySelectorAll('#suggestions .chip'))chip.onclick=()=>{if(!busy){$('name').value=chip.dataset.model;$('name').focus()}};
+ $('useAlt').onclick=()=>{try{load(JSON.parse($('alternatives').value))}catch{}};
+ $('send').onclick=send;
+ $('imageInput').onchange=async()=>{
+  try{for(const file of $('imageInput').files){if(pending.length>=8)throw new Error(tx().imageTooBig);pending.push(await readImage(file))}}
+  catch(error){history.push({role:'error',content:error.message});render()}
+  $('imageInput').value='';renderAttachments()};$('clear').onclick=()=>{history=[];try{sessionStorage.removeItem('cc.media.chat.history')}catch{};render()};
+ $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send()}});
+ for(const b of document.querySelectorAll('[data-copy]'))b.onclick=async()=>{try{await navigator.clipboard.writeText($(b.dataset.copy).textContent);b.textContent=tx().copied;setTimeout(()=>b.textContent=tx().copy,1500)}catch{}};
+ $('apiBase').textContent=location.origin+'/v1';
+ applyLanguage();
+ try{
+  const config=await (await fetch('/configuration',{headers:{'X-Local-Session':nonce}})).json();
+  $('apiKey').textContent=config.api_key||tx().apiKeyMissing;
+  if(!config.configured||config.mode!=='account')$('prepareStatus').textContent=tx().notConfigured;
+  const status=await (await fetch('/llm/status',{headers:{'X-Local-Session':nonce}})).json();
+  if(status.model){model=status.model;$('name').value=model.name;if(model.target)$('target').value=model.target;renderModel()}
+ }catch{}
+ $('toolsBox').addEventListener('toggle',()=>{if($('toolsBox').open)loadTools()});
+}
+if(typeof window!=='undefined'&&typeof document!=='undefined'&&document.getElementById('messages'))init();
+</script></body></html>

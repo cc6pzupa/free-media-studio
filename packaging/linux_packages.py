@@ -41,7 +41,7 @@ Description: Image and video creation with Kaggle GPU compute
 Version: {VERSION}
 Release: 1
 Summary: Image and video creation with Kaggle GPU compute
-License: LicenseRef-PolyForm-Noncommercial-1.0.0
+License: MIT
 URL: https://github.com/cc6pzupa/free-media-studio
 BuildArch: x86_64
 AutoReqProv: no

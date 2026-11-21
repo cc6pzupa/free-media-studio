@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-**Source available · Free for permitted noncommercial use · Separate commercial licensing** — [License](LICENSE) · [Commercial licensing](COMMERCIAL.md)
+**Open source · MIT License** — [License](LICENSE)
 
 This branch includes a [video preview](docs/video.md): three model tiers, MP4 playback/download, and GUI, MCP, ComfyUI and Kaggle notebook entry points.
 
@@ -185,9 +185,9 @@ GET http://127.0.0.1:8787/v1/studio/usage
 Authorization: Bearer <local API key>
 ```
 
-## License and commercial use
+## License
 
-Original project code and documentation use **PolyForm Noncommercial 1.0.0**. Noncommercial uses permitted by the license are free of charge; modification and redistribution are allowed under its terms. Retain the license and [NOTICE](NOTICE) when redistributing. Commercial uses outside those permissions require a separate written license before use; see [Commercial licensing](COMMERCIAL.md). The [LICENSE](LICENSE) defines the permitted purposes.
+Original project code and documentation are licensed under the [MIT License](LICENSE): use, modify and distribute them freely, including commercially, keeping the copyright notice and license text. Releases up to 0.10.0 were published under PolyForm Noncommercial 1.0.0.
 
 Third-party dependencies, model weights and separately licensed materials retain their own licenses.
 

@@ -6,7 +6,7 @@ root=Path(SPECPATH).parent
 # Remote sources are uploaded verbatim to Kaggle. Include them as data as well
 # as compiled client modules; the client never installs torch or diffusers.
 datas=[(str(p),'.') for pattern in ('*.py','*.html','*.ipynb','requirements*.txt') for p in root.glob(pattern)]
-datas += [(str(root/name),'.') for name in ('LICENSE','NOTICE','COMMERCIAL.md')]
+datas += [(str(root/name),'.') for name in ('LICENSE','NOTICE')]
 hidden=['studio_worker','studio_core','studio_client','account_backend','session_backend','batch_backend',
         'video_session','video_registry','model_registry','media_inputs','easy_gateway','desktop','mcp_server']
 hidden+=collect_submodules('mcp', filter=lambda name: not name.startswith('mcp.cli'))

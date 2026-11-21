@@ -2,7 +2,7 @@
 
 **简体中文** | [English](README.en.md)
 
-**源码可用 · 非商业使用免费 · 商业使用需另行授权** — [许可证](LICENSE) · [商业授权](COMMERCIAL.md)
+**开源 · MIT 许可证** — [许可证](LICENSE)
 
 本分支提供 [视频功能预览](docs/video.md)：三档模型、MP4 播放与下载，以及 GUI、MCP、ComfyUI 和 Kaggle Notebook 入口。
 
@@ -185,9 +185,9 @@ GET http://127.0.0.1:8787/v1/studio/usage
 Authorization: Bearer <本机 API Key>
 ```
 
-## 许可证与商业授权
+## 许可证
 
-本项目原创代码与文档采用 **PolyForm Noncommercial 1.0.0**。许可范围内的非商业使用免费，允许修改和分发；分发时须保留许可证和 [NOTICE](NOTICE)。超出许可范围的商业使用需事先取得书面授权，申请方式见 [商业授权说明](COMMERCIAL.md)。具体允许用途以 [LICENSE](LICENSE) 为准。
+本项目原创代码与文档采用 [MIT 许可证](LICENSE)：可以自由使用、修改和分发，包括商业用途；分发时须保留版权声明和许可证文本。0.10.0 及更早的版本发布时采用 PolyForm Noncommercial 1.0.0。
 
 第三方依赖、模型权重及另行许可的材料遵循各自许可证。
 

@@ -1,5 +1,10 @@
 # 更新记录 / Changelog
 
+## 未发布 / Unreleased
+
+- **许可证改为 MIT**：此后的版本可以自由使用、修改和分发，包括商业用途。0.10.0 及更早的版本发布时采用 PolyForm Noncommercial 1.0.0。
+- **License changed to MIT**: later versions may be used, modified and distributed freely, including commercially. Releases up to 0.10.0 were published under PolyForm Noncommercial 1.0.0.
+
 ## 0.10.0（预览 / preview）
 
 > 新功能已在 Kaggle 双 T4 上实测通过，测量结果见 [图片编辑说明](docs/editing.md)。

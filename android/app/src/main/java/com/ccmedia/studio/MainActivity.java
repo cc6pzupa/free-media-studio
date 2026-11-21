@@ -161,7 +161,28 @@ public class MainActivity extends Activity {
         });
         root.removeView(message);
         root.addView(web, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        if (savedWebState == null || web.restoreState(savedWebState) == null) web.loadUrl(address);
+        if (savedWebState == null || web.restoreState(savedWebState) == null) web.loadUrl(address + startPage(getIntent()));
+    }
+
+    /** One of the studio's own pages, from the launch intent ("page" extra); the image page otherwise. */
+    static String startPage(Intent intent) {
+        String page = intent == null ? null : intent.getStringExtra("page");
+        if (page == null) return "/";
+        switch (page) {
+            case "chat":
+            case "video":
+            case "gallery":
+                return "/" + page;
+            default:
+                return "/";
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (web != null && StudioService.url != null && intent.hasExtra("page")) web.loadUrl(StudioService.url + startPage(intent));
     }
 
     private static boolean isLocal(Uri uri) {
